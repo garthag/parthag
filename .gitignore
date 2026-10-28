@@ -83,3 +83,13 @@ lint/generated/
 lint/outputs/
 lint/tmp/
 # lint/reports/
+
+# Node / Vite
+node_modules/
+dist/
+dev-dist/
+coverage/
+*.local
+.env
+.env.*
+!.env.example
