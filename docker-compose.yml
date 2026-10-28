@@ -1,0 +1,16 @@
+# Frontend container. The backend (PostgreSQL + Auth + REST + Realtime +
+# Edge Functions) is Supabase: either Supabase Cloud, or the official
+# self-hosted Supabase Docker stack (https://supabase.com/docs/guides/self-hosting/docker).
+# See docs/SETUP.md for both paths.
+services:
+  web:
+    build:
+      context: .
+      dockerfile: web/Dockerfile
+      args:
+        VITE_SUPABASE_URL: ${VITE_SUPABASE_URL:?set in .env}
+        VITE_SUPABASE_ANON_KEY: ${VITE_SUPABASE_ANON_KEY:?set in .env}
+        VITE_DRIVE_ENABLED: ${VITE_DRIVE_ENABLED:-true}
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
