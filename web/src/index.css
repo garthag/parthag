@@ -1,0 +1,51 @@
+@import "tailwindcss";
+
+/* Dark mode follows the .dark class on <html> (set from the theme setting). */
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --color-brand-50: #eef6fb;
+  --color-brand-100: #d5e8f4;
+  --color-brand-500: #1f6fa3;
+  --color-brand-600: #185c88;
+  --color-brand-700: #0f3d5e;
+  --color-brand-900: #0b2236;
+  --color-accent-500: #f5a524;
+  --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans", "Helvetica Neue", Arial, sans-serif;
+}
+
+html { -webkit-text-size-adjust: 100%; }
+body { @apply bg-slate-100 text-slate-900 dark:bg-slate-950 dark:text-slate-100 antialiased; }
+
+/* Field-friendly controls: ≥ 44 px targets, 16 px text (no iOS zoom), strong focus ring. */
+.input {
+  @apply w-full min-h-11 rounded-lg border border-slate-300 bg-white px-3 py-2 text-base text-slate-900
+         placeholder:text-slate-400 focus:outline-none focus:ring-3 focus:ring-brand-500/40 focus:border-brand-500
+         disabled:bg-slate-100 disabled:text-slate-500
+         dark:bg-slate-900 dark:border-slate-600 dark:text-slate-100 dark:disabled:bg-slate-800;
+}
+.label { @apply block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1; }
+.btn { @apply inline-flex items-center justify-center gap-2 min-h-11 px-4 rounded-lg font-semibold text-base transition
+             focus:outline-none focus-visible:ring-3 focus-visible:ring-brand-500/50 disabled:opacity-50 disabled:cursor-not-allowed; }
+.btn-primary { @apply bg-brand-700 text-white hover:bg-brand-600 active:bg-brand-900; }
+.btn-secondary { @apply bg-white text-slate-800 border border-slate-300 hover:bg-slate-50 dark:bg-slate-800 dark:text-slate-100 dark:border-slate-600 dark:hover:bg-slate-700; }
+.btn-danger { @apply bg-red-700 text-white hover:bg-red-600; }
+.btn-success { @apply bg-emerald-700 text-white hover:bg-emerald-600; }
+.btn-ghost { @apply text-brand-700 hover:bg-brand-50 dark:text-brand-100 dark:hover:bg-slate-800; }
+.card { @apply bg-white rounded-xl border border-slate-200 shadow-sm dark:bg-slate-900 dark:border-slate-800; }
+.table { @apply w-full text-sm; }
+.table th { @apply text-left font-semibold text-slate-600 dark:text-slate-400 px-2 py-2 border-b border-slate-200 dark:border-slate-700 whitespace-nowrap; }
+.table td { @apply px-2 py-2 border-b border-slate-100 dark:border-slate-800 align-top; }
+.num { @apply text-right tabular-nums; }
+
+/* Chart tokens — validated reference palette (fixed categorical order, dark steps selected, not flipped). */
+:root {
+  --series-1: #2a78d6; --series-2: #eb6834; --series-3: #1baf7a; --series-4: #eda100;
+  --chart-grid: #e4e3df; --chart-axis: #52514e;
+  --status-good: #0f7b3e; --status-warn: #b26b00; --status-bad: #c62828;
+}
+.dark {
+  --series-1: #3987e5; --series-2: #d95926; --series-3: #199e70; --series-4: #c98500;
+  --chart-grid: #33322f; --chart-axis: #c3c2b7;
+  --status-good: #3fb36b; --status-warn: #e0a030; --status-bad: #ef6b6b;
+}
