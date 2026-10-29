@@ -19,8 +19,9 @@ begin
   end if;
 end $$;
 
+-- pgcrypto lives in `extensions` on Supabase and in `public` on plain PostgreSQL.
 create or replace function public.sha256_hex(p text) returns text
-language sql immutable as $$ select encode(digest(p, 'sha256'), 'hex') $$;
+language sql immutable set search_path = public, extensions as $$ select encode(digest(p, 'sha256'), 'hex') $$;
 
 -- Linear planned progress (%) of an activity on a date, from the approved
 -- baseline when one exists, otherwise from the current planned dates.

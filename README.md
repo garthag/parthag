@@ -32,6 +32,10 @@ Simple enough for a site supervisor on an Android phone; structured enough for p
 
 ## Quick start
 
+**Not a programmer?** Follow [docs/START_HERE.md](docs/START_HERE.md): browser-only setup with Supabase + Netlify, about 30–45 minutes.
+
+**Developers:**
+
 ```bash
 # 1. Backend: create a Supabase project (or self-host), then apply the migrations
 npx supabase link --project-ref <your-ref> && npx supabase db push

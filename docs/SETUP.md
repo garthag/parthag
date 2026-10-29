@@ -7,7 +7,7 @@ You need: Node.js 20+ (22 recommended), a Supabase backend (cloud free tier or s
 1. **Create a Supabase project** at <https://supabase.com> (free tier is enough to start).
 2. **Apply the database migrations** (in order). Either:
    * Supabase CLI: `npx supabase link --project-ref <ref>` then `npx supabase db push`; or
-   * Dashboard → SQL editor → paste each file of `supabase/migrations/` in filename order and run.
+   * Dashboard → SQL editor → paste `supabase/setup/part1.sql`, run, then `supabase/setup/part2.sql` (generated from the migrations by `supabase/setup/build.sh`).
 3. **Enable Realtime** is automatic (the migration adds tables to the `supabase_realtime` publication).
 4. **Auth**: Dashboard → Authentication → URL configuration → Site URL = your app URL. Optionally enable Google (see [GOOGLE_SETUP.md](GOOGLE_SETUP.md)).
 5. **Drive function** (optional but needed for photos/documents): follow [GOOGLE_SETUP.md](GOOGLE_SETUP.md), then `npx supabase functions deploy drive`.

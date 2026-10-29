@@ -6,6 +6,12 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 DB="${TEST_DB:-cdpr_test_$$}"
 dropdb --if-exists "$DB" >/dev/null 2>&1 || true
+# The copy-paste setup files must match the migrations.
+tmp=$(mktemp -d); cp setup/part1.sql setup/part2.sql "$tmp"/
+setup/build.sh >/dev/null
+if ! diff -q setup/part1.sql "$tmp/part1.sql" >/dev/null || ! diff -q setup/part2.sql "$tmp/part2.sql" >/dev/null; then
+  echo "supabase/setup/*.sql were out of date and have been regenerated; commit them." >&2; exit 1
+fi
 createdb "$DB"
 trap 'dropdb --if-exists "$DB" >/dev/null 2>&1 || true' EXIT
 cat tests/supabase_shim.sql migrations/*.sql | psql -v ON_ERROR_STOP=1 -q -X "$DB" >/dev/null

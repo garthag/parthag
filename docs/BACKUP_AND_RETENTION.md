@@ -28,7 +28,7 @@ pg_restore --no-owner -d cdpr_restore backup/cdpr_2026-10-28.dump
 Test a restore **at least quarterly**. Verify approved-report integrity after a restore:
 
 ```sql
-select dpr_no, revision, snapshot_sha256 = encode(digest(snapshot::text, 'sha256'), 'hex') as intact
+select dpr_no, revision, snapshot_sha256 = public.sha256_hex(snapshot::text) as intact
 from report_revisions order by approved_at desc;
 ```
 
