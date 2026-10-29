@@ -61,10 +61,37 @@ the best buys for **intraday, next week, 1 month, 6 months and 1 year**:
 - **⭐ Strong on every time frame**: stocks rated BUY on the most horizons.
 - **Deep-dive** any pick with one click (news, fundamentals, holders, order book).
 
-The scan uses price and volume only: 20+ indicators, buyer-vs-seller flow, walk-forward-tested ML, Monte Carlo
-simulation and damped trend models. The deep-dive adds news, fundamentals and analyst views, so its call can
+The scan ranks stocks against each other with a model trained on the whole universe (momentum, trend,
+volatility, volume flow, 20+ indicators). Buy/target/stop levels come from ATR and Monte Carlo simulation. The deep-dive adds news, fundamentals and analyst views, so its call can
 differ. Rely on the deep-dive for 6-month and 1-year decisions. Filters: sectors, number of picks, and minimum
 daily turnover (screens out illiquid stocks). Scans are cached for 30 minutes; **Run fresh scan** re-runs one.
+
+## 📊 How accurate is it? (tested on real data)
+The predictions were checked with a **walk-forward backtest** on real daily prices of 48 Nifty 50 stocks
+(June 2015 to October 2026, data from [Stock-Prediction-Platform](https://github.com/Surana-Piyush/Stock-Prediction-Platform)).
+On each past month-end, the models saw **only data up to that day**, made their calls, and were scored
+against what actually happened next.
+
+**No method reaches 98%.** Stock moves are driven by news no one knows in advance, and professional quant
+funds work with hit rates of about 51–55%. Any tool that shows 98% is testing on data it already saw.
+
+| | Result |
+|---|---|
+| Single-stock up/down calls (🔍 Analyse page) | 50–53% correct for 1 day to 1 month, close to a coin flip. ~62% at 6–12 months, the same as always saying "up". |
+| First suggestion-box version (hand-weighted signals) | Top picks did **worse** than the average stock for next week (−0.6%/week): it chased stocks that had just jumped. |
+| **Current ranking model** (💡 Suggestion box) | Top 5 picks beat the average stock in **both** test periods at every horizon. Next week: **+0.70%/week (2018–23) and +0.61%/week (2023–26)**, with 58–60% of picks beating the average. Weaker and noisier for 6–12 months. |
+
+What changed as a result:
+- The suggestion box now uses a **cross-sectional ranking model**: one gradient-boosting model per time frame,
+  trained on all stocks together to predict which will beat the others. Training data is only what was
+  known at the time, and a unit test checks there is no look-ahead.
+- Displayed "chance of rise" figures are **calibrated** close to real historical base rates (53–65%) instead of
+  over-confident numbers.
+- Each time frame shows its own backtested track record. The **📊 Accuracy check** page lets you re-run the
+  walk-forward test yourself on live data.
+
+How to use it sensibly: spread money over several top picks, not one. Always set the stop-loss. For 6–12
+months, also read the fundamentals and news on the 🔍 Analyse page.
 
 ## Real-time features
 - **Live price header**: price, change, day range and intraday momentum refresh automatically.
@@ -164,6 +191,8 @@ stockai/live.py          market clock, live quotes, intraday momentum, watchlist
 stockai/kite.py          Zerodha Kite Connect: login, quotes, candles, market depth, WebSocket ticks
 stockai/nse.py           free NSE India quotes, order book and delivery % (no account)
 stockai/screener.py      suggestion box: sector scan, ranking, top picks per time frame
+stockai/ranker.py        cross-sectional ranking model + walk-forward accuracy test
+stockai/backtest.py      walk-forward replay of the single-stock signals
 stockai/universe.py      sector-wise stock universe
 stockai/data.py          symbol resolution, Yahoo Finance prices/info/holders, news, demo data
 stockai/indicators.py    technical indicators, levels, patterns, buyer/seller pressure

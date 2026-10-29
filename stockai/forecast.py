@@ -18,6 +18,10 @@ from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
 
 HORIZONS = {"Intraday (today)": 1, "Next week": 5, "1 month": 21, "6 months": 126, "1 year": 252}
+# How often Nifty 50 stocks actually rose over each horizon (real data, 2023-10..2026-09).
+# Walk-forward tests showed per-stock "chance of rise" estimates carry little information beyond
+# these base rates, so displayed probabilities are kept close to them.
+BASE_RATE_UP = {"Intraday (today)": 0.527, "Next week": 0.551, "1 month": 0.563, "6 months": 0.624, "1 year": 0.65}
 
 FEATURES = [
     "ret1", "ret5", "ret10", "ret21", "ret63", "dist_sma20", "dist_sma50", "dist_sma200",
@@ -139,7 +143,7 @@ def monte_carlo(close: pd.Series, horizon: int, n_paths: int = 5000, seed: int =
     total = np.r_[gbm, boot]
     last = float(close.iloc[-1])
     prices = last * np.exp(total)
-    pct = {p: float(np.percentile(prices, p)) for p in (5, 10, 25, 50, 60, 75, 90, 95)}
+    pct = {p: float(np.percentile(prices, p)) for p in (5, 10, 25, 40, 50, 60, 75, 90, 95)}
     # Fan chart: percentiles along the path for the GBM leg.
     cum = np.cumsum(rng.normal(mu - 0.5 * sigma ** 2, sigma, (2000, horizon)), axis=1)
     fan = pd.DataFrame({p: last * np.exp(np.percentile(cum, p, axis=0)) for p in (5, 25, 50, 75, 95)})
@@ -229,13 +233,13 @@ class HorizonForecast:
 
 
 def forecast_all(ind: pd.DataFrame, index_daily: pd.DataFrame | None = None, fast: bool = False,
-                 horizons: dict | None = None) -> dict[str, HorizonForecast]:
+                 horizons: dict | None = None, use_ml: bool = True) -> dict[str, HorizonForecast]:
     feats = make_features(ind, index_daily)
     close = ind["Close"]
     last = float(close.iloc[-1])
     out = {}
     for label, h in (horizons or HORIZONS).items():
-        ml = ml_forecast(feats, close, h, fast=fast)
+        ml = ml_forecast(feats, close, h, fast=fast) if use_ml else MLResult(h, {}, {}, 0.0, 0.5)
         mc = monte_carlo(close, h, n_paths=2000 if fast else 5000)
         tr = trend_projection(close, h)
         ml_price = last * (1 + ml.ensemble_return)
@@ -248,7 +252,10 @@ def forecast_all(ind: pd.DataFrame, index_daily: pd.DataFrame | None = None, fas
         pred = (w_ml * ml_price + w_mc * mc["median"] + w_tr * trend_price) / tot
         # Probability of a rise: MC baseline nudged by ML signal strength.
         ml_tilt = np.tanh(ml.ensemble_return / max(mc["daily_vol"] * np.sqrt(h), 1e-6))
-        prob_up = float(np.clip(mc["prob_up"] + 0.2 * skill * ml_tilt + 0.05 * np.sign(trend_price - last), 0.10, 0.90))  # never claim near-certainty
+        raw = mc["prob_up"] + 0.2 * skill * ml_tilt + 0.05 * np.sign(trend_price - last)
+        # Calibrate: shrink hard toward the historical base rate (raw estimates were over-confident).
+        base = BASE_RATE_UP.get(label, 0.55)
+        prob_up = float(np.clip(base + 0.2 * (raw - 0.5), 0.10, 0.90))
         views = [mc["median"], trend_price] + ([ml_price] if has_ml else [])
         agree = np.mean([np.sign(v - last) for v in views])
         confidence = float(np.clip(0.35 + 0.25 * abs(agree) + 0.4 * skill, 0, 1))

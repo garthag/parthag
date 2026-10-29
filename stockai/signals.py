@@ -181,7 +181,7 @@ def analyze(bundle) -> Analysis:
                     intraday, _beta(bundle.daily, bundle.index_daily))
 
 
-def quick_analyze(daily: pd.DataFrame, index_daily: pd.DataFrame | None = None) -> dict:
+def quick_analyze(daily: pd.DataFrame, index_daily: pd.DataFrame | None = None, use_ml: bool = True) -> dict:
     """Price-only analysis for scanning many stocks: technicals, order flow, fast ML and Monte Carlo.
 
     News, fundamentals and analyst pillars are skipped (they need slow per-stock lookups),
@@ -190,7 +190,7 @@ def quick_analyze(daily: pd.DataFrame, index_daily: pd.DataFrame | None = None) 
     ind = indicators.add_all(daily)
     tech = technical_score(ind)
     pressure = indicators.buyer_seller_pressure(daily)
-    fcs = forecast.forecast_all(ind, index_daily, fast=True)
+    fcs = forecast.forecast_all(ind, index_daily, fast=True, use_ml=use_ml)
     pillars = {"technical": tech["score"], "flow": pressure["score"]}
     atr_value = float(ind["ATR"].iloc[-1])
     plans = {}
@@ -207,5 +207,6 @@ def quick_analyze(daily: pd.DataFrame, index_daily: pd.DataFrame | None = None) 
         "ret_1y": float(close.iloc[-1] / close.iloc[-253] - 1) * 100 if len(close) > 253 else np.nan,
         "off_52w_high": float(close.iloc[-1] / ind["High"].iloc[-252:].max() - 1) * 100,
         "turnover_cr": float((ind["Close"] * ind["Volume"]).iloc[-20:].mean() / 1e7),
+        "atr": float(last["ATR"]),
         "volatility": float(last["HV20"]) * 100,
     }

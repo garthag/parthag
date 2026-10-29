@@ -13,7 +13,7 @@ import plotly.graph_objects as go
 import streamlit as st
 from plotly.subplots import make_subplots
 
-from stockai import data, indicators, kite, live, nse, screener, sentiment, signals
+from stockai import data, indicators, kite, live, nse, ranker, screener, sentiment, signals
 from stockai.forecast import HORIZONS
 from stockai.universe import SECTORS
 
@@ -342,9 +342,10 @@ def pick_status(now: float | None, row) -> str:
 
 def suggestion_box(exchange: str, demo: bool):
     st.header("💡 Suggestion box — best stocks to buy, by time frame")
-    st.caption(f"Scans {len(screener.SECTORS)} sectors / {sum(map(len, SECTORS.values()))} liquid NSE stocks with "
-               "20+ technical indicators, buyer-vs-seller volume flow, walk-forward-tested machine learning, "
-               "Monte Carlo simulation and trend models. Each pick gets a buy price, sell target and stop-loss.")
+    st.caption(f"Ranks {sum(map(len, SECTORS.values()))} liquid NSE stocks in {len(SECTORS)} sectors against each "
+               "other with a gradient-boosting model trained on all of them together (momentum, trend, volatility, "
+               "volume flow and 20+ indicators). Buy/target/stop levels come from volatility (ATR) and Monte Carlo "
+               "simulation. Check its real track record in **📊 Accuracy check**.")
     c1, c2, c3 = st.columns([3, 1, 1])
     sectors = c1.multiselect("Sectors", list(SECTORS), default=list(SECTORS))
     n_picks = c2.slider("Picks per time frame", 3, 10, 5)
@@ -367,6 +368,12 @@ def suggestion_box(exchange: str, demo: bool):
     if results.empty:
         st.error("No price data could be downloaded. Check your internet connection, or switch on Demo mode.")
         return
+    if results.attrs.get("errors"):
+        with st.expander(f"⚠️ {len(results.attrs['errors'])} stocks could not be analysed"):
+            st.write(results.attrs["errors"])
+    if not results.attrs.get("ranked", True):
+        st.warning("Too few stocks to train the ranking model — showing single-stock signals instead, which "
+                   "backtests found close to a coin flip. Select more sectors for validated rankings.")
     if exchange == "BSE":
         st.caption("Scanning uses NSE listings (deeper liquidity); the same companies trade on BSE.")
 
@@ -388,6 +395,13 @@ def suggestion_box(exchange: str, demo: bool):
     all_picks = {}
     for tab, horizon in zip(tabs, HORIZONS):
         with tab:
+            edge = ranker.BACKTEST_EDGE[horizon]
+            st.info(f"**Track record (real Nifty 50 data, no look-ahead):** the model's top 5 for this time frame "
+                    f"beat the average stock by **{edge['excess'][0]:+.2f}%** per period in 2018–23 and "
+                    f"**{edge['excess'][1]:+.2f}%** in 2023–26; {edge['beat'][0]:.0f}% / {edge['beat'][1]:.0f}% of "
+                    f"those picks beat the average. Edge: **{edge['edge']}**. "
+                    + ("Treat these as one input and check fundamentals and news too." if "weak" in edge["edge"]
+                       else "Use it to choose *which* stocks, not to predict the whole market."), icon="📊")
             top = screener.top_buys(results, horizon, n_picks, min_turnover)
             all_picks.update({r.Symbol: r.Name for r in top.itertuples()})
             if top.empty:
@@ -433,12 +447,77 @@ def suggestion_box(exchange: str, demo: bool):
                "decisions. This is not investment advice.")
 
 
+def accuracy_check(demo: bool):
+    st.header("📊 Accuracy check — how good are the predictions really?")
+    st.markdown(
+        "No model can predict stock prices with 98% accuracy. Prices react to news nobody knows in advance, "
+        "and if a reliable pattern existed, traders would use it until it disappeared. Professional quant funds "
+        "make money with hit rates of about **51–55%**. A tool that *claims* 98% is either testing on data it "
+        "has already seen (look-ahead) or not telling the truth.\n\n"
+        "So this app measures itself honestly. It replays history month by month, training only on data available "
+        "on each date, and compares its picks with what actually happened next.")
+    st.subheader("Results on real Nifty 50 data (48 stocks, 2015–2026)")
+    ref = pd.DataFrame([{"Time frame": h, "Top-5 edge vs average, 2018–23 %": e["excess"][0],
+                         "Top-5 edge vs average, 2023–26 %": e["excess"][1],
+                         "Picks beating average, 2018–23 %": e["beat"][0],
+                         "Picks beating average, 2023–26 %": e["beat"][1], "Verdict": e["edge"]}
+                        for h, e in ranker.BACKTEST_EDGE.items()])
+    st.dataframe(ref, hide_index=True, width="stretch")
+    st.markdown(
+        "- **Single-stock up/down calls** (the 🔍 Analyse page) were right **50–53%** of the time for a day to a "
+        "month, about the same as always guessing \"up\". At 6–12 months they were right ~62%, but only because "
+        "most stocks rose; always saying \"up\" scored the same.\n"
+        "- **The ranking model** (💡 Suggestion box) does what *can* be done: picking which stocks are likely to do "
+        "**better than the others**. Its top picks beat the average stock in both test periods, most "
+        "consistently for the **next week**.\n"
+        "- To use it well: spread money across several picks rather than betting on one, always use the stop-loss, "
+        "and for 6–12 months also check fundamentals and news.")
+
+    st.subheader("Re-run the test yourself")
+    c = st.columns(3)
+    months = c[0].slider("Months to test", 6, 36, 18)
+    horizons = c[1].multiselect("Time frames", list(HORIZONS), default=["Next week", "1 month"])
+    top_n = c[2].slider("Picks per date", 3, 10, 5)
+    if not st.button("▶️ Run walk-forward test", type="primary") or not horizons:
+        st.caption("Downloads 5 years of prices for the stock universe and replays the model. Takes 1–3 minutes.")
+        return
+    bar = st.progress(0.0, text="Downloading prices…")
+    hist, index = screener.load_histories(list(dict.fromkeys(c for v in SECTORS.values() for c in v)), "NSE", demo,
+                                          None if demo else active_kite())
+    bar.progress(0.1, text="Building features…")
+    panel = ranker.build_panel(hist, index)
+    end = panel["Date"].max() - pd.Timedelta(days=7)
+    dates = list(pd.date_range(end - pd.DateOffset(months=months), end, freq="BME"))
+    res = ranker.walk_forward(panel, dates, top_n, horizons=horizons,
+                              progress=lambda f, t: bar.progress(0.1 + 0.9 * f, text=t))
+    bar.empty()
+    if res.empty:
+        st.warning("Not enough history to test. Try fewer months.")
+        return
+    st.dataframe(ranker.walk_forward_summary(res).round(2), width="stretch")
+    for h in horizons:
+        d = res[res["Horizon"] == h].set_index("Date")
+        if d.empty:
+            continue
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(x=d.index, y=d["Excess %"].cumsum(), name="Cumulative edge of top picks",
+                                 line=dict(color=BLUE, width=2)))
+        fig.add_hline(y=0, line_color=NEUTRAL, line_dash="dot")
+        fig.update_layout(title=f"{h}: top {top_n} picks minus average stock, added up over test dates (%)")
+        st.plotly_chart(style_fig(fig, 320), width="stretch")
+    with st.expander("Every test date and the picks it made"):
+        st.dataframe(res.round(2), hide_index=True, width="stretch")
+    if demo:
+        st.caption("Demo data is random, so no real edge is expected here. Switch Demo mode off to test real prices.")
+
+
 def _money_cols() -> dict:
     money = {c: st.column_config.NumberColumn(c, format="₹%.2f")
              for c in ("Price", "Live ₹", "Buy below", "Target", "Stop-loss")}
     pcts = {c: st.column_config.NumberColumn(c, format="%+.1f%%") for c in ("Profit %", "Risk %", "Since scan %")}
     return {**money, **pcts, "P(rise) %": st.column_config.NumberColumn("P(rise)", format="%.0f%%"),
-            "Confidence %": st.column_config.ProgressColumn("Confidence", min_value=0, max_value=100, format="%.0f%%"),
+            "Rank %": st.column_config.ProgressColumn("Model rank", min_value=0, max_value=100, format="%.0f",
+                                                      help="Percentile vs all scanned stocks (100 = best)"),
             "Risk:Reward": st.column_config.NumberColumn("Risk:Reward", format="1 : %.2f")}
 
 
@@ -452,7 +531,7 @@ def picks_table(top: pd.DataFrame, demo: bool, horizon: str):
         t["Status"] = [pick_status(p, r) for p, (_, r) in zip(t["Live ₹"], t.iterrows())]
         st.dataframe(
             t[["Symbol", "Action", "Live ₹", "Status", "Buy below", "Target", "Stop-loss", "Profit %",
-               "P(rise) %", "Risk:Reward", "Confidence %", "Since scan %", "Name", "Sector", "Buyers vs sellers"]],
+               "P(rise) %", "Risk:Reward", "Rank %", "Since scan %", "Name", "Sector", "Buyers vs sellers"]],
             hide_index=True, width="stretch", column_config=_money_cols())
         st.caption(f"{horizon}: buy at or below **Buy below**, sell at **Target**, exit if price closes under "
                    f"**Stop-loss**. Live prices updated {datetime.now(live.IST):%H:%M:%S} IST.")
@@ -464,7 +543,7 @@ if "view_next" in st.session_state:  # switch views programmatically before the 
 
 with st.sidebar:
     st.title("📈 StockAI")
-    view = st.radio("View", ["💡 Suggestion box", "🔍 Analyse a stock"], key="view")
+    view = st.radio("View", ["💡 Suggestion box", "🔍 Analyse a stock", "📊 Accuracy check"], key="view")
     exchange = st.radio("Exchange", ["NSE", "BSE"], horizontal=True)
     pick = st.selectbox("Popular stocks", ["— type below —"] + [f"{k} · {v}" for k, v in data.POPULAR_STOCKS.items()])
     typed = st.text_input("Stock name or code", placeholder="e.g. RELIANCE, Infosys, 500325")
@@ -502,6 +581,9 @@ if go_btn and query:
     st.rerun()
 if view.startswith("💡"):
     suggestion_box(exchange, demo)
+    st.stop()
+if view.startswith("📊"):
+    accuracy_check(demo)
     st.stop()
 active = st.session_state.get("active")
 if not active:
@@ -655,6 +737,23 @@ with tabs[1]:
                 f"Chance of rise: **{plan.probability_up * 100:.0f}%**"
             )
             st.progress(plan.confidence, text=f"Model confidence {plan.confidence * 100:.0f}%")
+
+    code = B.symbol[:-3]
+    scans = [v for k, v in scan_store().items() if k[0] == B.demo]
+    ranked = None
+    for res, _ts in scans:
+        hit = res[res["Code"] == code]
+        if not hit.empty and res.attrs.get("ranked", True):
+            ranked = hit.set_index("Horizon")
+    if ranked is not None:
+        st.markdown("**Validated ranking model** (from the latest 💡 Suggestion-box scan): " + " · ".join(
+            f"{h}: **{ranked.loc[h, 'Action']}** (rank {ranked.loc[h, 'Rank %']:.0f}/100)"
+            for h in HORIZONS if h in ranked.index))
+    st.caption("ℹ️ Honest accuracy: in walk-forward tests on real Nifty 50 data, these single-stock up/down calls "
+               "were right about 50–53% of the time for a day to a month (close to a coin flip) and ~62% for 6–12 "
+               "months (no better than assuming 'up'). The ranking model in 💡 Suggestion box has the better track "
+               "record — see 📊 Accuracy check." + ("" if ranked is not None else
+               " Run a Suggestion-box scan to see this stock's rank here."))
 
     st.subheader("What drives the call")
     rows = []

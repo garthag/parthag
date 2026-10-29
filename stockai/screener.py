@@ -14,8 +14,8 @@ from typing import Callable
 import numpy as np
 import pandas as pd
 
-from . import data, signals
-from .forecast import HORIZONS
+from . import data, ranker, signals
+from .forecast import BASE_RATE_UP, HORIZONS
 from .universe import NAMES, SECTORS, sector_of
 
 BUY_ACTIONS = ("STRONG BUY", "BUY")
@@ -57,20 +57,55 @@ def load_histories(codes: list[str], exchange: str, demo: bool = False, broker=N
     return hist, index
 
 
-def _scan_one(code: str, daily: pd.DataFrame, index: pd.DataFrame | None, exchange: str) -> list[dict]:
-    q = signals.quick_analyze(daily, index)
+def rank_action(pct: float) -> str:
+    """Action from the stock's percentile in the cross-sectional ranking."""
+    if pct >= 0.9:
+        return "STRONG BUY"
+    if pct >= 0.7:
+        return "BUY"
+    if pct <= 0.1:
+        return "STRONG SELL"
+    if pct <= 0.3:
+        return "SELL"
+    return "HOLD"
+
+
+def _scan_one(code: str, daily: pd.DataFrame, index: pd.DataFrame | None, exchange: str,
+              rank: dict | None = None) -> list[dict]:
+    """Trade levels for one stock; the BUY/SELL call comes from the cross-sectional ranker when available."""
+    q = signals.quick_analyze(daily, index, use_ml=rank is None)
+    entry, atr = q["price"], q["atr"]
     rows = []
     for label, plan in q["plans"].items():
         fc = q["forecasts"][label]
+        h = HORIZONS[label]
+        pct = (rank or {}).get(f"pct {label}", np.nan)
+        if np.isnan(pct):  # no ranking (e.g. tiny universe): fall back to the single-stock plan
+            action, score, target, stop = plan.action, plan.score, plan.target, plan.stop_loss
+            profit, risk, p_up = plan.expected_profit_pct, plan.potential_loss_pct, plan.probability_up
+        else:
+            action, score = rank_action(pct), 2 * pct - 1
+            stop_dist = signals.STOP_ATR[label] * atr
+            # Expected path: long-run market drift (~12%/yr) plus the model's predicted excess return.
+            predicted = entry * np.exp(np.log(1.12) / 252 * h + rank[f"xs {label}"])
+            if action in BUY_ACTIONS or action == "HOLD":
+                target = max(predicted, entry + 0.5 * stop_dist)
+                if action in BUY_ACTIONS:
+                    target = max(target, fc.mc["percentiles"][60])
+                stop = entry - stop_dist
+                profit, risk = (target / entry - 1) * 100, (stop / entry - 1) * 100
+            else:
+                target, stop = min(predicted, fc.mc["percentiles"][40]), entry + stop_dist
+                profit, risk = (1 - target / entry) * 100, (1 - stop / entry) * 100
+            # Honest odds: per-stock direction is barely predictable, so stay near the base rate.
+            p_up = float(np.clip(BASE_RATE_UP[label] + 0.08 * score, 0.1, 0.9))
         rows.append({
             "Symbol": code + data.EXCHANGE_SUFFIX[exchange], "Code": code,
-            "Name": data.POPULAR_STOCKS.get(code) or NAMES.get(code, code), "Sector": sector_of(code), "Horizon": label,
-            "Action": plan.action, "Score": plan.score, "Price": plan.entry,
-            "Buy below": plan.entry * 1.003, "Target": plan.target, "Stop-loss": plan.stop_loss,
-            "Profit %": plan.expected_profit_pct, "Risk %": plan.potential_loss_pct,
-            "Risk:Reward": plan.risk_reward, "P(rise) %": plan.probability_up * 100,
-            "Confidence %": plan.confidence * 100, "Predicted": fc.predicted_price,
-            "Low": fc.low, "High": fc.high,
+            "Name": data.POPULAR_STOCKS.get(code) or NAMES.get(code, code), "Sector": sector_of(code),
+            "Horizon": label, "Action": action, "Score": score, "Rank %": 100 * pct if not np.isnan(pct) else np.nan,
+            "Price": entry, "Buy below": entry * 1.003, "Target": target, "Stop-loss": stop,
+            "Profit %": profit, "Risk %": risk, "Risk:Reward": profit / abs(risk) if risk else np.nan,
+            "P(rise) %": p_up * 100, "Low": fc.low, "High": fc.high,
             "Technicals": q["technical"]["label"], "Buyers vs sellers": q["pressure"]["verdict"],
             "RSI": q["rsi"], "1M %": q["ret_1m"], "1Y %": q["ret_1y"], "From 52W high %": q["off_52w_high"],
             "Turnover ₹cr": q["turnover_cr"], "Volatility %": q["volatility"],
@@ -85,15 +120,23 @@ def scan(exchange: str = "NSE", demo: bool = False, broker=None, sectors: list[s
     if progress:
         progress(0.02, f"Downloading 5-year history for {len(codes)} stocks…")
     hist, index = load_histories(codes, exchange, demo, broker)
+    if progress:
+        progress(0.05, "Ranking all stocks against each other…")
+    ranks = _rank_universe(hist, index)
+    errors: list[str] = []
     try:
         # "spawn" (the Windows default) is safe inside multi-threaded hosts like Streamlit; fork is not.
         pool = ProcessPoolExecutor(max_workers=workers or min(8, os.cpu_count() or 2),
                                    mp_context=multiprocessing.get_context("spawn"))
-        rows = _run(pool, hist, index, exchange, progress)
+        rows = _run(pool, hist, index, exchange, progress, ranks, errors)
     except (OSError, NotImplementedError, BrokenProcessPool):
         # Processes sidestep the GIL for the CPU-bound models; threads are the fallback.
-        rows = _run(ThreadPoolExecutor(max_workers=4), hist, index, exchange, progress)
-    return pd.DataFrame(rows)
+        errors.clear()
+        rows = _run(ThreadPoolExecutor(max_workers=4), hist, index, exchange, progress, ranks, errors)
+    out = pd.DataFrame(rows)
+    out.attrs["errors"] = errors
+    out.attrs["ranked"] = bool(ranks)
+    return out
 
 
 @contextmanager
@@ -111,18 +154,30 @@ def _neutral_main():
         sys.modules["__main__"] = real
 
 
-def _run(pool, hist: dict, index, exchange: str, progress) -> list[dict]:
+def _rank_universe(hist: dict, index) -> dict[str, dict]:
+    """Cross-sectional ranks per stock ({} if the universe is too small to train on)."""
+    try:
+        table = ranker.rank_latest(ranker.build_panel(hist, index)).table
+    except Exception:
+        return {}
+    return {code: row.to_dict() for code, row in table.iterrows()}
+
+
+def _run(pool, hist: dict, index, exchange: str, progress, ranks: dict | None = None,
+         errors: list | None = None) -> list[dict]:
     rows: list[dict] = []
+    errors = errors if errors is not None else []
     with pool:
         with _neutral_main():  # workers start during the first submits
-            futures = {pool.submit(_scan_one, c, df, index, exchange): c for c, df in hist.items()}
+            futures = {pool.submit(_scan_one, c, df, index, exchange, (ranks or {}).get(c)): c
+                       for c, df in hist.items()}
         for done, (fut, code) in enumerate(futures.items(), start=1):
             try:
                 rows.extend(fut.result())
             except BrokenProcessPool:
                 raise
-            except Exception:
-                pass
+            except Exception as exc:  # keep going, but report which stocks failed
+                errors.append(f"{code}: {type(exc).__name__}: {exc}"[:150])
             if progress:
                 progress(0.05 + 0.95 * done / max(len(futures), 1), f"Analysed {code} ({done}/{len(futures)})")
     return rows
