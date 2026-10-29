@@ -240,22 +240,34 @@ def fetch_news(symbol: str, company: str, limit: int = 40) -> list[dict]:
     return unique[:limit]
 
 
-def load_stock(query: str, exchange: str, demo: bool = False) -> StockBundle:
-    """Fetch every piece of data for a stock (live, or synthetic when ``demo``)."""
+KITE_INDEX = {"NSE": "NSE:NIFTY 50", "BSE": "BSE:SENSEX"}
+
+
+def load_stock(query: str, exchange: str, demo: bool = False, broker=None) -> StockBundle:
+    """Fetch every piece of data for a stock (live, or synthetic when ``demo``).
+
+    With ``broker`` (a ``kite.KiteSource``) prices come from Zerodha; Yahoo is then only
+    used, best-effort, for company info, holders and news.
+    """
     if demo:
         return demo_bundle(query, exchange)
     symbol = resolve_symbol(query, exchange)
-    daily = fetch_history(symbol, period="5y", interval="1d")
+    if broker is not None:
+        daily = broker.history(symbol, "day", 1825)
+    else:
+        daily = fetch_history(symbol, period="5y", interval="1d")
     if daily.empty:
         raise ValueError(f"No price data found for {symbol}. Check the name/code and exchange.")
     try:
-        intraday = fetch_history(symbol, period="5d", interval="5m")
+        intraday = (broker.history(symbol, "5minute", 7) if broker is not None
+                    else fetch_history(symbol, period="5d", interval="5m"))
     except Exception:
         intraday = _clean_ohlcv(None)
-    info = fetch_info(symbol)
+    info = fetch_info(symbol) if yf is not None else {}
     name = info.get("longName") or info.get("shortName") or POPULAR_STOCKS.get(symbol[:-3], symbol[:-3])
     try:
-        index_daily = fetch_history(INDEX_SYMBOL[exchange], period="5y", interval="1d")
+        index_daily = (broker.history(KITE_INDEX[exchange], "day", 1825) if broker is not None
+                       else fetch_history(INDEX_SYMBOL[exchange], period="5y", interval="1d"))
     except Exception:
         index_daily = None
     try:

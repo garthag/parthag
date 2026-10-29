@@ -9,3 +9,5 @@ feedparser>=6.0
 matplotlib>=3.8
 # optional: Google search trends tab
 pytrends>=4.9
+# optional: real-time quotes, market depth and tick streaming from Zerodha Kite Connect
+kiteconnect>=5.0

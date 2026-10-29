@@ -52,6 +52,8 @@ class Quote:
     volume: float
     updated: datetime
     bars: pd.DataFrame = field(default_factory=pd.DataFrame)
+    source: str = "Yahoo Finance"
+    extra: dict = field(default_factory=dict)  # broker extras: market depth, buy/sell qty, circuits
 
     @property
     def change(self) -> float:

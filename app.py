@@ -13,7 +13,7 @@ import plotly.graph_objects as go
 import streamlit as st
 from plotly.subplots import make_subplots
 
-from stockai import data, indicators, live, sentiment, signals
+from stockai import data, indicators, kite, live, sentiment, signals
 from stockai.forecast import HORIZONS
 
 st.set_page_config(page_title="StockAI · NSE/BSE Predictor", page_icon="📈", layout="wide")
@@ -45,8 +45,8 @@ def span(lo, hi, d=0):
 
 
 @st.cache_data(ttl=300, show_spinner=False)
-def run_analysis(query: str, exchange: str, demo: bool):
-    bundle = data.load_stock(query, exchange, demo=demo)
+def run_analysis(query: str, exchange: str, demo: bool, source: str = "yahoo", _broker=None):
+    bundle = data.load_stock(query, exchange, demo=demo, broker=_broker)
     return signals.analyze(bundle)
 
 
@@ -55,9 +55,24 @@ def _live_quote(symbol: str):
     return live.fetch_quote(symbol)
 
 
+@st.cache_resource(show_spinner=False)
+def kite_source(api_key: str, access_token: str, stream: bool) -> kite.KiteSource:
+    src = kite.KiteSource(api_key, access_token)
+    if stream:
+        src.start_stream()
+    return src
+
+
+def active_kite() -> kite.KiteSource | None:
+    return st.session_state.get("kite_src")
+
+
 def get_quote(symbol: str, demo: bool, start_price: float | None = None) -> live.Quote:
-    """Live quote from Yahoo, or the next tick of a simulated feed in demo mode."""
+    """Live quote from Zerodha Kite or Yahoo, or the next tick of a simulated feed in demo mode."""
     if not demo:
+        src = active_kite()
+        if src is not None:
+            return src.quote(symbol)
         return _live_quote(symbol)
     feeds = st.session_state.setdefault("feeds", {})
     if symbol not in feeds:
@@ -109,9 +124,17 @@ def watchlist_panel(exchange: str, demo: bool):
     @st.fragment(run_every=REFRESH)
     def _table():
         rows = []
-        for sym in st.session_state.get("watchlist", []):
+        symbols = st.session_state.get("watchlist", [])
+        src = None if demo else active_kite()
+        batch = {}
+        if src is not None and symbols:
             try:
-                q = get_quote(sym, demo)
+                batch = src.quote_many(symbols)  # one API call for the whole list
+            except Exception as exc:
+                st.warning(f"Kite quotes failed: {exc}")
+        for sym in symbols:
+            try:
+                q = batch.get(sym) or get_quote(sym, demo)
                 check_alerts(sym, q.price)
                 rows.append(live.watch_row(q))
             except Exception as exc:
@@ -131,12 +154,93 @@ def watchlist_panel(exchange: str, demo: bool):
     _table()
 
 
+def order_book(q: live.Quote):
+    """Live market depth and pending buy vs sell quantity (broker data only)."""
+    st.subheader("📊 Live order book")
+    ex = q.extra
+    buy, sell = float(ex.get("buy_qty") or 0), float(ex.get("sell_qty") or 0)
+    if buy + sell:
+        share = buy / (buy + sell)
+        c = st.columns(4)
+        c[0].metric("Pending buy qty", f"{buy:,.0f}")
+        c[1].metric("Pending sell qty", f"{sell:,.0f}")
+        verdict = "🟢 buyers stronger" if share > 0.55 else "🔴 sellers stronger" if share < 0.45 else "🟡 balanced"
+        c[2].metric(f"Buyers' share · {verdict}", f"{share * 100:.0f}%")
+        c[3].metric("Avg traded price", rupee(ex.get("avg_price")))
+        st.progress(share, text=f"Buy {share * 100:.0f}%  ·  Sell {(1 - share) * 100:.0f}%")
+    rows = []
+    for i in range(max(len(ex.get("depth_buy", [])), len(ex.get("depth_sell", [])))):
+        b = ex["depth_buy"][i] if i < len(ex["depth_buy"]) else {}
+        a = ex["depth_sell"][i] if i < len(ex["depth_sell"]) else {}
+        rows.append({"Bid orders": b.get("orders"), "Bid qty": b.get("quantity"), "Bid ₹": b.get("price"),
+                     "Ask ₹": a.get("price"), "Ask qty": a.get("quantity"), "Ask orders": a.get("orders")})
+    if rows:
+        st.dataframe(pd.DataFrame(rows), hide_index=True, width="stretch")
+    if ex.get("upper_circuit"):
+        st.caption(f"Circuit limits: {rupee(ex.get('lower_circuit'))} – {rupee(ex.get('upper_circuit'))}")
+
+
 def style_fig(fig, height=420):
     fig.update_layout(height=height, margin=dict(l=10, r=10, t=50, b=10), hovermode="x unified",
                       legend=dict(orientation="h", yanchor="top", y=-0.08, x=0))
     fig.update_xaxes(showgrid=False)
     fig.update_yaxes(gridcolor="rgba(128,128,128,0.15)")
     return fig
+
+
+def kite_sidebar():
+    """Credentials, daily login redirect and connection status for Zerodha Kite."""
+    if not kite.available():
+        st.error("Install the Kite package first: `pip install kiteconnect`")
+        return
+    try:
+        secrets = dict(st.secrets)
+    except Exception:  # no secrets.toml
+        secrets = {}
+    cred = kite.credentials(secrets)
+    with st.expander("🔑 Kite API settings", expanded=not (cred["api_key"] and cred["api_secret"])):
+        cred["api_key"] = st.text_input("API key", value=cred["api_key"]).strip()
+        cred["api_secret"] = st.text_input("API secret", value=cred["api_secret"], type="password").strip()
+        stream = st.checkbox("Stream ticks over WebSocket", value=True,
+                             help="Tick-by-tick prices and market depth. Uses one WebSocket connection.")
+        st.caption("Set the redirect URL of your Kite Connect app to this app's address, "
+                   "e.g. http://localhost:8501. Keys can also go in .streamlit/secrets.toml.")
+    if not (cred["api_key"] and cred["api_secret"]):
+        st.info("Enter your Kite Connect API key and secret.")
+        return
+    params = st.query_params
+    if params.get("request_token") and params.get("status") == "success":
+        try:
+            st.session_state["kite_token"] = kite.exchange_request_token(
+                cred["api_key"], cred["api_secret"], params["request_token"])
+            st.toast("Logged in to Zerodha Kite", icon="✅")
+        except Exception as exc:
+            st.error(f"Kite login failed: {exc}")
+        st.query_params.clear()
+    token = (st.session_state.get("kite_token") or cred["access_token"]
+             or kite.load_saved_token(cred["api_key"]))
+    if not token:
+        st.link_button("🔐 Log in with Zerodha", kite.login_url(cred["api_key"]), type="primary",
+                       width="stretch")
+        st.caption("Kite tokens expire daily around 6 AM, so log in once each trading day.")
+        return
+    try:
+        src = kite_source(cred["api_key"], token, stream)
+        name = st.session_state.get("kite_user") or src.profile_name()
+        st.session_state["kite_user"] = name
+    except Exception as exc:
+        st.error(f"Kite connection failed: {exc}")
+        st.session_state.pop("kite_token", None)
+        st.link_button("🔐 Log in again", kite.login_url(cred["api_key"]), width="stretch")
+        return
+    st.session_state["kite_src"] = src
+    status = src.stream.status if src.stream else "REST polling"
+    st.success(f"Zerodha Kite connected · {name} · {status}")
+    if st.button("Log out of Kite", width="stretch"):
+        st.session_state.pop("kite_token", None)
+        st.session_state["kite_src"] = None
+        kite.TOKEN_FILE.unlink(missing_ok=True)
+        st.rerun()
 
 
 # --------------------------------------------------------------------------
@@ -150,11 +254,17 @@ with st.sidebar:
     query = typed.strip() or ("" if pick.startswith("—") else pick.split(" · ")[0])
     demo = st.toggle("Demo mode (synthetic data, works offline)", value=False)
     refresh_label = st.selectbox("⚡ Live refresh", ["5 s", "10 s", "15 s", "30 s", "60 s", "Off"], index=2)
+    kite_default = bool(st.query_params.get("request_token") or kite.TOKEN_FILE.exists())
+    source = st.radio("Live data source", ["Yahoo Finance (free, delayed)", "Zerodha Kite (real-time)"],
+                      index=1 if kite_default else 0, disabled=demo, key="source")
+    st.session_state["kite_src"] = None
+    if source.startswith("Zerodha") and not demo:
+        kite_sidebar()
     go_btn = st.button("🔍 Analyse", type="primary", width="stretch")
     if st.button("🔄 Refresh live data", width="stretch"):
         run_analysis.clear()
-    st.caption("Tip: BSE scrip codes (e.g. 500325) work with BSE selected. "
-               "Data: Yahoo Finance & Google News; quotes may be delayed ~1-15 min.")
+    st.caption("Tip: BSE scrip codes (e.g. 500325) work with BSE selected. Prices: Zerodha Kite when "
+               "connected, otherwise Yahoo Finance (delayed ~1-15 min). News: Google News & Yahoo.")
 
 REFRESH = None if refresh_label == "Off" else int(refresh_label.split()[0])
 status = live.market_status()
@@ -186,7 +296,8 @@ if not active:
 query, exchange, demo = active
 with st.spinner(f"Fetching data and running models for {query} on {exchange}…"):
     try:
-        A = run_analysis(query, exchange, demo)
+        broker = None if demo else active_kite()
+        A = run_analysis(query, exchange, demo, "kite" if broker else "yahoo", broker)
     except Exception as exc:  # network / symbol errors
         st.error(f"Could not analyse **{query}** on {exchange}: {exc}")
         st.info("Check the symbol, try the other exchange, or switch on **Demo mode** if you're offline.")
@@ -222,8 +333,9 @@ def live_header():
         m = live.momentum(q.bars)
         c[2].metric("Live momentum", m["label"], f"VWAP ₹{m['vwap']:,.2f}" if not np.isnan(m["vwap"]) else None,
                     delta_color="off")
-        st.caption(f"Updated {q.updated:%H:%M:%S} IST" + (" · simulated ticks" if B.demo else
-                   " · Yahoo Finance (may lag the exchange by a few minutes)"))
+        st.caption(f"Updated {q.updated:%H:%M:%S} IST · " + ("simulated ticks" if B.demo else
+                   "Zerodha Kite (real-time)" if q.source == "Zerodha Kite" else
+                   "Yahoo Finance (may lag the exchange by a few minutes)"))
     else:
         c[0].metric("Price", rupee(price), f"{chg:+.2f} ({chg / float(prev['Close']) * 100:+.2f}%)")
         c[1].metric("Day range ₹", span(A.intraday.get("day_low", last["Low"]), A.intraday.get("day_high", last["High"])))
@@ -285,6 +397,8 @@ with tabs[0]:
                 st.success("Target reached — consider booking profit.")
             elif q.price <= plan.stop_loss:
                 st.error("Stop-loss hit — the intraday view is invalidated.")
+        if q.extra.get("depth_buy") or q.extra.get("buy_qty"):
+            order_book(q)
 
     live_chart()
     st.subheader("⚡ Live watchlist")

@@ -91,3 +91,4 @@ __pycache__/
 venv/
 .pytest_cache/
 .streamlit/secrets.toml
+.kite_token.json

@@ -59,9 +59,45 @@ StockAI is a web app, so the phone just needs a browser. Choose one:
 - **Market clock**: NSE/BSE open, pre-open or closed in IST, with a countdown. Exchange holidays are not modelled.
 - **Demo mode** streams simulated ticks, so every live feature can be tried offline or after hours.
 
-Quotes come from Yahoo Finance and are typically delayed a few minutes versus the exchange. Exchange-grade
-tick data needs a broker API (Zerodha Kite Connect, Upstox, Angel One SmartAPI, Fyers); `stockai/live.py` is
-the place to plug one in.
+By default quotes come from Yahoo Finance, typically a few minutes behind the exchange. For exchange
+real-time data, connect Zerodha Kite (below).
+
+## Zerodha Kite real-time data
+With Kite connected, StockAI uses your Zerodha API for:
+- **Live prices**, tick by tick over WebSocket, with REST polling as fallback.
+- **Live order book**: top 5 bids/asks, total pending buy vs sell quantity ("who is stronger right now"),
+  average traded price and circuit limits.
+- **1-minute intraday candles** and **5 years of daily history** for every prediction, so Yahoo
+  is no longer needed for prices. Yahoo and Google News are still used, best-effort, for company info,
+  holders and news.
+
+StockAI only reads data. It never places orders.
+
+### One-time setup
+1. You need a Zerodha trading account. Go to <https://developers.kite.trade>, sign up and click
+   **Create new app** (type *Connect*). Kite Connect is a paid API subscription with market data;
+   check the current price on that site.
+2. In the app form set **Redirect URL** to the address you open StockAI on:
+   - on your PC: `http://localhost:8501`
+   - on Streamlit Cloud: `https://your-app.streamlit.app`
+3. Copy the **API key** and **API secret** into StockAI in one of these ways:
+   - copy `.streamlit/secrets.toml.example` to `.streamlit/secrets.toml` and fill it in, or
+   - on Streamlit Cloud, paste the same lines into **App settings → Secrets**, or
+   - type them into **🔑 Kite API settings** in the sidebar (used for this session only).
+
+### Every trading day
+Zerodha access tokens expire each morning (around 6 AM). In the sidebar choose
+**Live data source → Zerodha Kite (real-time)** and click **🔐 Log in with Zerodha**. Log in on Zerodha's page and you
+are sent back to StockAI, which shows *Zerodha Kite connected*. The day's token is saved in
+`.kite_token.json` next to the app. Phones on the same Wi-Fi then use the PC's connection without
+logging in again.
+
+Notes:
+- Kite allows about 1 quote request per second. StockAI batches the watchlist into one call and uses
+  WebSocket ticks where possible. Keep the refresh at 5 s or slower.
+- The WebSocket uses one of the 3 connections Kite allows per API key.
+- BSE scrip codes (e.g. `500325`) are mapped to Kite symbols automatically.
+- If the token is rejected (expired or revoked), the sidebar shows **Log in again**.
 
 ## What it analyses
 
@@ -96,6 +132,7 @@ lean on technicals & flow, the 6-month view on fundamentals & trend. Stop-losses
 ```
 app.py                   Streamlit UI
 stockai/live.py          market clock, live quotes, intraday momentum, watchlist, alerts
+stockai/kite.py          Zerodha Kite Connect: login, quotes, candles, market depth, WebSocket ticks
 stockai/data.py          symbol resolution, Yahoo Finance prices/info/holders, news, demo data
 stockai/indicators.py    technical indicators, levels, patterns, buyer/seller pressure
 stockai/forecast.py      ML ensemble, Monte Carlo, trend models, intraday outlook
@@ -109,7 +146,7 @@ Run tests with `pytest -q`.
 
 ## Data notes
 
-- Prices come from Yahoo Finance (`SYMBOL.NS` for NSE, `SYMBOL.BO` / scrip code for BSE) and can be
+- Without Kite, prices come from Yahoo Finance (`SYMBOL.NS` for NSE, `SYMBOL.BO` / scrip code for BSE) and can be
   delayed by a few minutes. Press **Refresh live data** to re-fetch (results are cached for 5 minutes).
 - Shareholding data from Yahoo is coarser than the exchange's quarterly shareholding-pattern filings
   (promoter / FII / DII). Check NSE/BSE filings for the official split.
