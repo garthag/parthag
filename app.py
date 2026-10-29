@@ -13,7 +13,7 @@ import plotly.graph_objects as go
 import streamlit as st
 from plotly.subplots import make_subplots
 
-from stockai import data, indicators, sentiment, signals
+from stockai import data, indicators, live, sentiment, signals
 from stockai.forecast import HORIZONS
 
 st.set_page_config(page_title="StockAI · NSE/BSE Predictor", page_icon="📈", layout="wide")
@@ -50,6 +50,87 @@ def run_analysis(query: str, exchange: str, demo: bool):
     return signals.analyze(bundle)
 
 
+@st.cache_data(ttl=4, show_spinner=False)
+def _live_quote(symbol: str):
+    return live.fetch_quote(symbol)
+
+
+def get_quote(symbol: str, demo: bool, start_price: float | None = None) -> live.Quote:
+    """Live quote from Yahoo, or the next tick of a simulated feed in demo mode."""
+    if not demo:
+        return _live_quote(symbol)
+    feeds = st.session_state.setdefault("feeds", {})
+    if symbol not in feeds:
+        base = start_price or float(data.demo_bundle(symbol[:-3], "NSE").daily["Close"].iloc[-1])
+        feeds[symbol] = live.DemoFeed(symbol, base)
+    return feeds[symbol].tick()
+
+
+def check_alerts(symbol: str, price: float):
+    for a in st.session_state.get("alerts", []):
+        if a.symbol == symbol and a.check(price):
+            msg = f"🔔 {symbol} is {a.direction} ₹{a.level:,.2f} (now ₹{price:,.2f})"
+            st.toast(msg, icon="🔔")
+            st.session_state.setdefault("alert_log", []).insert(0, f"{datetime.now(live.IST):%H:%M:%S} · {msg}")
+
+
+def watchlist_panel(exchange: str, demo: bool):
+    """Live-refreshing watchlist table plus alert manager."""
+    default = [f"{s}{data.EXCHANGE_SUFFIX[exchange]}" for s in ("RELIANCE", "HDFCBANK", "ICICIBANK", "TCS", "LT", "HAL")]
+    wl = st.session_state.setdefault("watchlist", default)
+    with st.expander("✏️ Edit watchlist & price alerts"):
+        add = st.text_input("Add stock (name or code)", key="wl_add")
+        c1, c2 = st.columns(2)
+        if c1.button("➕ Add to watchlist") and add:
+            try:
+                sym = data.resolve_symbol(add, exchange)
+                if sym not in wl:
+                    wl.append(sym)
+            except ValueError as exc:
+                st.error(str(exc))
+        remove = c2.multiselect("Remove", wl, key="wl_remove")
+        if remove:
+            st.session_state["watchlist"] = wl = [s for s in wl if s not in remove]
+        st.markdown("**New price alert**")
+        a1, a2, a3, a4 = st.columns([2, 1, 1, 1])
+        a_sym = a1.selectbox("Stock", wl, key="al_sym") if wl else None
+        a_dir = a2.selectbox("When price is", ["above", "below"], key="al_dir")
+        a_lvl = a3.number_input("₹ level", min_value=0.0, step=1.0, key="al_lvl")
+        if a4.button("🔔 Set alert") and a_sym and a_lvl > 0:
+            st.session_state.setdefault("alerts", []).append(live.Alert(a_sym, a_dir, a_lvl))
+        alerts = st.session_state.get("alerts", [])
+        if alerts:
+            st.dataframe(pd.DataFrame([{"Stock": a.symbol, "Condition": f"{a.direction} ₹{a.level:,.2f}",
+                                        "Status": "✅ triggered" if a.triggered else "⏳ watching"} for a in alerts]),
+                         hide_index=True, width="stretch")
+            if st.button("Clear alerts"):
+                st.session_state["alerts"] = []
+
+    @st.fragment(run_every=REFRESH)
+    def _table():
+        rows = []
+        for sym in st.session_state.get("watchlist", []):
+            try:
+                q = get_quote(sym, demo)
+                check_alerts(sym, q.price)
+                rows.append(live.watch_row(q))
+            except Exception as exc:
+                rows.append({"Symbol": sym, "Signal": f"⚠️ {exc}"[:60]})
+        if rows:
+            df = pd.DataFrame(rows)
+            st.dataframe(df, hide_index=True, width="stretch", column_config={
+                "Price": st.column_config.NumberColumn(format="₹%.2f"),
+                "Change": st.column_config.NumberColumn(format="%+.2f"),
+                "Change %": st.column_config.NumberColumn(format="%+.2f%%"),
+                "Day low": st.column_config.NumberColumn(format="₹%.2f"),
+                "Day high": st.column_config.NumberColumn(format="₹%.2f"),
+                "Volume": st.column_config.NumberColumn(format="%d"),
+            })
+        for line in st.session_state.get("alert_log", [])[:5]:
+            st.caption(line)
+    _table()
+
+
 def style_fig(fig, height=420):
     fig.update_layout(height=height, margin=dict(l=10, r=10, t=50, b=10), hovermode="x unified",
                       legend=dict(orientation="h", yanchor="top", y=-0.08, x=0))
@@ -68,11 +149,17 @@ with st.sidebar:
     typed = st.text_input("Stock name or code", placeholder="e.g. RELIANCE, Infosys, 500325")
     query = typed.strip() or ("" if pick.startswith("—") else pick.split(" · ")[0])
     demo = st.toggle("Demo mode (synthetic data, works offline)", value=False)
+    refresh_label = st.selectbox("⚡ Live refresh", ["5 s", "10 s", "15 s", "30 s", "60 s", "Off"], index=2)
     go_btn = st.button("🔍 Analyse", type="primary", width="stretch")
     if st.button("🔄 Refresh live data", width="stretch"):
         run_analysis.clear()
     st.caption("Tip: BSE scrip codes (e.g. 500325) work with BSE selected. "
                "Data: Yahoo Finance & Google News; quotes may be delayed ~1-15 min.")
+
+REFRESH = None if refresh_label == "Off" else int(refresh_label.split()[0])
+status = live.market_status()
+st.caption(f"{status['label']} · {status['detail']} · {status['now']:%a %d %b, %H:%M:%S} IST"
+           + ("" if REFRESH is None else f" · auto-refresh every {REFRESH}s"))
 
 st.warning("⚠️ Educational tool, not investment advice. Predictions are statistical estimates with real "
            "uncertainty — always do your own research or consult a SEBI-registered adviser.", icon="⚠️")
@@ -92,6 +179,8 @@ if not active:
         "- **News & sentiment**, **public interest**, **buyers vs sellers**, **who owns it** "
         "(promoters, FIIs/DIIs, mutual funds) and **fundamentals**"
     )
+    st.subheader("⚡ Live watchlist")
+    watchlist_panel(exchange, demo)
     st.stop()
 
 query, exchange, demo = active
@@ -116,21 +205,95 @@ st.header(f"{B.name}  ·  {B.symbol}")
 st.caption(f"{B.info.get('sector', '')} · {B.info.get('industry', '')} · {B.exchange} · "
            f"analysed {datetime.now():%d %b %Y %H:%M}" + ("  ·  **DEMO DATA**" if B.demo else ""))
 
-c = st.columns(3) + st.columns(3)
-c[0].metric("Price", rupee(price), f"{chg:+.2f} ({chg / float(prev['Close']) * 100:+.2f}%)")
-c[1].metric("Day range ₹", span(A.intraday.get("day_low", last["Low"]), A.intraday.get("day_high", last["High"])))
-c[2].metric("52W range ₹", span(ind["Low"].iloc[-252:].min(), ind["High"].iloc[-252:].max()))
-c[3].metric("Market cap", crore(B.info.get("marketCap")))
-c[4].metric("Beta vs index", f"{A.beta:.2f}" if A.beta is not None else "—")
-c[5].metric("Volatility (ann.)", pct(float(last["HV20"]) * 100, 1, sign=False))
 
-tabs = st.tabs(["🧭 Verdict", "📈 Charts", "🔮 Predictions", "🧮 Technicals", "📰 News & sentiment",
+
+@st.fragment(run_every=REFRESH)
+def live_header():
+    try:
+        q = get_quote(B.symbol, B.demo, price)
+    except Exception as exc:
+        st.caption(f"Live quote unavailable ({exc}); showing last analysed price.")
+        q = None
+    c = st.columns(3)
+    if q is not None:
+        check_alerts(B.symbol, q.price)
+        c[0].metric("Live price", rupee(q.price), f"{q.change:+.2f} ({q.change_pct:+.2f}%)")
+        c[1].metric("Day range ₹", span(q.day_low, q.day_high))
+        m = live.momentum(q.bars)
+        c[2].metric("Live momentum", m["label"], f"VWAP ₹{m['vwap']:,.2f}" if not np.isnan(m["vwap"]) else None,
+                    delta_color="off")
+        st.caption(f"Updated {q.updated:%H:%M:%S} IST" + (" · simulated ticks" if B.demo else
+                   " · Yahoo Finance (may lag the exchange by a few minutes)"))
+    else:
+        c[0].metric("Price", rupee(price), f"{chg:+.2f} ({chg / float(prev['Close']) * 100:+.2f}%)")
+        c[1].metric("Day range ₹", span(A.intraday.get("day_low", last["Low"]), A.intraday.get("day_high", last["High"])))
+
+
+live_header()
+c = st.columns(4)
+c[0].metric("52W range ₹", span(ind["Low"].iloc[-252:].min(), ind["High"].iloc[-252:].max()))
+c[1].metric("Market cap", crore(B.info.get("marketCap")))
+c[2].metric("Beta vs index", f"{A.beta:.2f}" if A.beta is not None else "—")
+c[3].metric("Volatility (ann.)", pct(float(last["HV20"]) * 100, 1, sign=False))
+
+tabs = st.tabs(["⚡ Live", "🧭 Verdict", "📈 Charts", "🔮 Predictions", "🧮 Technicals", "📰 News & sentiment",
                 "👥 Buyers & interest", "🏦 Fundamentals & holders"])
+
+# --------------------------------------------------------------------------
+# Live
+# --------------------------------------------------------------------------
+with tabs[0]:
+    plan = A.plans["Intraday (today)"]
+
+    @st.fragment(run_every=REFRESH)
+    def live_chart():
+        try:
+            q = get_quote(B.symbol, B.demo, price)
+        except Exception as exc:
+            st.info(f"Live 1-minute data unavailable: {exc}")
+            return
+        bars = q.bars.copy()
+        tp = (bars["High"] + bars["Low"] + bars["Close"]) / 3
+        bars["VWAP"] = (tp * bars["Volume"]).cumsum() / bars["Volume"].cumsum().replace(0, np.nan)
+        m = live.momentum(q.bars)
+        left, right = st.columns([3, 1])
+        with left:
+            fig = go.Figure()
+            fig.add_trace(go.Candlestick(x=bars.index, open=bars.Open, high=bars.High, low=bars.Low, close=bars.Close,
+                                         name="1 min", increasing_line_color=UP, decreasing_line_color=DOWN))
+            fig.add_trace(go.Scatter(x=bars.index, y=bars.VWAP, name="VWAP", line=dict(color=ORANGE, width=2)))
+            lo, hi = float(bars.Low.min()), float(bars.High.max())
+            pad = (hi - lo) * 0.15 or hi * 0.005
+            for lvl, name, color in ((plan.target, "Target", UP), (plan.stop_loss, "Stop-loss", DOWN)):
+                if lo - 3 * pad <= lvl <= hi + 3 * pad:  # only draw levels near today's action
+                    fig.add_hline(y=lvl, line_dash="dot", line_color=color, annotation_text=f"{name} {lvl:,.1f}")
+                    lo, hi = min(lo, lvl), max(hi, lvl)
+            fig.update_yaxes(range=[lo - pad, hi + pad])
+            fig.update_layout(xaxis_rangeslider_visible=False, title=f"{B.symbol} · today, 1-minute bars")
+            st.plotly_chart(style_fig(fig, 460), width="stretch")
+        with right:
+            st.metric("Live price", rupee(q.price), f"{q.change_pct:+.2f}%")
+            st.markdown(f"**{m['label']}**")
+            for r in m["reasons"]:
+                st.markdown(f"- {r}")
+            st.markdown(f"**Today's plan:** {ACTION_STYLE[plan.action][0]} {plan.action}  \n"
+                        f"🎯 Target {rupee(plan.target)}  \n🛑 Stop {rupee(plan.stop_loss)}")
+            dist_t = (plan.target / q.price - 1) * 100
+            dist_s = (plan.stop_loss / q.price - 1) * 100
+            st.caption(f"Target is {dist_t:+.2f}% away, stop is {dist_s:+.2f}% away.")
+            if q.price >= plan.target:
+                st.success("Target reached — consider booking profit.")
+            elif q.price <= plan.stop_loss:
+                st.error("Stop-loss hit — the intraday view is invalidated.")
+
+    live_chart()
+    st.subheader("⚡ Live watchlist")
+    watchlist_panel(exchange, B.demo)
 
 # --------------------------------------------------------------------------
 # Verdict
 # --------------------------------------------------------------------------
-with tabs[0]:
+with tabs[1]:
     st.subheader("Should you buy? — by time horizon")
     cols = st.columns(4)
     for col, (label, plan) in zip(cols, A.plans.items()):
@@ -183,7 +346,7 @@ with tabs[0]:
 # --------------------------------------------------------------------------
 # Charts
 # --------------------------------------------------------------------------
-with tabs[1]:
+with tabs[2]:
     period = st.radio("Range", ["1M", "3M", "6M", "1Y", "2Y", "5Y"], index=3, horizontal=True)
     n = {"1M": 21, "3M": 63, "6M": 126, "1Y": 252, "2Y": 504, "5Y": len(ind)}[period]
     overlays = st.multiselect("Overlays", ["SMA20", "SMA50", "SMA200", "EMA21", "Bollinger", "Supertrend"],
@@ -234,7 +397,7 @@ with tabs[1]:
 # --------------------------------------------------------------------------
 # Predictions
 # --------------------------------------------------------------------------
-with tabs[2]:
+with tabs[3]:
     st.subheader("Price forecasts by horizon")
     rows = []
     for label, fc in A.forecasts.items():
@@ -293,7 +456,7 @@ with tabs[2]:
 # --------------------------------------------------------------------------
 # Technicals
 # --------------------------------------------------------------------------
-with tabs[3]:
+with tabs[4]:
     left, right = st.columns(2)
     with left:
         st.subheader(f"Indicator votes — {A.technical['label']}")
@@ -336,7 +499,7 @@ with tabs[3]:
 # --------------------------------------------------------------------------
 # News & sentiment
 # --------------------------------------------------------------------------
-with tabs[4]:
+with tabs[5]:
     s = A.sentiment
     c = st.columns(4)
     c[0].metric("Overall news sentiment", s["label"], f"{s['score']:+.2f}")
@@ -362,7 +525,7 @@ with tabs[4]:
 # --------------------------------------------------------------------------
 # Buyers & public interest
 # --------------------------------------------------------------------------
-with tabs[5]:
+with tabs[6]:
     p = A.pressure
     c = st.columns(2) + st.columns(2)
     c[0].metric("Who's in control", p["verdict"])
@@ -402,7 +565,7 @@ with tabs[5]:
 # --------------------------------------------------------------------------
 # Fundamentals & holders
 # --------------------------------------------------------------------------
-with tabs[6]:
+with tabs[7]:
     left, right = st.columns([3, 2])
     with left:
         st.subheader(f"Fundamental health — {A.fundamental['label']}")

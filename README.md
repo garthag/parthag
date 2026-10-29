@@ -7,16 +7,61 @@ stop-loss and expected profit margin for each horizon.
 > ⚠️ Educational tool, **not investment advice**. Forecasts are statistical estimates; markets are
 > uncertain. Do your own research or consult a SEBI-registered adviser.
 
-## Quick start
+## Install & run
 
+### Windows 10 / 11 (desktop app)
+1. Download the code: on GitHub click **Code → Download ZIP**, then right-click the ZIP → **Extract All**
+   (or `git clone` this repo).
+2. Double-click **`install_windows.bat`**. It installs Python 3.12 if missing (via `winget`; run the
+   installer again after Python finishes), creates a private environment, installs the packages
+   and puts a **StockAI** shortcut on your desktop.
+3. Double-click the **StockAI** desktop shortcut. A console window starts the server, and StockAI opens in its
+   own Microsoft Edge app window, with no browser tabs or address bar. Keep the console open while you use it,
+   and close it to stop the app.
+
+> If Windows SmartScreen warns about the `.bat` file, click **More info → Run anyway**.
+> If Windows Firewall asks about Python, allow **Private networks** so your phone can connect.
+
+### macOS / Linux
 ```bash
-pip install -r requirements.txt
-streamlit run app.py
+./run.sh            # first run installs everything into .venv, then starts the app
 ```
 
-Open http://localhost:8501, choose **NSE** or **BSE**, pick a popular stock or type a name / symbol
-/ BSE scrip code (e.g. `RELIANCE`, `Infosys`, `500325`) and click **Analyse**.
-Switch on **Demo mode** to try the app offline with synthetic data.
+### Mobile (Android / iPhone)
+StockAI is a web app, so the phone just needs a browser. Choose one:
+
+**A. Same Wi-Fi as your PC (free, quickest)**
+1. Start StockAI on your PC (`run_windows.bat` / `./run.sh`). The console prints a line like
+   `On your phone (Wi-Fi): http://192.168.1.23:8501`.
+2. Open that address in Chrome (Android) or Safari (iPhone).
+3. Install it on your home screen:
+   - **Android / Chrome:** menu ⋮ → **Add to Home screen** → *Install*.
+   - **iPhone / Safari:** Share ⬆ → **Add to Home Screen** → *Add*.
+
+   It now opens from its own icon like an app. The PC must be on for it to work.
+
+**B. Anywhere, 24×7 (free cloud hosting)**
+1. Go to <https://share.streamlit.io>, sign in with GitHub and click **Create app**.
+2. Choose this repository, the branch, and main file `app.py`, then **Deploy**. You get a link like
+   `https://your-app.streamlit.app`.
+3. Open the link on your phone and **Add to Home Screen** as above. This works on mobile data too.
+   (Yahoo Finance sometimes rate-limits cloud servers; if quotes fail, use option A or a paid host.)
+
+**C. Any Docker host** (Render, Railway, Hugging Face Spaces, a VPS): `docker build -t stockai . && docker run -p 8501:8501 stockai`.
+
+## Real-time features
+- **Live price header**: price, change, day range and intraday momentum refresh automatically.
+  Pick the interval (5 s to 60 s, or Off) under **⚡ Live refresh** in the sidebar.
+- **⚡ Live tab**: today's 1-minute candles with VWAP, today's target/stop-loss lines, and momentum
+  signals (VWAP, EMA 9/21, RSI, last-5-bar direction). It also tells you when the target or stop is hit.
+- **Live watchlist** (also on the home screen): add or remove stocks; prices and signals refresh together.
+- **Price alerts**: "notify me when X goes above/below ₹Y". A pop-up appears while the app is open.
+- **Market clock**: NSE/BSE open, pre-open or closed in IST, with a countdown. Exchange holidays are not modelled.
+- **Demo mode** streams simulated ticks, so every live feature can be tried offline or after hours.
+
+Quotes come from Yahoo Finance and are typically delayed a few minutes versus the exchange. Exchange-grade
+tick data needs a broker API (Zerodha Kite Connect, Upstox, Angel One SmartAPI, Fyers); `stockai/live.py` is
+the place to plug one in.
 
 ## What it analyses
 
@@ -50,6 +95,7 @@ lean on technicals & flow, the 6-month view on fundamentals & trend. Stop-losses
 
 ```
 app.py                   Streamlit UI
+stockai/live.py          market clock, live quotes, intraday momentum, watchlist, alerts
 stockai/data.py          symbol resolution, Yahoo Finance prices/info/holders, news, demo data
 stockai/indicators.py    technical indicators, levels, patterns, buyer/seller pressure
 stockai/forecast.py      ML ensemble, Monte Carlo, trend models, intraday outlook
