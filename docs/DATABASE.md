@@ -68,6 +68,7 @@ erDiagram
 | Workflow | `approval_steps`, `approval_actions` (no update), `report_revisions` (immutable snapshot + SHA-256; PDF reference can be set once) |
 | Documents | `drive_folders` (unique per project+path → idempotent), `attachments`, `drive_upload_sessions` (no API access) |
 | Sync & audit | `synchronization_jobs` (idempotency results), `audit_events` (append-only) |
+| Integration | `integration_events` (append-only, ordered event feed for other software; see [INTEGRATIONS.md](INTEGRATIONS.md)) |
 | Industrial (Phase 6) | `fabrication_items`, `dispatch_records`, `erection_records`, `commissioning_checklists` |
 
 ## Views (security_invoker — caller's RLS applies)

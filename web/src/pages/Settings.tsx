@@ -7,6 +7,7 @@ import { db, requestPersistentStorage } from '../lib/local'
 import { download } from '../lib/csv'
 import { ROLE_LABELS, type AppRole } from '../lib/types'
 import { Alert, Card, PageHeader, Select, TextInput } from '../components/ui'
+import { IntegrationsCard } from '../components/Integrations'
 
 const MODULES = ['project', 'members', 'masters', 'schedule', 'boq', 'commercial', 'dpr', 'resources', 'safety', 'quality', 'documents', 'reports']
 const LETTER: Record<string, string> = { create: 'C', view: 'V', edit: 'E', submit: 'S', approve: 'A', reject: 'R', export: 'X', delete: 'D' }
@@ -81,6 +82,7 @@ export default function Settings() {
           <button className="btn btn-primary" disabled={!project || !(can('project', 'export') || can('reports', 'export'))} onClick={() => void exportJson()}>Export project (JSON)</button>
         </Card>
       </div>
+      <IntegrationsCard />
       <Card title="Privacy & security">
         <ul className="list-disc pl-5 text-sm space-y-1">
           <li>Access is enforced by the database (row-level security) for every request; the app only hides buttons you cannot use.</li>

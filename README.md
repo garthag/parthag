@@ -27,6 +27,7 @@ Simple enough for a site supervisor on an Android phone; structured enough for p
 | **Safety & QA/QC** | Permits with configurable checklists (hot work, height, lifting, confined space, excavation, LOTO), observations, inspections & hold points, NCRs, constraints, actions, commissioning & punch list |
 | **Dashboards** | KPIs, S-curve, production, manpower, equipment, area & contractor progress, delay Pareto, materials, quantity & billing — each with range, unit, method, table view |
 | **Security** | 13 roles × 12 modules × 8 actions, per-project overrides, RLS on every table, server-side validation, audit log, no secrets in the browser |
+| **Integrations** | Works with other software: REST API (OpenAPI), ordered event feed, `integration` role, ready-made **Python** and **Java** clients, CLI, Excel/Power BI/Google Sheets recipes — [docs/INTEGRATIONS.md](docs/INTEGRATIONS.md) |
 | **Portability** | CSV export on every register, full-project JSON export, CSV activity import |
 
 ## Quick start
@@ -49,7 +50,9 @@ Google Drive storage and Google sign-in: [docs/GOOGLE_SETUP.md](docs/GOOGLE_SETU
 
 ```bash
 cd web && npm test              # 39 unit tests
-supabase/tests/run.sh           # 43 database acceptance checks (PostgreSQL 15+)
+supabase/tests/run.sh           # 56 database acceptance checks (PostgreSQL 15+)
+cd clients/python && python -m unittest discover -s tests   # 9 Python client tests
+cd clients/java && ./build.sh test                          # 11 Java client tests
 ```
 Status against acceptance tests A–L: [docs/TESTING.md](docs/TESTING.md).
 
@@ -64,6 +67,7 @@ Status against acceptance tests A–L: [docs/TESTING.md](docs/TESTING.md).
 | [Google setup](docs/GOOGLE_SETUP.md) | OAuth, Drive scopes, folder tree, security implications |
 | [Setup & deployment](docs/SETUP.md) | Cloud, self-hosted, local dev, env vars |
 | [User manual](docs/USER_MANUAL.md) | By role |
+| [Integrations](docs/INTEGRATIONS.md) | Python, Java, ERP, Excel/Power BI, Google Sheets; API and event feed |
 | [Costs & limits](docs/COSTS_AND_LIMITS.md) | What is free, what is not, quotas |
 | [Security](docs/SECURITY.md) | Controls, privacy, residual risks |
 | [Backup & retention](docs/BACKUP_AND_RETENTION.md) | Backup/restore, retention, deletion |
@@ -75,7 +79,7 @@ Status against acceptance tests A–L: [docs/TESTING.md](docs/TESTING.md).
 
 ```
 supabase/
-  migrations/      8 SQL migrations: schema, RLS, workflow functions, demo loader
+  migrations/      10 SQL migrations: schema, RLS, workflow functions, demo loader
   functions/drive/ Google Drive gateway (Deno edge function; core logic unit-tested)
   tests/           database acceptance tests
 web/
@@ -83,6 +87,9 @@ web/
   src/pages/       Home, Projects, DPR wizard/view, Activities, Schedule, Manpower, Equipment,
                    Materials, Safety & QA/QC, Documents, Dashboards, Approvals, Settings
   src/components/  UI kit, evidence capture, charts, master tables
+clients/
+  python/          Python client + CLI (standard library only)
+  java/            Java 11+ client (no dependencies)
 docs/              architecture, guides and manuals
 ```
 

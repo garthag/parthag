@@ -1,8 +1,10 @@
 # Testing and acceptance status
 
-Two automated suites run in CI:
+Four automated suites run in CI:
 
-* **Database acceptance tests** — `supabase/tests/run.sh` applies every migration to a fresh PostgreSQL database (with a small shim for the Supabase `auth` schema) and runs 43 checks **as the `authenticated` role with a JWT subject**, exactly like API requests, so row-level security is exercised.
+* **Database acceptance tests** — `supabase/tests/run.sh` applies every migration to a fresh PostgreSQL database (with a small shim for the Supabase `auth` schema) and runs 56 checks (43 workflow + 13 integration-layer) **as the `authenticated` role with a JWT subject**, exactly like API requests, so row-level security is exercised.
+* **Python client** — `cd clients/python && python -m unittest discover -s tests` (9 tests against a fake API server: auth, token refresh, retries, filters, upsert, event paging, CLI).
+* **Java client** — `cd clients/java && ./build.sh test` (11 tests against a fake API server).
 * **Unit tests** — `cd web && npm test` (39 tests): progress maths, money, stock ledger, working calendar, CPM engine, S-curve, voice parser, Drive service against a simulated Drive API, offline sync engine against a simulated server, and the PDF generator.
 
 ## Status against the acceptance criteria

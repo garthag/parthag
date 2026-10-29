@@ -93,3 +93,8 @@ coverage/
 .env
 .env.*
 !.env.example
+
+# Clients
+clients/java/target/
+__pycache__/
+*.egg-info/

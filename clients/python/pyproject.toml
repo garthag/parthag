@@ -1,0 +1,15 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "construct-dpr"
+version = "0.1.0"
+description = "Python client and CLI for the CONSTRUCT DPR API"
+readme = "README.md"
+license = { text = "Apache-2.0" }
+requires-python = ">=3.9"
+dependencies = []
+
+[project.scripts]
+construct-dpr = "construct_dpr.cli:main"

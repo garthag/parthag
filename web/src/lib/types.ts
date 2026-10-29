@@ -1,13 +1,14 @@
 export type AppRole =
   | 'org_admin' | 'project_admin' | 'project_manager' | 'construction_manager' | 'planning_engineer'
   | 'site_engineer' | 'supervisor' | 'storekeeper' | 'qaqc_engineer' | 'safety_engineer'
-  | 'commercial_engineer' | 'client_reviewer' | 'auditor'
+  | 'commercial_engineer' | 'client_reviewer' | 'auditor' | 'integration'
 
 export const ROLE_LABELS: Record<AppRole, string> = {
   org_admin: 'Organisation administrator', project_admin: 'Project administrator', project_manager: 'Project manager',
   construction_manager: 'Construction manager', planning_engineer: 'Planning engineer', site_engineer: 'Site engineer',
   supervisor: 'Supervisor', storekeeper: 'Storekeeper', qaqc_engineer: 'QA/QC engineer', safety_engineer: 'Safety engineer',
   commercial_engineer: 'Commercial engineer', client_reviewer: 'Client reviewer', auditor: 'Read-only auditor',
+  integration: 'Integration (API account for other software)',
 }
 
 export type Module = 'project' | 'members' | 'masters' | 'schedule' | 'boq' | 'commercial' | 'dpr' | 'resources' | 'safety' | 'quality' | 'documents' | 'reports'

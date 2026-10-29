@@ -25,6 +25,8 @@ flowchart LR
     FN --> PG
   end
 
+  EXT["Other software<br/>Python · Java · ERP · Excel/Power BI"]
+  EXT -- "REST API + event feed<br/>(integration role)" --> REST
   GD[("Google Drive<br/>project folder tree<br/>photos · video · audio · PDFs")]
 
   UI -- "JWT" --> AUTH
@@ -43,6 +45,7 @@ flowchart LR
 | Approved DPR = immutable JSON snapshot + SHA-256 | A report, once approved, can always be reproduced exactly, even after BOQ/masters change. |
 | Drive access through a server function holding one document-controller credential | With the narrow `drive.file` scope each *user's* token can only see files *that user's* session created, which breaks a shared project tree. A single server-held credential keeps one tree, keeps secrets off phones, and lets the database decide who may upload/view. |
 | Offline-first client with outbox + idempotency keys | Site networks drop; retries must never duplicate a DPR. |
+| Language-neutral API + event feed for other software | Python/Java/ERP/BI integrate through the same REST API and permissions as the app; an ordered, append-only event feed lets them react to approvals without missing anything ([INTEGRATIONS.md](INTEGRATIONS.md)). |
 | CPM engine in TypeScript on the client | Deterministic, unit-tested, works offline; results are written back only through `apply_schedule_dates()` with version checks. |
 
 ## 2. Request flow for a DPR

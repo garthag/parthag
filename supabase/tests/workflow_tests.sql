@@ -5,29 +5,8 @@
 \set ON_ERROR_STOP 1
 \set QUIET 1
 
-create or replace function pg_temp.ok(cond boolean, msg text) returns void language plpgsql as $$
-begin
-  if cond is distinct from true then raise exception 'FAILED: %', msg; end if;
-  raise notice 'ok - %', msg;
-end $$;
+\i tests/helpers.sql
 
-create or replace function pg_temp.fails(sql text, expect text, msg text) returns void language plpgsql as $$
-begin
-  execute sql;
-  raise exception 'FAILED (no error raised): %', msg;
-exception when others then
-  if sqlerrm like 'FAILED (no error raised)%' then raise; end if;
-  if position(lower(expect) in lower(sqlerrm)) = 0 then
-    raise exception 'FAILED: % — unexpected error: %', msg, sqlerrm;
-  end if;
-  raise notice 'ok - % (rejected: %)', msg, left(sqlerrm, 90);
-end $$;
-
-create or replace function pg_temp.login(p uuid) returns void language plpgsql as $$
-begin
-  perform set_config('request.jwt.claims', json_build_object('sub', p, 'role', 'authenticated')::text, false);
-end $$;
-grant execute on all functions in schema pg_temp to authenticated;
 
 -- Users (Supabase Auth would create these on sign-up)
 insert into auth.users (id, email, raw_user_meta_data) values

@@ -18,9 +18,12 @@ Letters: **C** create · **V** view · **E** edit · **S** submit · **A** appro
 | Safety engineer | V | V | V | V | — | — | VS | V | CVESARX | V | CVX | VX |
 | Commercial engineer | V | V | V | V | CVESX | CVESX | VX | V | — | — | VX | VX |
 | Client reviewer | V | — | V | V | V | — | VARX | V | V | V | V | VX |
+| Integration (API account) | VX | V | CVEX | CVEX | CVEX | VX | VX | VX | VX | VX | VX | VX |
 | Read-only auditor | VX | V | VX | VX | VX | VX | VX | VX | VX | VX | VX | VX |
 
 ### Special rules
+
+* **Integration** accounts are for other software (ERP, Python/Java services). They sync masters, schedule and billing fields and read the event feed, but can never submit, approve or reject reports or authorise BOQ revisions. See [INTEGRATIONS.md](INTEGRATIONS.md).
 
 * **No self-approval**: a user cannot approve a DPR they prepared or submitted unless the project setting *Allow self-approval* is on (recorded in the audit log). Default: off.
 * **Rejection requires a reason.** Revisions require a reason.
