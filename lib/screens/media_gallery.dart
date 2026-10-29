@@ -523,7 +523,16 @@ class _VideoViewState extends State<_VideoView> {
   Widget build(BuildContext context) {
     final c = _c!;
     if (_error != null) {
-      return const Center(child: Text('Video unavailable', style: TextStyle(color: Colors.white)));
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(24),
+          child: Text(
+            'Video cannot be played on this device.\nUse Share to open it in another app.',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: Colors.white),
+          ),
+        ),
+      );
     }
     if (!c.value.isInitialized) return const Center(child: CircularProgressIndicator());
     return GestureDetector(

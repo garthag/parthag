@@ -43,7 +43,37 @@ It works fully **offline** on site. You can optionally turn on **Google sign-in 
 - Offline first: data is kept as JSON in the app's private storage, and photos and videos are copied into app storage, so clearing the gallery doesn't lose them.
 - Optional Google cloud: sign in with Google through Firebase Auth. Reports sync to Cloud Firestore and media goes to Firebase Storage, so the whole site team can share it across devices.
 
-## Getting started
+## Download & install
+
+Ready-made builds are on the **[Releases page](https://github.com/garthag/parthag/releases/latest)**:
+
+| File | For |
+|---|---|
+| `SiteDPR-android.apk` | Android phones and tablets (recommended for site use: camera, video, GPS) |
+| `SiteDPR-windows.zip` | Windows 10 / 11 PCs (office use: review, add photos from files, print PDFs) |
+
+### Windows PC
+
+1. Open the [Releases page](https://github.com/garthag/parthag/releases/latest) and click **`SiteDPR-windows.zip`** to download it.
+2. In your **Downloads** folder, right-click the zip and choose **Extract All… → Extract**.
+3. Open the extracted **`SiteDPR`** folder and double-click **`site_dpr.exe`**.
+4. If Windows shows **"Windows protected your PC"**, click **More info → Run anyway**. The app isn't code-signed, so Windows shows this warning for any new app.
+5. Optional: right-click `site_dpr.exe` and choose **Show more options → Send to → Desktop (create shortcut)**.
+
+Keep the whole `SiteDPR` folder together: the `.exe` needs the `data` folder and the `.dll` files next to it. You can move the folder anywhere, for example to `C:\Program Files` or your Documents folder.
+
+If the app doesn't start and complains about a missing `MSVCP140.dll` or `VCRUNTIME140.dll`, install the [Microsoft Visual C++ Redistributable (x64)](https://aka.ms/vs/17/release/vc_redist.x64.exe) and try again.
+
+On Windows, photos and videos are added from files (**Gallery** / **Video file**), because there's no camera capture, and in-app video playback may not be available. For site work with the camera and GPS, use the Android app.
+
+### Android phone
+
+1. On the phone, open the [Releases page](https://github.com/garthag/parthag/releases/latest) and tap **`SiteDPR-android.apk`**.
+   (Or download it on a PC and copy it to the phone over USB, WhatsApp or Google Drive.)
+2. Open the downloaded file. If Android asks, allow **Install unknown apps** for your browser or file manager.
+3. Tap **Install**, then **Open**.
+
+## Building from source
 
 Prerequisites: the [Flutter SDK](https://docs.flutter.dev/get-started/install) (stable) and Android Studio or the Android SDK.
 
@@ -51,9 +81,10 @@ Prerequisites: the [Flutter SDK](https://docs.flutter.dev/get-started/install) (
 flutter pub get
 flutter run              # on a connected phone or emulator
 flutter build apk        # release APK: build/app/outputs/flutter-apk/app-release.apk
+flutter build windows    # on a Windows PC with Visual Studio (Desktop C++): build/windows/x64/runner/Release
 ```
 
-Each push also triggers the GitHub Actions workflow (`.github/workflows/build.yml`). It runs the analyzer and tests and uploads a ready-to-install **APK** as the `site-dpr-apk` artifact.
+Each push also triggers the GitHub Actions workflow (`.github/workflows/build.yml`). It runs the analyzer and tests, builds the Android APK and the Windows app, and publishes both on the Releases page.
 
 ## Enable Google cloud sync (optional)
 

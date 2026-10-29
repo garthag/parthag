@@ -5,6 +5,9 @@ on:
   pull_request:
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   test-and-build-apk:
     runs-on: ubuntu-latest
@@ -28,7 +31,62 @@ jobs:
       - name: Build release APK
         run: flutter build apk --release
 
+      - name: Rename APK
+        run: mv build/app/outputs/flutter-apk/app-release.apk SiteDPR-android.apk
+
       - uses: actions/upload-artifact@v4
         with:
           name: site-dpr-apk
-          path: build/app/outputs/flutter-apk/app-release.apk
+          path: SiteDPR-android.apk
+
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - run: flutter pub get
+
+      - name: Build Windows app
+        run: flutter build windows --release
+
+      - name: Zip Windows app
+        shell: pwsh
+        run: |
+          Copy-Item -Recurse build/windows/x64/runner/Release SiteDPR
+          Compress-Archive -Path SiteDPR -DestinationPath SiteDPR-windows.zip
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: site-dpr-windows
+          path: SiteDPR-windows.zip
+
+  # On every push (not pull requests) publish both builds on the repository's
+  # Releases page so they can be downloaded with a plain link.
+  release:
+    if: github.event_name == 'push'
+    needs: [test-and-build-apk, build-windows]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          merge-multiple: true
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: build-${{ github.run_number }}
+          target_commitish: ${{ github.sha }}
+          name: Site DPR build ${{ github.run_number }}
+          make_latest: true
+          body: |
+            **Android:** download `SiteDPR-android.apk` on the phone and open it to install.
+            **Windows:** download `SiteDPR-windows.zip`, extract it, and run `site_dpr.exe` inside the `SiteDPR` folder.
+
+            See the README section "Download & install" for step-by-step help.
+          files: |
+            SiteDPR-android.apk
+            SiteDPR-windows.zip

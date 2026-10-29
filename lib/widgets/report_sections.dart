@@ -1,3 +1,6 @@
+import 'dart:io';
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:signature/signature.dart';
@@ -847,6 +850,8 @@ class MediaSection extends ReportSection {
 }
 
 class _MediaSectionState extends ReportSectionState<MediaSection> {
+  static final _hasCamera = !kIsWeb && (Platform.isAndroid || Platform.isIOS);
+
   @override
   Widget build(BuildContext context) {
     context.watch<AppState>();
@@ -870,10 +875,13 @@ class _MediaSectionState extends ReportSectionState<MediaSection> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Row(children: [
-                    btn(Icons.photo_camera, 'Photo', CaptureMode.cameraPhoto),
-                    const SizedBox(width: 8),
-                    btn(Icons.videocam, 'Video', CaptureMode.cameraVideo),
-                    const SizedBox(width: 8),
+                    // Phones and tablets only: desktop (Windows) has no camera capture.
+                    if (_hasCamera) ...[
+                      btn(Icons.photo_camera, 'Photo', CaptureMode.cameraPhoto),
+                      const SizedBox(width: 8),
+                      btn(Icons.videocam, 'Video', CaptureMode.cameraVideo),
+                      const SizedBox(width: 8),
+                    ],
                     btn(Icons.photo_library, 'Gallery', CaptureMode.galleryPhotos),
                     const SizedBox(width: 8),
                     btn(Icons.video_library, 'Video file', CaptureMode.galleryVideo),
