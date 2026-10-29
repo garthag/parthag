@@ -39,7 +39,7 @@ Simple enough for a site supervisor on an Android phone; structured enough for p
 
 ## Quick start
 
-**Not a programmer?** Follow [docs/START_HERE.md](docs/START_HERE.md): browser-only setup with Supabase + Netlify, about 30–45 minutes.
+**Not a programmer?** Follow [docs/START_HERE.md](docs/START_HERE.md): browser-only setup with Supabase + Netlify, about 30–45 minutes. Then install it on Windows: [docs/WINDOWS.md](docs/WINDOWS.md).
 
 **Developers:**
 

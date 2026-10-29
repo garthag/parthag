@@ -95,6 +95,10 @@ Supabase → **Authentication → URL Configuration** → **Site URL** = your Ne
 
 ---
 
+## Windows PCs and laptops
+
+Install the same app on Windows with Chrome or Edge: see [WINDOWS.md](WINDOWS.md).
+
 ## Part D — Google Drive for photos (next session)
 
 This needs a Google Cloud project, a dedicated "document controller" Google account and a small server function. It is explained in [GOOGLE_SETUP.md](GOOGLE_SETUP.md). After it, set `VITE_DRIVE_ENABLED` to `true` in Netlify and redeploy.
