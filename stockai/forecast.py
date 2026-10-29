@@ -11,13 +11,13 @@ from dataclasses import dataclass, field
 
 import numpy as np
 import pandas as pd
-from sklearn.ensemble import HistGradientBoostingRegressor, RandomForestRegressor
+from sklearn.ensemble import ExtraTreesRegressor, HistGradientBoostingRegressor, RandomForestRegressor
 from sklearn.linear_model import Ridge
 from sklearn.model_selection import TimeSeriesSplit
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
 
-HORIZONS = {"Intraday (today)": 1, "Next week": 5, "1 month": 21, "6 months": 126}
+HORIZONS = {"Intraday (today)": 1, "Next week": 5, "1 month": 21, "6 months": 126, "1 year": 252}
 
 FEATURES = [
     "ret1", "ret5", "ret10", "ret21", "ret63", "dist_sma20", "dist_sma50", "dist_sma200",
@@ -58,7 +58,13 @@ def make_features(ind: pd.DataFrame, index_daily: pd.DataFrame | None = None) ->
     return f.replace([np.inf, -np.inf], np.nan)
 
 
-def _models() -> dict:
+def _models(fast: bool = False) -> dict:
+    if fast:  # used by the multi-stock scanner
+        return {
+            "Ridge regression": make_pipeline(StandardScaler(), Ridge(alpha=10.0)),
+            "Extra trees": ExtraTreesRegressor(n_estimators=40, max_depth=5, min_samples_leaf=30,
+                                               n_jobs=1, random_state=42),
+        }
     return {
         "Ridge regression": make_pipeline(StandardScaler(), Ridge(alpha=10.0)),
         "Random forest": RandomForestRegressor(n_estimators=150, max_depth=6, min_samples_leaf=20,
@@ -78,18 +84,29 @@ class MLResult:
     feature_importance: pd.Series = field(default_factory=pd.Series)
 
 
-def ml_forecast(features: pd.DataFrame, close: pd.Series, horizon: int, n_splits: int = 4) -> MLResult:
+def _usable_splits(n: int, horizon: int, wanted: int) -> int:
+    """Largest walk-forward split count whose first training fold still has >= 50 rows."""
+    for k in range(wanted, 1, -1):
+        if n - k * (n // (k + 1)) - horizon >= 50:
+            return k
+    return 0
+
+
+def ml_forecast(features: pd.DataFrame, close: pd.Series, horizon: int, n_splits: int = 4,
+                fast: bool = False) -> MLResult:
+    """Walk-forward-validated ML ensemble; returns an empty result when history is too short."""
     target = np.log(close.shift(-horizon) / close)
     data = features.join(target.rename("y"))
     train = data.dropna()
     latest = features.iloc[[-1]].fillna(features.median())
     X, y = train[FEATURES], train["y"]
     preds, scores = {}, {}
-    if len(train) < 150:
-        raise ValueError("Not enough history to train ML models")
+    n_splits = _usable_splits(len(train), horizon, 3 if fast else n_splits)
+    if len(train) < 150 or n_splits == 0:
+        return MLResult(horizon, {}, {}, 0.0, 0.5)
     tscv = TimeSeriesSplit(n_splits=n_splits, gap=horizon)
     importance = None
-    for name, model in _models().items():
+    for name, model in _models(fast).items():
         dir_hits, errs = [], []
         for tr, te in tscv.split(X):
             model.fit(X.iloc[tr], y.iloc[tr])
@@ -114,13 +131,15 @@ def monte_carlo(close: pd.Series, horizon: int, n_paths: int = 5000, seed: int =
     rng = np.random.default_rng(seed)
     r = np.log(close / close.shift()).dropna().iloc[-756:]
     sigma = float(np.sqrt((r ** 2).ewm(alpha=0.06).mean().iloc[-1]))
-    mu = float(r.mean())
+    # Shrink the stock's own past drift halfway toward a long-run equity return (~12%/yr),
+    # so one hot (or awful) stretch is not projected forward at full strength.
+    mu = 0.5 * float(r.mean()) + 0.5 * np.log(1.12) / 252
     gbm = rng.normal(mu - 0.5 * sigma ** 2, sigma, (n_paths // 2, horizon)).sum(axis=1)
     boot = rng.choice(r.to_numpy() - r.mean() + mu, (n_paths - n_paths // 2, horizon)).sum(axis=1)
     total = np.r_[gbm, boot]
     last = float(close.iloc[-1])
     prices = last * np.exp(total)
-    pct = {p: float(np.percentile(prices, p)) for p in (5, 10, 25, 50, 75, 90, 95)}
+    pct = {p: float(np.percentile(prices, p)) for p in (5, 10, 25, 50, 60, 75, 90, 95)}
     # Fan chart: percentiles along the path for the GBM leg.
     cum = np.cumsum(rng.normal(mu - 0.5 * sigma ** 2, sigma, (2000, horizon)), axis=1)
     fan = pd.DataFrame({p: last * np.exp(np.percentile(cum, p, axis=0)) for p in (5, 25, 50, 75, 95)})
@@ -143,7 +162,9 @@ def trend_projection(close: pd.Series, horizon: int, lookback: int = 252) -> dic
     slope, intercept = np.polyfit(x, y, 1)
     resid = y - (slope * x + intercept)
     r2 = 1 - resid.var() / y.var() if y.var() > 0 else 0.0
-    lin = float(np.exp(y[-1] + slope * horizon))  # trend slope anchored at today's price
+    # Trends fade: damp the extrapolated slope so a hot year is not simply repeated.
+    damped = horizon / (1 + horizon / 126)
+    lin = float(np.exp(y[-1] + slope * damped))  # trend slope anchored at today's price
     # Holt's linear method on log prices.
     alpha, beta = 0.3, 0.05
     level, trend = y[0], y[1] - y[0]
@@ -151,7 +172,7 @@ def trend_projection(close: pd.Series, horizon: int, lookback: int = 252) -> dic
         prev = level
         level = alpha * v + (1 - alpha) * (level + trend)
         trend = beta * (level - prev) + (1 - beta) * trend
-    holt = float(np.exp(level + trend * horizon))
+    holt = float(np.exp(level + trend * damped))
     return {"linear": lin, "holt": holt, "r2": float(r2), "annual_trend_pct": float(np.expm1(slope * 252) * 100)}
 
 
@@ -207,26 +228,29 @@ class HorizonForecast:
     confidence: float
 
 
-def forecast_all(ind: pd.DataFrame, index_daily: pd.DataFrame | None = None) -> dict[str, HorizonForecast]:
+def forecast_all(ind: pd.DataFrame, index_daily: pd.DataFrame | None = None, fast: bool = False,
+                 horizons: dict | None = None) -> dict[str, HorizonForecast]:
     feats = make_features(ind, index_daily)
     close = ind["Close"]
     last = float(close.iloc[-1])
     out = {}
-    for label, h in HORIZONS.items():
-        ml = ml_forecast(feats, close, h)
-        mc = monte_carlo(close, h)
+    for label, h in (horizons or HORIZONS).items():
+        ml = ml_forecast(feats, close, h, fast=fast)
+        mc = monte_carlo(close, h, n_paths=2000 if fast else 5000)
         tr = trend_projection(close, h)
         ml_price = last * (1 + ml.ensemble_return)
-        # ML weight grows with its out-of-sample directional skill.
-        skill = float(np.clip((ml.ensemble_dir_acc - 0.5) * 5, 0, 1))
-        w_ml, w_mc, w_tr = 0.35 + 0.25 * skill, 0.35, 0.30 - 0.10 * skill
+        has_ml = bool(ml.predictions)
+        # ML weight grows with its out-of-sample directional skill (zero when it could not be trained).
+        skill = float(np.clip((ml.ensemble_dir_acc - 0.5) * 5, 0, 1)) if has_ml else 0.0
+        w_ml, w_mc, w_tr = (0.35 + 0.25 * skill if has_ml else 0.0), 0.35, 0.30 - 0.10 * skill
         trend_price = 0.5 * tr["linear"] + 0.5 * tr["holt"]
         tot = w_ml + w_mc + w_tr
         pred = (w_ml * ml_price + w_mc * mc["median"] + w_tr * trend_price) / tot
         # Probability of a rise: MC baseline nudged by ML signal strength.
         ml_tilt = np.tanh(ml.ensemble_return / max(mc["daily_vol"] * np.sqrt(h), 1e-6))
-        prob_up = float(np.clip(mc["prob_up"] + 0.2 * skill * ml_tilt + 0.05 * np.sign(trend_price - last), 0.02, 0.98))
-        agree = np.mean([np.sign(ml_price - last), np.sign(mc["median"] - last), np.sign(trend_price - last)])
+        prob_up = float(np.clip(mc["prob_up"] + 0.2 * skill * ml_tilt + 0.05 * np.sign(trend_price - last), 0.10, 0.90))  # never claim near-certainty
+        views = [mc["median"], trend_price] + ([ml_price] if has_ml else [])
+        agree = np.mean([np.sign(v - last) for v in views])
         confidence = float(np.clip(0.35 + 0.25 * abs(agree) + 0.4 * skill, 0, 1))
         out[label] = HorizonForecast(
             label, h, last, ml, mc, tr, float(pred),

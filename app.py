@@ -13,8 +13,9 @@ import plotly.graph_objects as go
 import streamlit as st
 from plotly.subplots import make_subplots
 
-from stockai import data, indicators, kite, live, sentiment, signals
+from stockai import data, indicators, kite, live, nse, screener, sentiment, signals
 from stockai.forecast import HORIZONS
+from stockai.universe import SECTORS
 
 st.set_page_config(page_title="StockAI · NSE/BSE Predictor", page_icon="📈", layout="wide")
 
@@ -67,12 +68,32 @@ def active_kite() -> kite.KiteSource | None:
     return st.session_state.get("kite_src")
 
 
-def get_quote(symbol: str, demo: bool, start_price: float | None = None) -> live.Quote:
-    """Live quote from Zerodha Kite or Yahoo, or the next tick of a simulated feed in demo mode."""
+@st.cache_resource(show_spinner=False)
+def nse_source() -> nse.NSESource:
+    return nse.NSESource()
+
+
+@st.cache_data(ttl=3, show_spinner=False)
+def _nse_quote(symbol: str, with_bars: bool = True, with_depth: bool = False):
+    return nse_source().quote(symbol, with_bars=with_bars, with_depth=with_depth)
+
+
+def use_nse(symbol: str) -> bool:
+    return st.session_state.get("source", "").startswith("NSE") and symbol.endswith(".NS")
+
+
+def get_quote(symbol: str, demo: bool, start_price: float | None = None, depth: bool = False,
+              bars: bool = True) -> live.Quote:
+    """Live quote from Zerodha Kite, NSE India or Yahoo, or a simulated tick in demo mode."""
     if not demo:
         src = active_kite()
         if src is not None:
-            return src.quote(symbol)
+            return src.quote(symbol, with_bars=bars)
+        if use_nse(symbol):
+            try:
+                return _nse_quote(symbol, bars, depth)
+            except Exception as exc:  # NSE blocked / changed: fall back quietly to Yahoo
+                st.session_state["nse_error"] = f"{type(exc).__name__}: {exc}"[:120]
         return _live_quote(symbol)
     feeds = st.session_state.setdefault("feeds", {})
     if symbol not in feeds:
@@ -155,7 +176,7 @@ def watchlist_panel(exchange: str, demo: bool):
 
 
 def order_book(q: live.Quote):
-    """Live market depth and pending buy vs sell quantity (broker data only)."""
+    """Live market depth, pending buy vs sell quantity and delivery % (Kite / NSE data)."""
     st.subheader("📊 Live order book")
     ex = q.extra
     buy, sell = float(ex.get("buy_qty") or 0), float(ex.get("sell_qty") or 0)
@@ -176,6 +197,12 @@ def order_book(q: live.Quote):
                      "Ask ₹": a.get("price"), "Ask qty": a.get("quantity"), "Ask orders": a.get("orders")})
     if rows:
         st.dataframe(pd.DataFrame(rows), hide_index=True, width="stretch")
+    if ex.get("delivery_pct") is not None:
+        d = ex["delivery_pct"]
+        note = ("strong — many buyers are taking delivery (investors, not just day traders)" if d >= 50 else
+                "average" if d >= 30 else "low — mostly intraday speculation, moves may not last")
+        st.metric("Delivery % (shares actually taken into demat)", f"{d:.1f}%")
+        st.caption(f"Delivery is {note}.")
     if ex.get("upper_circuit"):
         st.caption(f"Circuit limits: {rupee(ex.get('lower_circuit'))} – {rupee(ex.get('upper_circuit'))}")
 
@@ -246,8 +273,198 @@ def kite_sidebar():
 # --------------------------------------------------------------------------
 # Sidebar
 # --------------------------------------------------------------------------
+@st.cache_resource(show_spinner=False)
+def scan_store() -> dict:
+    """Process-wide store of recent scans, shared by every browser session (e.g. PC + phone)."""
+    return {}
+
+
+def run_scan(demo: bool, sectors: tuple, broker, progress, force: bool = False, max_age_min: int = 30):
+    key = (demo, sectors, "kite" if broker else "yahoo")
+    store = scan_store()
+    hit = store.get(key)
+    if hit and not force and (datetime.now(live.IST) - hit[1]).total_seconds() < max_age_min * 60:
+        return hit
+    store[key] = (screener.scan("NSE", demo, broker, list(sectors), progress), datetime.now(live.IST))
+    return store[key]
+
+
+@st.cache_data(ttl=10, show_spinner=False)
+def _yahoo_last(symbols: tuple) -> dict:
+    raw = data.yf.download(list(symbols), period="1d", interval="1m", group_by="ticker", progress=False)
+    out = {}
+    for sym in symbols:
+        try:
+            closes = (raw[sym] if len(symbols) > 1 else raw)["Close"].dropna()
+            out[sym] = float(closes.iloc[-1])
+        except (KeyError, IndexError):
+            continue
+    return out
+
+
+def live_prices(symbols: list[str], demo: bool, start: dict) -> dict:
+    """Latest price for many symbols with as few requests as the active source allows."""
+    if not symbols:
+        return {}
+    src = None if demo else active_kite()
+    if src is not None:
+        try:
+            return {sym: q.price for sym, q in src.quote_many(symbols, with_bars=False).items()}
+        except Exception:
+            pass
+    if not demo and not st.session_state.get("source", "").startswith("NSE"):
+        try:
+            return _yahoo_last(tuple(symbols))
+        except Exception:
+            return {}
+    out = {}
+    for sym in symbols:
+        try:
+            out[sym] = get_quote(sym, demo, start.get(sym), bars=False).price
+        except Exception:
+            continue
+    return out
+
+
+def pick_status(now: float | None, row) -> str:
+    if now is None or np.isnan(now):
+        return "—"
+    if now >= row["Target"]:
+        return "🎯 Target reached"
+    if now <= row["Stop-loss"]:
+        return "🛑 Below stop — skip"
+    if now <= row["Buy below"]:
+        return "✅ In buy zone"
+    if now <= row["Buy below"] + 0.25 * (row["Target"] - row["Buy below"]):
+        return "🟡 Slightly above — buy small"
+    return "⏳ Ran up — wait for a dip"
+
+
+def suggestion_box(exchange: str, demo: bool):
+    st.header("💡 Suggestion box — best stocks to buy, by time frame")
+    st.caption(f"Scans {len(screener.SECTORS)} sectors / {sum(map(len, SECTORS.values()))} liquid NSE stocks with "
+               "20+ technical indicators, buyer-vs-seller volume flow, walk-forward-tested machine learning, "
+               "Monte Carlo simulation and trend models. Each pick gets a buy price, sell target and stop-loss.")
+    c1, c2, c3 = st.columns([3, 1, 1])
+    sectors = c1.multiselect("Sectors", list(SECTORS), default=list(SECTORS))
+    n_picks = c2.slider("Picks per time frame", 3, 10, 5)
+    min_turnover = c3.number_input("Min daily turnover ₹ cr", 0.0, 500.0, 5.0, step=5.0,
+                                   help="Filters out thinly traded stocks that are hard to buy/sell.")
+    force = st.button("🔄 Run fresh scan", type="primary")
+    if not sectors:
+        st.info("Pick at least one sector.")
+        return
+    broker = None if demo else active_kite()
+    bar = st.progress(0.0, text="Starting scan…")
+    try:
+        results, scanned_at = run_scan(demo, tuple(sectors), broker,
+                                       lambda f, t: bar.progress(min(f, 1.0), text=t), force)
+    except Exception as exc:
+        bar.empty()
+        st.error(f"Scan failed: {exc}. Check your internet connection, or switch on Demo mode.")
+        return
+    bar.empty()
+    if results.empty:
+        st.error("No price data could be downloaded. Check your internet connection, or switch on Demo mode.")
+        return
+    if exchange == "BSE":
+        st.caption("Scanning uses NSE listings (deeper liquidity); the same companies trade on BSE.")
+
+    month = results[results["Horizon"] == "1 month"]
+    buys = month["Action"].isin(screener.BUY_ACTIONS).mean() * 100
+    sect = month.groupby("Sector")["Score"].mean().sort_values()
+    m = st.columns([1, 1, 3, 3])
+    m[0].metric("Stocks scanned", month["Symbol"].nunique())
+    m[1].metric("Rated BUY (1 month)", f"{buys:.0f}%",
+                "broad strength" if buys > 50 else "narrow market" if buys < 25 else "mixed", delta_color="off")
+    m[2].metric("Strongest sector", sect.index[-1], f"score {sect.iloc[-1]:+.2f}", delta_color="off")
+    m[3].metric("Weakest sector", sect.index[0], f"score {sect.iloc[0]:+.2f}", delta_color="off")
+    st.caption(f"Scanned {scanned_at:%d %b %H:%M} IST · results cached 30 min · live prices refresh "
+               + (f"every {REFRESH}s" if REFRESH else "on reload")
+               + ("  ·  **DEMO DATA**" if demo else ""))
+
+    icons = {"Intraday (today)": "⚡", "Next week": "📅", "1 month": "🗓️", "6 months": "📈", "1 year": "🏆"}
+    tabs = st.tabs([f"{icons[h]} {h}" for h in HORIZONS])
+    all_picks = {}
+    for tab, horizon in zip(tabs, HORIZONS):
+        with tab:
+            top = screener.top_buys(results, horizon, n_picks, min_turnover)
+            all_picks.update({r.Symbol: r.Name for r in top.itertuples()})
+            if top.empty:
+                st.warning("No stock passes the buy filters for this time frame right now — "
+                           "staying in cash is also a position.")
+            else:
+                picks_table(top, demo, horizon)
+            lcol, rcol = st.columns([3, 2])
+            with lcol:
+                st.markdown("**🏭 Best stock in each sector**")
+                lead = screener.sector_leaders(results, horizon)
+                st.dataframe(lead[["Sector", "Sector mood", "Symbol", "Action", "Price", "Target", "Stop-loss",
+                                   "Profit %", "P(rise) %"]],
+                             hide_index=True, width="stretch", column_config=_money_cols())
+            with rcol:
+                st.markdown("**🚫 Avoid / sell for this time frame**")
+                avoid = screener.avoid_list(results, horizon)
+                if avoid.empty:
+                    st.caption("No SELL ratings in this scan.")
+                else:
+                    st.dataframe(avoid[["Symbol", "Action", "Price", "Technicals", "Buyers vs sellers"]],
+                                 hide_index=True, width="stretch", column_config=_money_cols())
+
+    st.subheader("⭐ Strong on every time frame")
+    st.caption("Stocks rated BUY on the most horizons — the steadiest candidates for building a position.")
+    cw = screener.consistent_winners(results, 10)
+    st.dataframe(cw, hide_index=True, width="stretch",
+                 column_config={h: st.column_config.ProgressColumn(h, min_value=-1, max_value=1, format="%+.2f")
+                                for h in HORIZONS})
+
+    st.subheader("🔍 Deep-dive a pick")
+    options = sorted(all_picks) or sorted(results["Symbol"].unique())
+    cols = st.columns([3, 1])
+    chosen = cols[0].selectbox("Run the full analysis (news, fundamentals, holders, order book)", options,
+                               format_func=lambda s: f"{s} · {all_picks.get(s, '')}")
+    if cols[1].button("Analyse ➜", width="stretch"):
+        st.session_state["active"] = (chosen[:-3], "NSE", demo)
+        st.session_state["view_next"] = "🔍 Analyse a stock"
+        st.rerun()
+    st.caption("How to use: buy only in the buy zone, place the stop-loss immediately, book profit near the "
+               "target. The scan scores price, volume and models only; the deep-dive also weighs news, "
+               "fundamentals and analysts, so its call can differ — trust it more for 6-month and 1-year "
+               "decisions. This is not investment advice.")
+
+
+def _money_cols() -> dict:
+    money = {c: st.column_config.NumberColumn(c, format="₹%.2f")
+             for c in ("Price", "Live ₹", "Buy below", "Target", "Stop-loss")}
+    pcts = {c: st.column_config.NumberColumn(c, format="%+.1f%%") for c in ("Profit %", "Risk %", "Since scan %")}
+    return {**money, **pcts, "P(rise) %": st.column_config.NumberColumn("P(rise)", format="%.0f%%"),
+            "Confidence %": st.column_config.ProgressColumn("Confidence", min_value=0, max_value=100, format="%.0f%%"),
+            "Risk:Reward": st.column_config.NumberColumn("Risk:Reward", format="1 : %.2f")}
+
+
+def picks_table(top: pd.DataFrame, demo: bool, horizon: str):
+    @st.fragment(run_every=REFRESH)
+    def _render():
+        prices = live_prices(list(top["Symbol"]), demo, dict(zip(top["Symbol"], top["Price"])))
+        t = top.copy()
+        t["Live ₹"] = t["Symbol"].map(prices)
+        t["Since scan %"] = (t["Live ₹"] / t["Price"] - 1) * 100
+        t["Status"] = [pick_status(p, r) for p, (_, r) in zip(t["Live ₹"], t.iterrows())]
+        st.dataframe(
+            t[["Symbol", "Action", "Live ₹", "Status", "Buy below", "Target", "Stop-loss", "Profit %",
+               "P(rise) %", "Risk:Reward", "Confidence %", "Since scan %", "Name", "Sector", "Buyers vs sellers"]],
+            hide_index=True, width="stretch", column_config=_money_cols())
+        st.caption(f"{horizon}: buy at or below **Buy below**, sell at **Target**, exit if price closes under "
+                   f"**Stop-loss**. Live prices updated {datetime.now(live.IST):%H:%M:%S} IST.")
+    _render()
+
+
+if "view_next" in st.session_state:  # switch views programmatically before the widget exists
+    st.session_state["view"] = st.session_state.pop("view_next")
+
 with st.sidebar:
     st.title("📈 StockAI")
+    view = st.radio("View", ["💡 Suggestion box", "🔍 Analyse a stock"], key="view")
     exchange = st.radio("Exchange", ["NSE", "BSE"], horizontal=True)
     pick = st.selectbox("Popular stocks", ["— type below —"] + [f"{k} · {v}" for k, v in data.POPULAR_STOCKS.items()])
     typed = st.text_input("Stock name or code", placeholder="e.g. RELIANCE, Infosys, 500325")
@@ -255,16 +472,21 @@ with st.sidebar:
     demo = st.toggle("Demo mode (synthetic data, works offline)", value=False)
     refresh_label = st.selectbox("⚡ Live refresh", ["5 s", "10 s", "15 s", "30 s", "60 s", "Off"], index=2)
     kite_default = bool(st.query_params.get("request_token") or kite.TOKEN_FILE.exists())
-    source = st.radio("Live data source", ["Yahoo Finance (free, delayed)", "Zerodha Kite (real-time)"],
-                      index=1 if kite_default else 0, disabled=demo, key="source")
+    source = st.radio("Live data source", ["NSE India (free, live)", "Yahoo Finance (free, delayed)",
+                                           "Zerodha Kite (real-time)"],
+                      index=2 if kite_default else 0, disabled=demo, key="source",
+                      help="NSE India needs no account (NSE symbols only; falls back to Yahoo if NSE "
+                           "blocks the request). Kite needs a Zerodha Kite Connect subscription.")
+    if source.startswith("NSE") and st.session_state.get("nse_error") and not demo:
+        st.caption(f"⚠️ NSE unavailable, using Yahoo ({st.session_state['nse_error']})")
     st.session_state["kite_src"] = None
     if source.startswith("Zerodha") and not demo:
         kite_sidebar()
     go_btn = st.button("🔍 Analyse", type="primary", width="stretch")
     if st.button("🔄 Refresh live data", width="stretch"):
         run_analysis.clear()
-    st.caption("Tip: BSE scrip codes (e.g. 500325) work with BSE selected. Prices: Zerodha Kite when "
-               "connected, otherwise Yahoo Finance (delayed ~1-15 min). News: Google News & Yahoo.")
+    st.caption("Tip: BSE scrip codes (e.g. 500325) work with BSE selected. Live prices: NSE India, Zerodha "
+               "Kite or Yahoo (delayed ~1-15 min). History: Kite if connected, else Yahoo. News: Google News.")
 
 REFRESH = None if refresh_label == "Off" else int(refresh_label.split()[0])
 status = live.market_status()
@@ -276,13 +498,18 @@ st.warning("⚠️ Educational tool, not investment advice. Predictions are stat
 
 if go_btn and query:
     st.session_state["active"] = (query, exchange, demo)
+    st.session_state["view_next"] = "🔍 Analyse a stock"
+    st.rerun()
+if view.startswith("💡"):
+    suggestion_box(exchange, demo)
+    st.stop()
 active = st.session_state.get("active")
 if not active:
     st.header("NSE / BSE Stock Predictor & Deep Analyser")
     st.markdown(
         "Choose **NSE or BSE**, pick or type a **stock name / code** and press **Analyse**. You get:\n"
         "- **Real-time position** and intraday movement / expected day range\n"
-        "- **Predictions** for today, next week, 1 month and 6 months from an ML ensemble "
+        "- **Predictions** for today, next week, 1 month, 6 months and 1 year from an ML ensemble "
         "(Ridge, Random Forest, Gradient Boosting), Monte Carlo simulation and trend models\n"
         "- **Buy / Hold / Sell** for each horizon with target, stop-loss and profit margin\n"
         "- **20+ technical indicators**, support/resistance, pivots, Fibonacci, candlestick patterns\n"
@@ -335,6 +562,7 @@ def live_header():
                     delta_color="off")
         st.caption(f"Updated {q.updated:%H:%M:%S} IST · " + ("simulated ticks" if B.demo else
                    "Zerodha Kite (real-time)" if q.source == "Zerodha Kite" else
+                   "NSE India website (near real-time)" if q.source == "NSE India" else
                    "Yahoo Finance (may lag the exchange by a few minutes)"))
     else:
         c[0].metric("Price", rupee(price), f"{chg:+.2f} ({chg / float(prev['Close']) * 100:+.2f}%)")
@@ -360,7 +588,7 @@ with tabs[0]:
     @st.fragment(run_every=REFRESH)
     def live_chart():
         try:
-            q = get_quote(B.symbol, B.demo, price)
+            q = get_quote(B.symbol, B.demo, price, depth=True)
         except Exception as exc:
             st.info(f"Live 1-minute data unavailable: {exc}")
             return
@@ -397,7 +625,7 @@ with tabs[0]:
                 st.success("Target reached — consider booking profit.")
             elif q.price <= plan.stop_loss:
                 st.error("Stop-loss hit — the intraday view is invalidated.")
-        if q.extra.get("depth_buy") or q.extra.get("buy_qty"):
+        if q.extra.get("depth_buy") or q.extra.get("buy_qty") or q.extra.get("delivery_pct") is not None:
             order_book(q)
 
     live_chart()
@@ -409,7 +637,7 @@ with tabs[0]:
 # --------------------------------------------------------------------------
 with tabs[1]:
     st.subheader("Should you buy? — by time horizon")
-    cols = st.columns(4)
+    cols = st.columns(len(A.plans))
     for col, (label, plan) in zip(cols, A.plans.items()):
         icon, color = ACTION_STYLE[plan.action]
         with col.container(border=True):

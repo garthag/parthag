@@ -16,9 +16,10 @@ WEIGHTS = {
     "Next week": {"technical": 0.30, "ml": 0.30, "flow": 0.15, "sentiment": 0.15, "fundamental": 0.05, "analyst": 0.05},
     "1 month": {"technical": 0.25, "ml": 0.30, "flow": 0.10, "sentiment": 0.10, "fundamental": 0.15, "analyst": 0.10},
     "6 months": {"technical": 0.10, "ml": 0.25, "flow": 0.05, "sentiment": 0.05, "fundamental": 0.35, "analyst": 0.20},
+    "1 year": {"technical": 0.05, "ml": 0.15, "flow": 0.05, "sentiment": 0.0, "fundamental": 0.45, "analyst": 0.30},
 }
 
-STOP_ATR = {"Intraday (today)": 0.75, "Next week": 1.5, "1 month": 2.5, "6 months": 4.0}
+STOP_ATR = {"Intraday (today)": 0.75, "Next week": 1.5, "1 month": 2.5, "6 months": 4.0, "1 year": 6.0}
 
 
 def technical_score(ind: pd.DataFrame) -> dict:
@@ -81,8 +82,8 @@ class TradePlan:
 
 
 def trade_plan(label: str, fc: forecast.HorizonForecast, pillars: dict, atr_value: float,
-               entry: float | None = None) -> TradePlan:
-    w = WEIGHTS[label]
+               entry: float | None = None, weights: dict | None = None) -> TradePlan:
+    w = weights or WEIGHTS[label]
     ml_score = float(np.tanh(fc.expected_return_pct / (100 * fc.mc["daily_vol"] * np.sqrt(fc.horizon) + 1e-9)))
     ml_score = 0.6 * ml_score + 0.4 * (fc.prob_up - 0.5) * 2
     parts = {**pillars, "ml": ml_score}
@@ -96,7 +97,8 @@ def trade_plan(label: str, fc: forecast.HorizonForecast, pillars: dict, atr_valu
     entry = entry or fc.last_price
     stop_dist = STOP_ATR[label] * atr_value
     if score >= -0.15:  # long side
-        target = max(fc.predicted_price, fc.mc["percentiles"][75]) if score > 0.15 else max(fc.predicted_price, entry + 0.5 * stop_dist)
+        target = (max(fc.predicted_price, fc.mc["percentiles"][60]) if score > 0.15
+                  else max(fc.predicted_price, entry + 0.5 * stop_dist))
         stop = entry - stop_dist
         profit = (target / entry - 1) * 100
         loss = (stop / entry - 1) * 100
@@ -174,3 +176,33 @@ def analyze(bundle) -> Analysis:
     return Analysis(bundle, ind, tech, fcs, scored, sent, interest, pressure, fund, analyst, owners, plans,
                     levels, indicators.chart_events(ind), indicators.candlestick_patterns(bundle.daily),
                     intraday, _beta(bundle.daily, bundle.index_daily))
+
+
+def quick_analyze(daily: pd.DataFrame, index_daily: pd.DataFrame | None = None) -> dict:
+    """Price-only analysis for scanning many stocks: technicals, order flow, fast ML and Monte Carlo.
+
+    News, fundamentals and analyst pillars are skipped (they need slow per-stock lookups),
+    so each horizon's weights are re-normalised over the pillars that are available.
+    """
+    ind = indicators.add_all(daily)
+    tech = technical_score(ind)
+    pressure = indicators.buyer_seller_pressure(daily)
+    fcs = forecast.forecast_all(ind, index_daily, fast=True)
+    pillars = {"technical": tech["score"], "flow": pressure["score"]}
+    atr_value = float(ind["ATR"].iloc[-1])
+    plans = {}
+    for label, fc in fcs.items():
+        w = {k: v for k, v in WEIGHTS[label].items() if k in ("technical", "flow", "ml")}
+        tot = sum(w.values())
+        plans[label] = trade_plan(label, fc, pillars, atr_value, weights={k: v / tot for k, v in w.items()})
+    last = ind.iloc[-1]
+    close = ind["Close"]
+    return {
+        "plans": plans, "forecasts": fcs, "technical": tech, "pressure": pressure,
+        "price": float(last["Close"]), "rsi": float(last["RSI"]),
+        "ret_1m": float(close.iloc[-1] / close.iloc[-22] - 1) * 100 if len(close) > 22 else np.nan,
+        "ret_1y": float(close.iloc[-1] / close.iloc[-253] - 1) * 100 if len(close) > 253 else np.nan,
+        "off_52w_high": float(close.iloc[-1] / ind["High"].iloc[-252:].max() - 1) * 100,
+        "turnover_cr": float((ind["Close"] * ind["Volume"]).iloc[-20:].mean() / 1e7),
+        "volatility": float(last["HV20"]) * 100,
+    }

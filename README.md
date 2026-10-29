@@ -49,6 +49,23 @@ StockAI is a web app, so the phone just needs a browser. Choose one:
 
 **C. Any Docker host** (Render, Railway, Hugging Face Spaces, a VPS): `docker build -t stockai . && docker run -p 8501:8501 stockai`.
 
+## 💡 Suggestion box (stock picks by time frame)
+The default screen scans **83 liquid NSE stocks across 13 sectors** in about 20–60 seconds and suggests
+the best buys for **intraday, next week, 1 month, 6 months and 1 year**:
+
+- **Top picks per time frame** with **Buy below** (entry), **Target** (sell) and **Stop-loss**, plus profit %,
+  risk:reward, probability of a rise and model confidence. Live prices refresh automatically, and each pick
+  shows its status: ✅ in buy zone, 🟡 slightly above, ⏳ ran up (wait for a dip), 🎯 target reached or 🛑 below stop.
+- **Best stock in each sector**, with the sector's overall mood.
+- **Avoid / sell list** for each time frame.
+- **⭐ Strong on every time frame**: stocks rated BUY on the most horizons.
+- **Deep-dive** any pick with one click (news, fundamentals, holders, order book).
+
+The scan uses price and volume only: 20+ indicators, buyer-vs-seller flow, walk-forward-tested ML, Monte Carlo
+simulation and damped trend models. The deep-dive adds news, fundamentals and analyst views, so its call can
+differ. Rely on the deep-dive for 6-month and 1-year decisions. Filters: sectors, number of picks, and minimum
+daily turnover (screens out illiquid stocks). Scans are cached for 30 minutes; **Run fresh scan** re-runs one.
+
 ## Real-time features
 - **Live price header**: price, change, day range and intraday momentum refresh automatically.
   Pick the interval (5 s to 60 s, or Off) under **⚡ Live refresh** in the sidebar.
@@ -59,8 +76,20 @@ StockAI is a web app, so the phone just needs a browser. Choose one:
 - **Market clock**: NSE/BSE open, pre-open or closed in IST, with a countdown. Exchange holidays are not modelled.
 - **Demo mode** streams simulated ticks, so every live feature can be tried offline or after hours.
 
-By default quotes come from Yahoo Finance, typically a few minutes behind the exchange. For exchange
-real-time data, connect Zerodha Kite (below).
+### Live data sources (pick one in the sidebar)
+| Source | Account needed | Speed | Extras |
+|---|---|---|---|
+| **NSE India** (default) | none | near real-time (seconds) | order book (5 levels), pending buy/sell quantity, **delivery %** |
+| Yahoo Finance | none | delayed ~1–15 min | works for BSE too |
+| Zerodha Kite | Zerodha + Kite Connect subscription | real-time ticks | full depth, WebSocket streaming |
+
+**No broker account?** Use **NSE India**. It reads the same public data the nseindia.com quote page shows.
+It is unofficial: NSE may rate-limit it or block cloud servers, and when that happens StockAI quietly falls
+back to Yahoo. It works best when StockAI runs on your own PC. BSE-only symbols use Yahoo.
+
+**Delivery %** is the share of today's traded shares actually taken into demat accounts. Above ~50% means real
+investor buying; below ~30% means mostly intraday speculation. It's a good check on whether a price move is
+"real".
 
 ## Zerodha Kite real-time data
 With Kite connected, StockAI uses your Zerodha API for:
@@ -113,7 +142,7 @@ Notes:
 
 ## How predictions are made
 
-For each horizon (1, 5, 21, 126 trading days):
+For each horizon (1, 5, 21, 126 and 252 trading days):
 
 1. **Machine learning ensemble** — Ridge regression, Random Forest and Gradient Boosting trained on
    25 features (returns, moving-average distances, RSI, MACD, Bollinger, ADX, money flow, volatility,
@@ -133,6 +162,9 @@ lean on technicals & flow, the 6-month view on fundamentals & trend. Stop-losses
 app.py                   Streamlit UI
 stockai/live.py          market clock, live quotes, intraday momentum, watchlist, alerts
 stockai/kite.py          Zerodha Kite Connect: login, quotes, candles, market depth, WebSocket ticks
+stockai/nse.py           free NSE India quotes, order book and delivery % (no account)
+stockai/screener.py      suggestion box: sector scan, ranking, top picks per time frame
+stockai/universe.py      sector-wise stock universe
 stockai/data.py          symbol resolution, Yahoo Finance prices/info/holders, news, demo data
 stockai/indicators.py    technical indicators, levels, patterns, buyer/seller pressure
 stockai/forecast.py      ML ensemble, Monte Carlo, trend models, intraday outlook

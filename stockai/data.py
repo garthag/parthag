@@ -8,6 +8,7 @@ When the network is unavailable the caller can fall back to
 from __future__ import annotations
 
 import re
+import zlib
 from urllib.parse import quote_plus
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -329,7 +330,7 @@ def synthetic_intraday(last_close: float, seed: int = 7, days: int = 5) -> pd.Da
 
 def demo_bundle(query: str, exchange: str) -> StockBundle:
     code = (query or "DEMO").strip().upper() or "DEMO"
-    seed = sum(map(ord, code)) % 1000
+    seed = zlib.crc32(code.encode()) % 100_000
     daily = synthetic_history(seed=seed)
     index_daily = synthetic_history(seed=seed + 99, start_price=20000)
     intraday = synthetic_intraday(float(daily["Close"].iloc[-1]), seed=seed)
