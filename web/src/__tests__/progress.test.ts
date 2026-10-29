@@ -56,6 +56,6 @@ describe('store ledger', () => {
   it('flags issues beyond stock and impossible rejections', () => {
     const w = stockWarnings({ opening: 10, received: 5, rejected: 8, issued: 20, consumed: 0, returned: 0 })
     expect(w.join(' ')).toMatch(/Rejected quantity cannot exceed/)
-    expect(w.join(' ')).toMatch(/exceeds available stock/)
+    expect(w.join(' ')).toMatch(/exceeds approved stock/)
   })
 })

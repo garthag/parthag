@@ -18,7 +18,7 @@ export function stockWarnings(l: StockLine): string[] {
   for (const [k, v] of Object.entries(l)) if (typeof v === 'number' && v < 0) w.push(`${k} cannot be negative`)
   if (l.rejected > l.received) w.push('Rejected quantity cannot exceed quantity received.')
   if (l.accepted != null && l.accepted + l.rejected > l.received) w.push('Accepted + rejected cannot exceed quantity received.')
-  if (closingStock(l) < 0) w.push(`Issue exceeds available stock (closing would be ${closingStock(l)}).`)
+  if (closingStock(l) < 0) w.push(`Issue exceeds approved stock (closing would be ${closingStock(l)}). Earlier receipts must be approved before this report can be.`)
   return w
 }
 

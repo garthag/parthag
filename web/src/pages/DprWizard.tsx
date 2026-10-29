@@ -146,7 +146,9 @@ export default function DprWizard() {
     for (const m of draft.materials) {
       const w = stockWarnings({ opening: stock.get(m.material_id) ?? 0, received: m.received_qty ?? 0, accepted: m.accepted_qty, rejected: m.rejected_qty ?? 0, issued: m.issued_qty ?? 0, consumed: m.consumed_qty ?? 0, returned: m.returned_qty ?? 0 })
       const code = masters.materials.find((x) => x.id === m.material_id)?.code
-      for (const x of w) (x.includes('exceeds available stock') ? errors : warnings).push(`${code}: ${x}`)
+      // Opening stock counts approved reports only; an earlier receipt may still be pending, so the
+      // database enforces non-negative stock at approval and the form only warns here.
+      for (const x of w) warnings.push(`${code}: ${x}`)
     }
     for (const s of draft.safety) if (!s.description.trim()) errors.push('Every safety record needs a description.')
     for (const n of draft.ncrs) if (!n.description.trim()) errors.push('Every NCR/observation needs a description.')

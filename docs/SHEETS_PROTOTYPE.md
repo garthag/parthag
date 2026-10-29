@@ -1,6 +1,8 @@
 # Optional Google Sheets prototype mode — limitations
 
-If an organisation insists that **every** record lives in Google Drive, a Sheets-based prototype is possible (one spreadsheet per project, a tab per table, written by Apps Script). This repository does **not** implement it as the main path, for these reasons:
+> **Update:** a complete Google-only edition now exists — see [GOOGLE_WORKSPACE_EDITION.md](GOOGLE_WORKSPACE_EDITION.md). It uses AppSheet + Apps Script to address several points below (offline sync, row-level filtering, approval rules, snapshots with integrity checks). The table remains accurate about what Sheets cannot guarantee compared with PostgreSQL.
+
+If an organisation insists that **every** record lives in Google Drive, a Sheets-based edition is possible. The trade-offs versus the database edition:
 
 | Need | PostgreSQL (implemented) | Google Sheets prototype |
 |---|---|---|

@@ -10,6 +10,13 @@ Simple enough for a site supervisor on an Android phone; structured enough for p
 
 ---
 
+## Two editions — pick one
+
+| | |
+|---|---|
+| **Web edition** (this README) | Installable web app + PostgreSQL (Supabase). Strict database-enforced controls, scales to many projects. Start: [docs/START_HERE.md](docs/START_HERE.md) |
+| **Google Workspace edition** | Everything inside Google: Sheets + AppSheet + Apps Script + Drive + Looker Studio. No hosting; customise the app without code. Start: [docs/GOOGLE_WORKSPACE_EDITION.md](docs/GOOGLE_WORKSPACE_EDITION.md) |
+
 ## What you get
 
 | Area | Highlights |
@@ -54,9 +61,10 @@ Google Drive storage and Google sign-in: [docs/GOOGLE_SETUP.md](docs/GOOGLE_SETU
 
 ```bash
 cd web && npm test              # 39 unit tests
-supabase/tests/run.sh           # 56 database acceptance checks (PostgreSQL 15+)
+supabase/tests/run.sh           # 60 database acceptance checks (PostgreSQL 15+)
 cd clients/python && python -m unittest discover -s tests   # 9 Python client tests
 cd clients/java && ./build.sh test                          # 11 Java client tests
+cd google-workspace && npm ci && npm test                   # 12 Google-edition end-to-end tests
 ```
 Status against acceptance tests A–L: [docs/TESTING.md](docs/TESTING.md).
 
@@ -83,7 +91,7 @@ Status against acceptance tests A–L: [docs/TESTING.md](docs/TESTING.md).
 
 ```
 supabase/
-  migrations/      10 SQL migrations: schema, RLS, workflow functions, demo loader
+  migrations/      11 SQL migrations: schema, RLS, workflow functions, demo loader
   functions/drive/ Google Drive gateway (Deno edge function; core logic unit-tested)
   tests/           database acceptance tests
 web/
@@ -91,6 +99,7 @@ web/
   src/pages/       Home, Projects, DPR wizard/view, Activities, Schedule, Manpower, Equipment,
                    Materials, Safety & QA/QC, Documents, Dashboards, Approvals, Settings
   src/components/  UI kit, evidence capture, charts, master tables
+google-workspace/  Google Workspace edition (Apps Script source, tests, dist/Code.gs)
 clients/
   python/          Python client + CLI (standard library only)
   java/            Java 11+ client (no dependencies)

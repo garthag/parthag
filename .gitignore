@@ -98,3 +98,6 @@ coverage/
 clients/java/target/
 __pycache__/
 *.egg-info/
+
+# Google Workspace edition
+google-workspace/node_modules/

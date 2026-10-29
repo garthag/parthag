@@ -42,3 +42,12 @@ jobs:
       - uses: actions/setup-java@v4
         with: { distribution: temurin, java-version: "17" }
       - run: clients/java/build.sh test
+  google-workspace:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - run: cd web && npm ci
+      - run: cd google-workspace && npm ci && npm test
+      - run: git diff --exit-code google-workspace/dist docs/APPSHEET_COLUMNS.md || (echo "Run 'npm test' in google-workspace and commit dist/" && exit 1)

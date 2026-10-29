@@ -1,0 +1,15 @@
+{
+  "name": "construct-dpr-google-workspace",
+  "version": "0.1.0",
+  "private": true,
+  "license": "Apache-2.0",
+  "description": "CONSTRUCT DPR — Google Workspace edition (Sheets + AppSheet + Apps Script + Drive + Looker Studio)",
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs",
+    "test": "node build.mjs && node --test test/*.test.mjs"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.2"
+  }
+}
