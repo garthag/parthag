@@ -53,6 +53,9 @@ def technical_score(ind: pd.DataFrame) -> dict:
             "label": "Bullish" if score > 0.2 else "Bearish" if score < -0.2 else "Neutral"}
 
 
+BUY_LIKE = ("STRONG BUY", "BUY")
+
+
 def label_for(score: float) -> str:
     if score > 0.45:
         return "STRONG BUY"
