@@ -1,0 +1,11 @@
+streamlit>=1.50
+yfinance>=0.2.54
+pandas>=2.0
+numpy>=1.26
+scikit-learn>=1.4
+plotly>=5.20
+vaderSentiment>=3.3.2
+feedparser>=6.0
+matplotlib>=3.8
+# optional: Google search trends tab
+pytrends>=4.9
