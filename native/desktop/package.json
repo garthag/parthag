@@ -2,7 +2,7 @@
   "name": "construct-dpr-desktop",
   "productName": "CONSTRUCT DPR",
   "version": "1.0.0",
-  "description": "CONSTRUCT DPR for Windows — construction daily progress reporting",
+  "description": "CONSTRUCT DPR for Windows \u2014 construction daily progress reporting",
   "author": "CONSTRUCT DPR contributors",
   "license": "Apache-2.0",
   "private": true,
@@ -33,8 +33,7 @@
       "buildResources": "resources"
     },
     "win": {
-      "icon": "resources/icon.png",
-      "artifactName": "CONSTRUCT-DPR-${version}-${arch}-${target}.${ext}"
+      "icon": "resources/icon.png"
     },
     "nsis": {
       "oneClick": false,
@@ -42,7 +41,8 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "CONSTRUCT DPR"
+      "shortcutName": "CONSTRUCT DPR",
+      "artifactName": "CONSTRUCT-DPR-${version}-setup.${ext}"
     },
     "portable": {
       "artifactName": "CONSTRUCT-DPR-${version}-portable.exe"
@@ -51,5 +51,9 @@
   "devDependencies": {
     "electron": "^45.2.1",
     "electron-builder": "^26.18.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/garthag/parthag.git"
   }
 }

@@ -28,7 +28,7 @@ jobs:
         with: { node-version: 22, cache: npm, cache-dependency-path: web/package-lock.json }
       - uses: actions/setup-java@v4
         with: { distribution: temurin, java-version: '21', cache: gradle }
-      - uses: android-actions/setup-android@v3
+      # GitHub's Ubuntu runners include the Android SDK (ANDROID_HOME); Gradle fetches any missing platform.
       - name: Build the web app for the Android shell
         working-directory: web
         env: { CDPR_TARGET: app }
@@ -105,6 +105,6 @@ jobs:
             Latest automatic build from `${{ github.ref_name }}` (commit ${{ github.sha }}, build ${{ github.run_number }}).
 
             **Android:** download `CONSTRUCT-DPR-android-….apk` on the phone → open it → allow "Install unknown apps" for your browser/Files app → Install.
-            **Windows:** download `CONSTRUCT-DPR-…-x64-nsis.exe` → run it → if "Windows protected your PC" appears, click **More info → Run anyway** (the installer is not code-signed yet). The `…-portable.exe` runs without installing.
+            **Windows:** download `CONSTRUCT-DPR-…-setup.exe` → run it → if "Windows protected your PC" appears, click **More info → Run anyway** (the installer is not code-signed yet). The `…-portable.exe` runs without installing.
 
             On first start each app asks for the **connection code** (Settings → Connect other devices, in any signed-in copy). Full guide: docs/APPS.md

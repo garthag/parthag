@@ -1,6 +1,6 @@
 # CONSTRUCT DPR on Windows
 
-> **New:** a real Windows installer is now available — `CONSTRUCT-DPR-…-x64-nsis.exe` on the repository's Releases page. See [APPS.md](APPS.md). The browser-install method below still works too.
+> **New:** a real Windows installer is now available — `CONSTRUCT-DPR-…-setup.exe` on the repository's Releases page. See [APPS.md](APPS.md). The browser-install method below still works too.
 
 Without the installer: CONSTRUCT DPR is an installable web app: Chrome or Microsoft Edge installs it like a normal Windows program. It gets a Start-menu entry, a desktop/taskbar icon and its own window, and updates itself.
 
