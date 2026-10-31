@@ -8,6 +8,8 @@ export default defineConfig({
     react(),
     tailwindcss(),
     VitePWA({
+      // The Android and Windows apps ship the files inside the app, so no service worker there.
+      disable: process.env.CDPR_TARGET === 'app',
       registerType: 'prompt',
       includeAssets: ['icon.svg'],
       manifest: {

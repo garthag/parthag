@@ -1,0 +1,55 @@
+{
+  "name": "construct-dpr-desktop",
+  "productName": "CONSTRUCT DPR",
+  "version": "1.0.0",
+  "description": "CONSTRUCT DPR for Windows — construction daily progress reporting",
+  "author": "CONSTRUCT DPR contributors",
+  "license": "Apache-2.0",
+  "private": true,
+  "main": "main.cjs",
+  "scripts": {
+    "test": "node --test test/*.test.cjs",
+    "start": "electron .",
+    "dist": "electron-builder --win nsis portable --publish never"
+  },
+  "build": {
+    "appId": "org.constructdpr.desktop",
+    "productName": "CONSTRUCT DPR",
+    "copyright": "Apache-2.0",
+    "files": [
+      "main.cjs",
+      "preload.cjs",
+      "assets.cjs",
+      "resources/icon.png"
+    ],
+    "extraResources": [
+      {
+        "from": "../../web/dist",
+        "to": "web"
+      }
+    ],
+    "directories": {
+      "output": "release",
+      "buildResources": "resources"
+    },
+    "win": {
+      "icon": "resources/icon.png",
+      "artifactName": "CONSTRUCT-DPR-${version}-${arch}-${target}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "CONSTRUCT DPR"
+    },
+    "portable": {
+      "artifactName": "CONSTRUCT-DPR-${version}-portable.exe"
+    }
+  },
+  "devDependencies": {
+    "electron": "^45.2.1",
+    "electron-builder": "^26.18.0"
+  }
+}

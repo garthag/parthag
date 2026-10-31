@@ -3,7 +3,8 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useProject } from '../lib/project'
 import { useAuth } from '../lib/auth'
 import { supabase, friendlyError } from '../lib/supabase'
-import { cacheGet, cachePut, drafts } from '../lib/local'
+import { cacheGet, cachePut, drafts, outbox } from '../lib/local'
+import { usePresence, useRowWatch } from '../lib/live'
 import { sync } from '../lib/sync'
 import { useFavorites, useSyncStatus } from '../lib/hooks'
 import { computeProgress, linearPlannedPct } from '../lib/calc/progress'
@@ -35,7 +36,7 @@ export default function DprWizard() {
   const { id } = useParams()
   const nav = useNavigate()
   const { project, masters, can } = useProject()
-  const { user } = useAuth()
+  const { user, profile } = useAuth()
   const [draft, setDraft] = useState<DprDraft | null>(null)
   const [loadErr, setLoadErr] = useState<string | null>(null)
   const [step, setStep] = useState(0)
@@ -47,6 +48,26 @@ export default function DprWizard() {
   const [msg, setMsg] = useState<{ tone: 'red' | 'green' | 'amber'; text: string } | null>(null)
   const sStatus = useSyncStatus()
   const [localState, setLocalState] = useState<string>('local')
+  const [remote, setRemote] = useState<Record<string, unknown> | null>(null)
+  const others = usePresence(id ? `dpr:${id}` : null, user ? { id: user.id, name: profile?.full_name || user.email || 'User' } : null)
+  // Someone (or you on another device) saved this report while it is open here.
+  useRowWatch('dpr_headers', id ?? null, async (row) => {
+    const rec = await drafts.get(String(row.id))
+    return Number(row.version) > Number(rec?.serverVersion ?? draft?.expected_version ?? 0)
+  }, setRemote)
+  const loadLatest = async () => {
+    const { data, error } = await supabase.rpc('dpr_document', { p_id: id })
+    if (error) return setMsg({ tone: 'red', text: friendlyError(error) })
+    const doc = data as DprDocument
+    if (!['draft', 'rejected'].includes(doc.header.status)) return nav(`/dpr/${id}`, { replace: true })
+    const fresh = docToDraft(doc)
+    await drafts.put({ id: fresh.id, projectId: fresh.project_id, draft: fresh, savedAt: Date.now(), syncState: 'synced', serverVersion: doc.header.version })
+    for (const o of await outbox.byDpr(fresh.id)) await outbox.delete(o.id)
+    await sync.refreshCounts()
+    setDraft(fresh)
+    setRemote(null)
+    setMsg({ tone: 'green', text: 'Loaded the latest version from the server.' })
+  }
 
   // ---- load --------------------------------------------------------------
   useEffect(() => {
@@ -218,10 +239,22 @@ export default function DprWizard() {
             <Badge tone={stateLabel[localState]?.[0]}>{stateLabel[localState]?.[1] ?? localState}</Badge>
             {ctx.from === 'device' && <Badge tone="amber">Using cached quantities (offline)</Badge>}
           </div>
+          {others.length > 0 && (
+            <p className="mt-1 text-sm text-sky-800 dark:text-sky-300" role="status">👥 Also open now: {others.map((o) => `${o.name} (${o.device})`).join(', ')}</p>
+          )}
         </div>
         <button className="btn btn-secondary" disabled={!!busy} onClick={() => void saveDraft()}>{busy === 'save' ? 'Saving…' : 'Save draft'}</button>
       </div>
       {msg && <Alert tone={msg.tone}>{msg.text}</Alert>}
+      {remote && (
+        <Alert tone="amber">
+          <b>This report was just changed on another device</b> (now {String(remote.status)}, version {String(remote.version)}).
+          <div className="mt-2 flex flex-wrap gap-2">
+            <button className="btn btn-primary" onClick={() => void loadLatest()}>Load latest (discard my unsaved changes)</button>
+            <button className="btn btn-secondary" onClick={() => setRemote(null)}>Keep editing mine (you will choose when saving)</button>
+          </div>
+        </Alert>
+      )}
 
       <ol className="flex gap-1 overflow-x-auto pb-1" aria-label="Report steps">
         {STEPS.map((s, i) => (

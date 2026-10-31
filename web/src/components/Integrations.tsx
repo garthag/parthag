@@ -1,10 +1,10 @@
 import { useState } from 'react'
 import { useProject } from '../lib/project'
 import { useLoad, useRealtime } from '../lib/hooks'
-import { supabase } from '../lib/supabase'
+import { serverConfig, supabase } from '../lib/supabase'
 import { Card, Tabs } from './ui'
 
-const api = (import.meta.env.VITE_SUPABASE_URL as string | undefined) ?? 'https://your-project.supabase.co'
+const api = serverConfig?.url ?? 'https://your-project.supabase.co'
 
 const SNIPPETS: Record<'python' | 'java' | 'curl', string> = {
   python: `from construct_dpr import ConstructDPR   # clients/python (standard library only)

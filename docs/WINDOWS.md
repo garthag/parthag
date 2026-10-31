@@ -1,6 +1,8 @@
 # CONSTRUCT DPR on Windows
 
-There is nothing to install from an `.exe`. CONSTRUCT DPR is an installable web app: Chrome or Microsoft Edge installs it like a normal Windows program. It gets a Start-menu entry, a desktop/taskbar icon and its own window, and updates itself.
+> **New:** a real Windows installer is now available — `CONSTRUCT-DPR-…-x64-nsis.exe` on the repository's Releases page. See [APPS.md](APPS.md). The browser-install method below still works too.
+
+Without the installer: CONSTRUCT DPR is an installable web app: Chrome or Microsoft Edge installs it like a normal Windows program. It gets a Start-menu entry, a desktop/taskbar icon and its own window, and updates itself.
 
 Before you start, the app must be online. Finish **Part A (Supabase)** and **Part B (Netlify)** in [START_HERE.md](START_HERE.md) so you have an address like `https://yourcompany-dpr.netlify.app`.
 

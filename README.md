@@ -10,6 +10,10 @@ Simple enough for a site supervisor on an Android phone; structured enough for p
 
 ---
 
+## Apps for Android, Windows and the web
+
+Download the **Android APK** and the **Windows installer** from the repository's *Releases* page (**CONSTRUCT DPR apps (latest build)**), or use any browser. All are live-synchronised with each other — see [docs/APPS.md](docs/APPS.md).
+
 ## Two editions — pick one
 
 | | |
@@ -99,6 +103,8 @@ web/
   src/pages/       Home, Projects, DPR wizard/view, Activities, Schedule, Manpower, Equipment,
                    Materials, Safety & QA/QC, Documents, Dashboards, Approvals, Settings
   src/components/  UI kit, evidence capture, charts, master tables
+native/desktop/    Windows app (Electron shell around web/)
+web/android/       Android app (Capacitor project)
 google-workspace/  Google Workspace edition (Apps Script source, tests, dist/Code.gs)
 clients/
   python/          Python client + CLI (standard library only)

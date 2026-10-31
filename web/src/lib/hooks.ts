@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useState, useSyncExternalStore } from 'react'
-import { supabase, friendlyError } from './supabase'
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
+import { friendlyError } from './supabase'
 import { sync } from './sync'
+import { subscribeWithCatchUp } from './live'
 
 export function useSyncStatus() {
   return useSyncExternalStore((cb) => sync.subscribe(cb), () => sync.status)
@@ -28,15 +29,19 @@ export function useLoad<T>(fn: () => Promise<T>, deps: unknown[]) {
   return { data, error, loading, reload, setData }
 }
 
-/** Re-runs `onChange` whenever a committed row changes in `table` for the project (Supabase Realtime, RLS-filtered). */
+/**
+ * Re-runs `onChange` whenever a committed row changes in `table` for the
+ * project (Supabase Realtime, RLS-filtered), and again after reconnects or
+ * when the app returns to the foreground, so missed events are caught up.
+ */
 export function useRealtime(table: string, projectId: string | null | undefined, onChange: () => void) {
+  const cb = useRef(onChange)
+  cb.current = onChange
   useEffect(() => {
     if (!projectId) return
-    const ch = supabase.channel(`rt:${table}:${projectId}:${Math.random().toString(36).slice(2)}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table, filter: `project_id=eq.${projectId}` }, () => onChange())
-      .subscribe()
-    return () => { void supabase.removeChannel(ch) }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    return subscribeWithCatchUp(`rt:${table}:${projectId}`,
+      (ch) => ch.on('postgres_changes', { event: '*', schema: 'public', table, filter: `project_id=eq.${projectId}` }, () => cb.current()),
+      () => cb.current())
   }, [table, projectId])
 }
 

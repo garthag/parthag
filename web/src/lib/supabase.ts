@@ -1,4 +1,5 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
+import { consumeConnectLink, loadConfig } from './config'
 
 /**
  * The anon key is designed to be public: it only identifies the project.
@@ -6,12 +7,12 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js'
  * permission checks inside the database functions. NEVER put the
  * service-role key in any VITE_ variable — it would ship in the bundle.
  */
-const url = import.meta.env.VITE_SUPABASE_URL as string | undefined
-const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined
+// A shared ?connect=CODE link configures the device before the client is created.
+consumeConnectLink()
+export const serverConfig = loadConfig()
+export const isConfigured = serverConfig !== null
 
-export const isConfigured = Boolean(url && anonKey)
-
-export const supabase: SupabaseClient = createClient(url || 'http://localhost:54321', anonKey || 'missing-anon-key', {
+export const supabase: SupabaseClient = createClient(serverConfig?.url || 'http://localhost:54321', serverConfig?.anonKey || 'missing-anon-key', {
   auth: {
     persistSession: true, // Supabase stores a refresh token in localStorage; Drive tokens are memory-only (see drive.ts)
     autoRefreshToken: true,

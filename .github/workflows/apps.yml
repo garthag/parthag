@@ -1,0 +1,110 @@
+name: Build apps (Android + Windows)
+
+# Builds the Android APK and the Windows installer from the same web app and
+# publishes them on the "CONSTRUCT DPR apps (latest build)" release page.
+on:
+  push:
+    branches: [main, claude/construct-dpr-app-z3h0j8]
+    paths: ['web/**', 'native/**', 'supabase/functions/drive/core.ts', '.github/workflows/apps.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: apps-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    env:
+      CDPR_VERSION_CODE: ${{ github.run_number }}
+      CDPR_VERSION_NAME: 1.0.${{ github.run_number }}
+      HAS_KEYSTORE: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm, cache-dependency-path: web/package-lock.json }
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: '21', cache: gradle }
+      - uses: android-actions/setup-android@v3
+      - name: Build the web app for the Android shell
+        working-directory: web
+        env: { CDPR_TARGET: app }
+        run: npm ci && npm run build && npx cap sync android
+      - name: Build debug APK
+        working-directory: web/android
+        run: ./gradlew --no-daemon assembleDebug
+      - name: Build signed release (only when signing secrets are configured)
+        if: env.HAS_KEYSTORE == 'true'
+        working-directory: web/android
+        env:
+          KEYSTORE: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          CDPR_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          CDPR_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          CDPR_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          echo "$KEYSTORE" | base64 -d > "$RUNNER_TEMP/release.jks"
+          CDPR_KEYSTORE_FILE="$RUNNER_TEMP/release.jks" ./gradlew --no-daemon assembleRelease bundleRelease
+      - name: Collect
+        run: |
+          mkdir -p out
+          cp web/android/app/build/outputs/apk/debug/app-debug.apk "out/CONSTRUCT-DPR-android-1.0.${{ github.run_number }}.apk"
+          if [ -f web/android/app/build/outputs/apk/release/app-release.apk ]; then
+            cp web/android/app/build/outputs/apk/release/app-release.apk "out/CONSTRUCT-DPR-android-1.0.${{ github.run_number }}-signed.apk"
+            cp web/android/app/build/outputs/bundle/release/app-release.aab "out/CONSTRUCT-DPR-android-1.0.${{ github.run_number }}-playstore.aab"
+          fi
+      - uses: actions/upload-artifact@v4
+        with: { name: android, path: out/* }
+
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            web/package-lock.json
+            native/desktop/package-lock.json
+      - name: Build the web app for the Windows shell
+        working-directory: web
+        env: { CDPR_TARGET: app }
+        run: npm ci && npm run build
+      - name: Build Windows installer and portable app
+        working-directory: native/desktop
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CSC_LINK: ${{ secrets.WINDOWS_CERTIFICATE_BASE64 }}
+          CSC_KEY_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+        shell: bash
+        run: |
+          npm version --no-git-tag-version --allow-same-version "1.0.${{ github.run_number }}"
+          if [ -z "$CSC_LINK" ]; then unset CSC_LINK CSC_KEY_PASSWORD; fi
+          npm ci && npm test && npx electron-builder --win nsis portable --x64 --publish never
+      - uses: actions/upload-artifact@v4
+        with: { name: windows, path: native/desktop/release/*.exe }
+
+  publish:
+    needs: [android, windows]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with: { path: dist, merge-multiple: true }
+      - run: ls -la dist
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: apps-latest
+          name: CONSTRUCT DPR apps (latest build)
+          prerelease: true
+          target_commitish: ${{ github.sha }}
+          files: dist/*
+          body: |
+            Latest automatic build from `${{ github.ref_name }}` (commit ${{ github.sha }}, build ${{ github.run_number }}).
+
+            **Android:** download `CONSTRUCT-DPR-android-….apk` on the phone → open it → allow "Install unknown apps" for your browser/Files app → Install.
+            **Windows:** download `CONSTRUCT-DPR-…-x64-nsis.exe` → run it → if "Windows protected your PC" appears, click **More info → Run anyway** (the installer is not code-signed yet). The `…-portable.exe` runs without installing.
+
+            On first start each app asks for the **connection code** (Settings → Connect other devices, in any signed-in copy). Full guide: docs/APPS.md

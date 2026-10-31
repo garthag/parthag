@@ -65,6 +65,9 @@ class SyncEngine {
     if (this.timer) return
     window.addEventListener('online', () => { this.status.online = true; this.emit(); void this.run() })
     window.addEventListener('offline', () => { this.status.online = false; this.emit() })
+    // Apps are paused in the background (Android) or minimised (Windows): sync as soon as they return.
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') void this.run() })
+    window.addEventListener('focus', () => void this.run())
     this.timer = setInterval(() => void this.run(), 30_000)
     void this.refreshCounts().then(() => this.run())
   }

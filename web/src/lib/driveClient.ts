@@ -1,7 +1,7 @@
-import { supabase } from './supabase'
+import { serverConfig, supabase } from './supabase'
 
 /** Browser side of the `drive` edge function. Holds no Google credentials. */
-const base = `${import.meta.env.VITE_SUPABASE_URL ?? ''}/functions/v1/drive`
+const base = `${serverConfig?.url ?? ''}/functions/v1/drive`
 export const driveEnabled = (import.meta.env.VITE_DRIVE_ENABLED ?? 'true') !== 'false'
 
 export class DriveError extends Error {
@@ -18,7 +18,7 @@ async function authHeaders(): Promise<Record<string, string>> {
   const { data } = await supabase.auth.getSession()
   const token = data.session?.access_token
   if (!token) throw new DriveError('Not signed in', 401)
-  return { Authorization: `Bearer ${token}`, apikey: import.meta.env.VITE_SUPABASE_ANON_KEY ?? '' }
+  return { Authorization: `Bearer ${token}`, apikey: serverConfig?.anonKey ?? '' }
 }
 
 async function call<T>(init: RequestInit & { query?: Record<string, string> }): Promise<T> {

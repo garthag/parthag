@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useProject } from '../lib/project'
 import { useAuth } from '../lib/auth'
 import { useLoad, useRealtime, must } from '../lib/hooks'
+import { usePresence } from '../lib/live'
 import { supabase, friendlyError } from '../lib/supabase'
 import { fileObjectUrl } from '../lib/driveClient'
 import { sha256Hex } from '../lib/media'
@@ -38,6 +39,7 @@ export default function DprView() {
   }, [id])
   useRealtime('dpr_headers', project?.id, () => void data.reload())
   useRealtime('approval_actions', project?.id, () => void data.reload())
+  const others = usePresence(id ? `dpr:${id}` : null, user ? { id: user.id, name: profile?.full_name || user.email || 'User' } : null)
 
   if (data.error) return <Alert>{data.error}</Alert>
   if (!data.data) return <Spinner />
@@ -94,6 +96,7 @@ export default function DprView() {
       <PageHeader title={`${h.dpr_no}${h.revision ? ` · Rev ${h.revision}` : ''}`} subtitle={`${h.report_date} · ${h.shift} shift · ${h.area_name ?? 'Whole project'} · prepared by ${h.prepared_by_name ?? '—'}`}
         actions={<DprStatusBadge status={status} revision={h.revision} />} />
       {msg && <Alert tone={msg.tone}>{msg.text}</Alert>}
+      {others.length > 0 && <p className="text-sm text-sky-800 dark:text-sky-300" role="status">👥 Also viewing: {others.map((o) => `${o.name} (${o.device})`).join(', ')}</p>}
       {!!h.revision_reason && <Alert tone="amber">Revision {h.revision} reason: {String(h.revision_reason)}</Alert>}
 
       <Card title="Actions">

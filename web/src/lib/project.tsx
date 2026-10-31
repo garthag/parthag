@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, t
 import { supabase } from './supabase'
 import { cacheGet, cachePut } from './local'
 import { useAuth } from './auth'
+import { subscribeWithCatchUp } from './live'
 import type { Action, Activity, Module, Project } from './types'
 
 /** Read-only project masters used for lookups; cached on the device for offline use. */
@@ -106,15 +107,15 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
   useEffect(() => { void reloadProjects() }, [reloadProjects])
   useEffect(() => { setMasters(EMPTY); setPerms(new Set()); void reloadMasters() }, [reloadMasters])
 
-  // Live updates: committed changes to activities / BOQ refresh the masters for everyone on the project.
+  // Live updates: committed changes to activities / BOQ refresh the masters for everyone on the
+  // project; reconnects and returning to the foreground trigger a catch-up reload.
   useEffect(() => {
     if (!projectId) return
-    const ch = supabase.channel(`masters:${projectId}`)
+    return subscribeWithCatchUp(`masters:${projectId}`, (ch) => ch
       .on('postgres_changes', { event: '*', schema: 'public', table: 'activities', filter: `project_id=eq.${projectId}` }, () => void reloadMasters())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'boq_items', filter: `project_id=eq.${projectId}` }, () => void reloadMasters())
-      .subscribe()
-    return () => { void supabase.removeChannel(ch) }
-  }, [projectId, reloadMasters])
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'boq_items', filter: `project_id=eq.${projectId}` }, () => void reloadMasters()),
+    () => { void reloadMasters(); void reloadProjects() })
+  }, [projectId, reloadMasters, reloadProjects])
 
   const project = useMemo(() => projects.find((p) => p.id === projectId) ?? null, [projects, projectId])
   const can = useCallback((m: Module, a: Action) => perms.has(`${m}.${a}`), [perms])

@@ -95,9 +95,9 @@ Supabase → **Authentication → URL Configuration** → **Site URL** = your Ne
 
 ---
 
-## Windows PCs and laptops
+## Android and Windows apps
 
-Install the same app on Windows with Chrome or Edge: see [WINDOWS.md](WINDOWS.md).
+Install the Android app (`.apk`) and the Windows program (`.exe`) from the repository's **Releases** page and connect them with the code from **Settings → Connect other devices**: see [APPS.md](APPS.md). Browser install on Windows: [WINDOWS.md](WINDOWS.md).
 
 ## Part D — Google Drive for photos (next session)
 

@@ -7,6 +7,7 @@ import { sync } from './lib/sync'
 import { requestPersistentStorage } from './lib/local'
 import { Layout } from './components/Layout'
 import { UpdatePrompt } from './components/UpdatePrompt'
+import { platform } from './lib/platform'
 import { Empty, Spinner } from './components/ui'
 import { Login } from './pages/Login'
 import { Home } from './pages/Home'
@@ -73,7 +74,7 @@ function Shell() {
           </Routes>
         </Suspense>
       </Layout>
-      <UpdatePrompt />
+      {platform() === 'web' && <UpdatePrompt />}
     </ProjectProvider>
   )
 }
