@@ -78,10 +78,7 @@ Supabase → **Authentication → URL Configuration** → **Site URL** = your Ne
    - Fill the other steps → **Submit for review**.
    - Open **Approvals** → approve it.
    - Download the PDF.
-6. **Add colleagues:**
-   - Ask them to open the address and create an account.
-   - Then go to **Projects → Setup → Members & roles**, enter their e-mail, choose a role (e.g. Site engineer) and click **Add member**.
-7. **Your own real project:** **Projects → ＋ New project**. Create your organisation, then fill in the project and add areas, WBS, activities (or import a CSV) and the BOQ.
+6. **Adding colleagues and creating your own real projects** belong to the **admin portal**, which is switched off for now (see [ADMIN_PORTAL.md](ADMIN_PORTAL.md)). Until it is switched on, each person who signs up can load their own demo project to try the app.
 
 ### If something goes wrong
 
@@ -97,7 +94,7 @@ Supabase → **Authentication → URL Configuration** → **Site URL** = your Ne
 
 ## Android and Windows apps
 
-Install the Android app (`.apk`) and the Windows program (`.exe`) from the repository's **Releases** page and connect them with the code from **Settings → Connect other devices**: see [APPS.md](APPS.md). Browser install on Windows: [WINDOWS.md](WINDOWS.md).
+Install the Android app (`.apk`) and the Windows program (`.exe`) from the repository's **Releases** page and connect them by entering the server address and public key from step A5: see [APPS.md](APPS.md). Browser install on Windows: [WINDOWS.md](WINDOWS.md).
 
 ## Part D — Google Drive for photos (next session)
 

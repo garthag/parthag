@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { ADMIN_PORTAL } from '../lib/features'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -56,7 +57,7 @@ export default function Projects() {
   return (
     <div className="flex flex-col gap-4">
       <PageHeader title="Projects" subtitle="Organisation → Client → Contract → Project → Site → Area → WBS → Activity"
-        actions={<button className="btn btn-primary" onClick={() => setOpen(true)}>＋ New project</button>} />
+        actions={ADMIN_PORTAL && <button className="btn btn-primary" onClick={() => setOpen(true)}>＋ New project</button>} />
       <input className="input" type="search" placeholder="Search projects by code or name…" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search projects" />
       {!filtered.length && <Empty title="No projects found">Create a project, load the demo from Home, or ask an administrator to add you.</Empty>}
       <div className="grid gap-3 md:grid-cols-2">
@@ -72,14 +73,14 @@ export default function Projects() {
             </div>
             <div className="mt-3 flex gap-2">
               <button className="btn btn-primary" onClick={() => { setProjectId(p.id); nav('/') }}>{p.id === project?.id ? 'Current' : 'Open'}</button>
-              <button className="btn btn-secondary" onClick={() => { setProjectId(p.id); nav('/projects/setup') }}>Setup</button>
+              {ADMIN_PORTAL && <button className="btn btn-secondary" onClick={() => { setProjectId(p.id); nav('/projects/setup') }}>Setup</button>}
             </div>
           </Card>
         ))}
       </div>
       <p className="text-sm text-slate-500">Need sample data? <Link to="/" className="underline">Home → Load demo project</Link> (only shown when you have no projects) or call <code>load_demo_project()</code>.</p>
 
-      <Modal open={open} onClose={() => setOpen(false)} title="New project">
+      <Modal open={ADMIN_PORTAL && open} onClose={() => setOpen(false)} title="New project">
         <form onSubmit={handleSubmit(onSubmit)} className="grid gap-3">
           {err && <Alert>{err}</Alert>}
           <Select label="Organisation" {...register('organization_id')} error={errors.organization_id?.message}>

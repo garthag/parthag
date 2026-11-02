@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react'
+import { ADMIN_PORTAL } from '../lib/features'
 import { useProject } from '../lib/project'
 import { useFavorites, useLoad, useRealtime, must } from '../lib/hooks'
 import { supabase, friendlyError } from '../lib/supabase'
@@ -47,11 +48,11 @@ export default function Activities() {
   return (
     <div className="flex flex-col gap-4">
       <PageHeader title="Activity register" subtitle="Approved quantities, planned dates and accepted progress from approved DPRs."
-        actions={can('masters', 'create') && <button className="btn btn-secondary" onClick={() => fileRef.current?.click()}>Import CSV</button>} />
+        actions={ADMIN_PORTAL && can('masters', 'create') && <button className="btn btn-secondary" onClick={() => fileRef.current?.click()}>Import CSV</button>} />
       <input ref={fileRef} type="file" accept=".csv,text/csv" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) void importCsv(f); e.target.value = '' }} />
       {msg && <Alert tone={msg.tone}>{msg.text}</Alert>}
       <MasterTable title="Activities" table="activities" scope={{ column: 'project_id', value: project!.id }}
-        canCreate={can('masters', 'create')} canEdit={can('masters', 'edit')} canDelete={can('masters', 'delete')}
+        canCreate={ADMIN_PORTAL && can('masters', 'create')} canEdit={ADMIN_PORTAL && can('masters', 'edit')} canDelete={ADMIN_PORTAL && can('masters', 'delete')}
         columns={[
           { key: 'fav', label: '★', readOnly: true, render: (r) => <button className="text-lg" onClick={() => toggle(r.id)} aria-label="Toggle favourite">{fav.includes(r.id) ? '★' : '☆'}</button> },
           { key: 'code', label: 'ID', required: true }, { key: 'name', label: 'Activity', required: true },
@@ -71,9 +72,9 @@ export default function Activities() {
           { key: 'status', label: 'Status', type: 'select', options: [['not_started', 'Not started'], ['in_progress', 'In progress'], ['completed', 'Completed'], ['cancelled', 'Cancelled']] },
           { key: 'progress', label: 'Accepted cum. / %', readOnly: true, render: (r) => { const p = by.get(r.id); return p ? `${Number(p.accepted_cum_qty).toLocaleString('en-IN')} · ${p.progress_pct == null ? '—' : `${Number(p.progress_pct).toFixed(1)} %`}` : '—' } },
         ]} />
-      <Card title="CSV import format">
+      {ADMIN_PORTAL && <Card title="CSV import format">
         <p className="text-sm">Columns (header row required): <code>code, name, wbs_code, area_code, boq_item_no, unit, location, total_qty, weight, original_duration, planned_start, planned_finish, is_milestone, responsible</code>. Dates as YYYY-MM-DD. Rows with an existing code update that activity. For Primavera P6, export activities to Excel/CSV and map the columns as described in docs/P6_EXCHANGE.md.</p>
-      </Card>
+      </Card>}
     </div>
   )
 }

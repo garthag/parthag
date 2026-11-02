@@ -36,10 +36,12 @@ Updating: download and install the newer APK over the old one — your data and 
 No admin rights? Use **`CONSTRUCT-DPR-…-portable.exe`**: double-click to run, nothing installed.
 Updating: run the newer installer; it replaces the old version and keeps your data. Uninstall: Windows **Settings → Apps → CONSTRUCT DPR → Uninstall**.
 
-## The connection code
-Each app works with *your* company server. Any signed-in user can find the code in **Settings → Connect other devices** (web, Android or Windows) and send it by WhatsApp/e-mail. It contains only the server address and its **public** key — the same information every copy of the app needs — never a password. Each person still signs in with their own account and sees only their projects.
+## Connecting an app to your server
+On first start, tap **Or enter the server address and public key** and enter the **Project URL** and **public key** from Supabase (START_HERE step A5). You can share these two values with colleagues; both are public.
 
-(Typing it instead: *Or enter the server address and public key* on the first-start screen. The app refuses secret/service-role keys.)
+> While the **admin portal** is switched off ([ADMIN_PORTAL.md](ADMIN_PORTAL.md)) the one-line connection code is hidden. When it is switched on, any signed-in user finds the code in **Settings → Connect other devices** (web, Android or Windows) and can send it by WhatsApp/e-mail.
+
+Neither the code nor the two values contain a password — only the server address and its **public** key, which every copy of the app needs. Each person still signs in with their own account and sees only their projects. The app refuses secret / service-role keys.
 
 ## Sign-in in the apps
 Use **e-mail and password** (or set one up from the web version with *Create account*). "Continue with Google" is offered in the browser version.

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { ADMIN_PORTAL } from '../lib/features'
 import { useAuth } from '../lib/auth'
 import { useProject } from '../lib/project'
 import { useLoad, useTheme, must } from '../lib/hooks'
@@ -78,13 +79,13 @@ export default function Settings() {
             <button className="btn btn-secondary" onClick={() => void clearSynced()}>Clear synchronised data</button>
           </div>
         </Card>
-        <Card title="Data export (portability)">
+        {ADMIN_PORTAL && <Card title="Data export (portability)">
           <p className="text-sm mb-2">Download the complete project — masters, schedule, baselines, BOQ, every DPR revision, registers, approvals, report snapshots and Drive file references — as open JSON. CSV exports are on each register.</p>
           <button className="btn btn-primary" disabled={!project || !(can('project', 'export') || can('reports', 'export'))} onClick={() => void exportJson()}>Export project (JSON)</button>
-        </Card>
+        </Card>}
       </div>
-      <ConnectDevicesCard />
-      <IntegrationsCard />
+      {ADMIN_PORTAL && <ConnectDevicesCard />}
+      {ADMIN_PORTAL && <IntegrationsCard />}
       <Card title="Privacy & security">
         <ul className="list-disc pl-5 text-sm space-y-1">
           <li>Access is enforced by the database (row-level security) for every request; the app only hides buttons you cannot use.</li>
@@ -95,7 +96,7 @@ export default function Settings() {
           <li>Retention: files are not deleted from the app; authorised users can request deletion, and administrators act on it under the organisation's policy (see docs/BACKUP_AND_RETENTION.md).</li>
         </ul>
       </Card>
-      <Card title="Role & permission matrix">
+      {ADMIN_PORTAL && <Card title="Role & permission matrix">
         <p className="text-xs text-slate-500 mb-2">C create · V view · E edit · S submit · A approve · R reject · X export · D delete. Project administrators can override per project.</p>
         <div className="overflow-x-auto">
           <table className="table text-xs">
@@ -105,7 +106,7 @@ export default function Settings() {
             ))}</tbody>
           </table>
         </div>
-      </Card>
+      </Card>}
       <Card title="About">
         <p className="text-sm">CONSTRUCT DPR — open-source (Apache-2.0). Built with React, Vite, Tailwind CSS, Supabase (PostgreSQL), Recharts, jsPDF, idb and Zod. See THIRD_PARTY_LICENSES.md.</p>
         <p className="text-xs text-slate-500 mt-1">Roles available: {(Object.keys(ROLE_LABELS) as AppRole[]).length}.</p>

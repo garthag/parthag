@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { ADMIN_PORTAL } from '../lib/features'
 import { supabase, friendlyError, isConfigured, serverConfig } from '../lib/supabase'
 import { checkConfig, clearConfig, parseConnectionCode, saveConfig, testConnection } from '../lib/config'
 import { deviceLabel, isAppShell } from '../lib/platform'
@@ -42,7 +43,7 @@ export function SetupRequired() {
           </form>
         </details>
         {msg && <Alert>{msg}</Alert>}
-        <p className="text-xs text-slate-500">Administrators find the code in <b>Settings → Connect other devices</b>. Only the public key is used; the app refuses secret keys.</p>
+        <p className="text-xs text-slate-500">{ADMIN_PORTAL ? <>Administrators find the code in <b>Settings → Connect other devices</b>. </> : <>Ask whoever set up your server for its address and public key. </>}Only the public key is used; the app refuses secret keys.</p>
       </div>
     </div>
   )

@@ -1,4 +1,5 @@
 import { useProject } from '../lib/project'
+import { ADMIN_PORTAL } from '../lib/features'
 import { useLoad, useRealtime, must } from '../lib/hooks'
 import { supabase } from '../lib/supabase'
 import { ChartCard, BarsChart } from '../components/charts'
@@ -39,7 +40,7 @@ export default function Equipment() {
       <Card title="Register & certificates">
         <table className="table"><thead><tr><th>ID</th><th>Type</th><th>Capacity</th><th>Certificate expiry</th></tr></thead>
           <tbody>{masters.equipment.map((e) => <tr key={e.id}><td>{e.code}</td><td>{e.type}</td><td>{e.rated_capacity}</td><td><Expiry date={e.certification_expiry} /></td></tr>)}</tbody></table>
-        <p className="mt-2 text-xs text-slate-500">Edit the register under Projects → Setup → Equipment.</p>
+        {ADMIN_PORTAL && <p className="mt-2 text-xs text-slate-500">Edit the register under Projects → Setup → Equipment.</p>}
       </Card>
     </div>
   )

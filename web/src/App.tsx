@@ -1,4 +1,5 @@
 import { lazy, Suspense, useEffect, type ReactNode } from 'react'
+import { ADMIN_PORTAL } from './lib/features'
 import { Link, Route, Routes } from 'react-router-dom'
 import { AuthProvider, useAuth } from './lib/auth'
 import { ProjectProvider, useProject } from './lib/project'
@@ -55,7 +56,7 @@ function Shell() {
           <Routes>
             <Route path="/" element={<Home />} />
             <Route path="/projects" element={<Projects />} />
-            <Route path="/projects/setup" element={P(<ProjectSetup />)} />
+            {ADMIN_PORTAL && <Route path="/projects/setup" element={P(<ProjectSetup />)} />}
             <Route path="/dpr" element={P(<DprList />)} />
             <Route path="/dpr/new" element={P(<DprWizard />)} />
             <Route path="/dpr/edit/:id" element={P(<DprWizard />)} />

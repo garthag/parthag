@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { ADMIN_PORTAL } from '../lib/features'
 import { useProject } from '../lib/project'
 import { useLoad, useRealtime, must } from '../lib/hooks'
 import { supabase, friendlyError } from '../lib/supabase'
@@ -97,8 +98,8 @@ export default function Schedule() {
       <PageHeader title="Schedule (CPM)" subtitle="Forward/backward pass on the working calendar with FS/SS/FF/SF links, lags, constraints and progress."
         actions={<>
           <button className="btn btn-secondary" disabled={!result.out} onClick={() => download(`${project!.code}_schedule.csv`, toCsv(rows.map(({ a, r, bl, slip }) => ({ code: a.code, name: a.name, duration: a.original_duration, early_start: r?.earlyStart, early_finish: r?.earlyFinish, late_start: r?.lateStart, late_finish: r?.lateFinish, total_float: r?.totalFloat, free_float: r?.freeFloat, critical: r?.critical, baseline_start: bl?.start_date, baseline_finish: bl?.finish_date, finish_variance_days: slip }))))}>Export CSV</button>
-          {can('schedule', 'edit') && <button className="btn btn-secondary" disabled={!result.out} onClick={() => void apply()}>Apply dates to plan</button>}
-          {can('schedule', 'create') && <button className="btn btn-primary" onClick={() => { setBlName(`Baseline rev ${(base.data?.list.length ?? 0)}`); setBlOpen(true) }}>Freeze baseline…</button>}
+          {ADMIN_PORTAL && can('schedule', 'edit') && <button className="btn btn-secondary" disabled={!result.out} onClick={() => void apply()}>Apply dates to plan</button>}
+          {ADMIN_PORTAL && can('schedule', 'create') && <button className="btn btn-primary" onClick={() => { setBlName(`Baseline rev ${(base.data?.list.length ?? 0)}`); setBlOpen(true) }}>Freeze baseline…</button>}
         </>} />
       {msg && <Alert tone={msg.tone}>{msg.text}</Alert>}
       {result.error && <Alert>{result.error}</Alert>}
@@ -145,7 +146,7 @@ export default function Schedule() {
         <p className="mt-2 text-xs text-slate-500">TF = total float, FF = free float, in working days. Variance = forecast finish minus approved-baseline finish (calendar days). The baseline never changes when the forecast slips; freeze a new revision to re-baseline.</p>
       </Card>
       <Card title={`Relationships (${deps.data?.length ?? 0})`}>
-        {can('schedule', 'create') && (
+        {ADMIN_PORTAL && can('schedule', 'create') && (
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-5 items-end mb-3">
             <Select label="Predecessor" value={depForm.p} onChange={(e) => setDepForm({ ...depForm, p: e.target.value })}><option value="">—</option>{acts.map((a) => <option key={a.id} value={a.id}>{a.code} {a.name}</option>)}</Select>
             <Select label="Successor" value={depForm.s} onChange={(e) => setDepForm({ ...depForm, s: e.target.value })}><option value="">—</option>{acts.map((a) => <option key={a.id} value={a.id}>{a.code} {a.name}</option>)}</Select>
@@ -158,7 +159,7 @@ export default function Schedule() {
           {deps.data?.map((d) => (
             <li key={d.id} className="flex items-center justify-between rounded border border-slate-200 dark:border-slate-700 px-2">
               <span>{code(d.predecessor_id)} → {code(d.successor_id)} <b>{d.type}</b>{d.lag_days ? ` ${d.lag_days > 0 ? '+' : ''}${d.lag_days}d` : ''}</span>
-              {can('schedule', 'delete') && <button className="btn btn-ghost px-2 text-red-700" onClick={() => void supabase.from('activity_dependencies').delete().eq('id', d.id).then(() => deps.reload())}>Remove</button>}
+              {ADMIN_PORTAL && can('schedule', 'delete') && <button className="btn btn-ghost px-2 text-red-700" onClick={() => void supabase.from('activity_dependencies').delete().eq('id', d.id).then(() => deps.reload())}>Remove</button>}
             </li>
           ))}
         </ul>
@@ -168,7 +169,7 @@ export default function Schedule() {
           {base.data?.list.map((b) => (
             <li key={b.id} className="flex items-center justify-between gap-2">
               <span>Rev {b.revision_no} — {b.name} · frozen {new Date(b.created_at).toLocaleDateString('en-IN')} {b.id === project!.approved_baseline_id && <Badge tone="green">Approved baseline</Badge>}</span>
-              {b.id !== project!.approved_baseline_id && can('schedule', 'approve') && <button className="btn btn-ghost" onClick={() => void setCurrent(b.id)}>Make approved baseline</button>}
+              {ADMIN_PORTAL && b.id !== project!.approved_baseline_id && can('schedule', 'approve') && <button className="btn btn-ghost" onClick={() => void setCurrent(b.id)}>Make approved baseline</button>}
             </li>
           ))}
         </ul>

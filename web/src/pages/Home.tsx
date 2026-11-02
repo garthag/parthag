@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { ADMIN_PORTAL } from '../lib/features'
 import { Link, useNavigate } from 'react-router-dom'
 import { useProject } from '../lib/project'
 import { useAuth } from '../lib/auth'
@@ -53,11 +54,11 @@ export function Home() {
         <Card title="Get started">
           <div className="flex flex-col gap-3 sm:flex-row">
             <button className="btn btn-primary" disabled={busy} onClick={() => void loadDemo()}>{busy ? 'Creating demo…' : 'Load demo project'}</button>
-            <Link to="/projects" className="btn btn-secondary">Create organisation & project</Link>
+            {ADMIN_PORTAL && <Link to="/projects" className="btn btn-secondary">Create organisation & project</Link>}
           </div>
           <p className="mt-3 text-sm text-slate-600 dark:text-slate-400">
             The demo creates a sample blast-furnace project (you as administrator) with activities, BOQ, baseline and a week of approved DPRs.
-            If someone else set up your project, ask them to add your e-mail as a member.
+            {ADMIN_PORTAL ? ' If someone else set up your project, ask them to add your e-mail as a member.' : ''}
           </p>
         </Card>
       </div>

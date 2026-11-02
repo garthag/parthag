@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react'
+import { ADMIN_PORTAL } from '../lib/features'
 import { useProject } from '../lib/project'
 import { useLoad, useRealtime, must } from '../lib/hooks'
 import { supabase, friendlyError } from '../lib/supabase'
@@ -59,7 +60,7 @@ export default function Documents() {
             <input ref={fileRef} type="file" multiple hidden onChange={(e) => { if (e.target.files) void upload(e.target.files); e.target.value = '' }} />
           </div>
         </Card>
-        <Card title="Google Drive folders">
+        {ADMIN_PORTAL && <Card title="Google Drive folders">
           <p className="text-sm mb-2">Root: {project!.drive_root_folder_id ? <a className="underline" target="_blank" rel="noreferrer" href={`https://drive.google.com/drive/folders/${project!.drive_root_folder_id}`}>open in Drive</a> : 'not created yet'} · Standard tree 01_Contracts … 15_Archive, with 04_DPR/Year/Month/… created on demand.</p>
           {can('documents', 'create') && <button className="btn btn-secondary mb-3" disabled={busy || !driveEnabled} onClick={() => void run(() => createFolderTree(project!.id), 'Folder tree created (existing folders were reused, not duplicated).')}>Create / verify folder tree</button>}
           <div className="grid gap-2 sm:grid-cols-[1fr_auto_auto] items-end">
@@ -68,7 +69,7 @@ export default function Documents() {
             <button className="btn btn-secondary" disabled={busy || !email || !driveEnabled} onClick={() => void run(() => shareProjectFolder(project!.id, email, role), `Shared with ${email}.`)}>Share</button>
           </div>
           <p className="mt-2 text-xs text-slate-500">Project roles do not grant Drive access automatically. In-app viewing is permission-checked without Drive sharing. Share only when people need to work in Drive directly, and remove access in Drive when they leave. Avoid "anyone with the link".</p>
-        </Card>
+        </Card>}
       </div>
       <Card title="Files" actions={<select className="input w-auto" value={cat} onChange={(e) => setCat(e.target.value)} aria-label="Category filter"><option value="">All categories</option>{['photo', 'video', 'audio', 'document', 'drawing', 'report'].map((c) => <option key={c}>{c}</option>)}</select>}>
         {files.error && <Alert>{files.error}</Alert>}
