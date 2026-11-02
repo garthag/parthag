@@ -107,4 +107,4 @@ jobs:
             **Android:** download `CONSTRUCT-DPR-android-….apk` on the phone → open it → allow "Install unknown apps" for your browser/Files app → Install.
             **Windows:** download `CONSTRUCT-DPR-…-setup.exe` → run it → if "Windows protected your PC" appears, click **More info → Run anyway** (the installer is not code-signed yet). The `…-portable.exe` runs without installing.
 
-            On first start each app asks for the **connection code** (Settings → Connect other devices, in any signed-in copy). Full guide: docs/APPS.md
+            On first start each app asks to connect to your server: tap **Or enter the server address and public key** and enter the Supabase Project URL and public (publishable/anon) key. Then sign in, or create an account, and tap **Load demo project** to try it. Full guide: docs/APPS.md
