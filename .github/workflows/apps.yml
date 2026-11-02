@@ -90,21 +90,35 @@ jobs:
   publish:
     needs: [android, windows]
     runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GH_REPO: ${{ github.repository }}
     steps:
       - uses: actions/download-artifact@v4
-        with: { path: dist, merge-multiple: true }
-      - run: ls -la dist
-      - uses: softprops/action-gh-release@v2
-        with:
-          tag_name: apps-latest
-          name: CONSTRUCT DPR apps (latest build)
-          prerelease: true
-          target_commitish: ${{ github.sha }}
-          files: dist/*
-          body: |
-            Latest automatic build from `${{ github.ref_name }}` (commit ${{ github.sha }}, build ${{ github.run_number }}).
+        with: { path: built, merge-multiple: true }
+      - name: Give the files fixed names (download links never change)
+        run: |
+          mkdir dist
+          cp built/CONSTRUCT-DPR-android-*[0-9].apk dist/CONSTRUCT-DPR-android.apk
+          cp built/*-setup.exe dist/CONSTRUCT-DPR-windows-setup.exe
+          cp built/*-portable.exe dist/CONSTRUCT-DPR-windows-portable.exe
+          ls -la dist
+      - name: Replace the download page (old files are removed)
+        run: |
+          gh release delete apps-latest --cleanup-tag --yes || true
+          cat > notes.md <<NOTES
+          **Version 1.0.${{ github.run_number }}** — built $(date -u '+%d %b %Y %H:%M UTC') from commit ${GITHUB_SHA::7}.
 
-            **Android:** download `CONSTRUCT-DPR-android-….apk` on the phone → open it → allow "Install unknown apps" for your browser/Files app → Install.
-            **Windows:** download `CONSTRUCT-DPR-…-setup.exe` → run it → if "Windows protected your PC" appears, click **More info → Run anyway** (the installer is not code-signed yet). The `…-portable.exe` runs without installing.
+          | Device | File |
+          |---|---|
+          | Android phone / tablet | **CONSTRUCT-DPR-android.apk** |
+          | Windows PC (install) | **CONSTRUCT-DPR-windows-setup.exe** |
+          | Windows PC (no install) | **CONSTRUCT-DPR-windows-portable.exe** |
 
-            On first start each app asks to connect to your server: tap **Or enter the server address and public key** and enter the Supabase Project URL and public (publishable/anon) key. Then sign in, or create an account, and tap **Load demo project** to try it. Full guide: docs/APPS.md
+          **Android:** open the .apk on the phone → allow installing from this source → Install. Installing over an older version keeps your data.
+          **Windows:** run the setup .exe → if "Windows protected your PC" appears, click **More info → Run anyway** (not code-signed yet).
+
+          **First start:** tap *Or enter the server address and public key*, enter your Supabase Project URL and public (publishable/anon) key, sign in or create an account, then tap **Load demo project**. Guide: docs/APPS.md
+          NOTES
+          gh release create apps-latest dist/* --target "$GITHUB_SHA" --prerelease \
+            --title "CONSTRUCT DPR apps — v1.0.${{ github.run_number }} ($(date -u '+%d %b %Y'))" --notes-file notes.md

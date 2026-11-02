@@ -12,7 +12,7 @@ Simple enough for a site supervisor on an Android phone; structured enough for p
 
 ## Apps for Android, Windows and the web
 
-Download the **Android APK** and the **Windows installer** from the repository's *Releases* page (**CONSTRUCT DPR apps (latest build)**), or use any browser. All are live-synchronised with each other — see [docs/APPS.md](docs/APPS.md).
+Download the **Android APK** and the **Windows installer** from the repository's *Releases* page (**CONSTRUCT DPR apps — v1.0.x**), or use any browser. All are live-synchronised with each other — see [docs/APPS.md](docs/APPS.md).
 
 > **Admin portal is switched off for now** (project creation, members & roles, setup, integrations). Turn it back on with `VITE_ADMIN_PORTAL=true` — see [docs/ADMIN_PORTAL.md](docs/ADMIN_PORTAL.md).
 

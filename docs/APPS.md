@@ -2,8 +2,8 @@
 
 | Where | What you install | Good for |
 |---|---|---|
-| **Android phone/tablet** | `CONSTRUCT-DPR-android-….apk` | Site engineers, supervisors, storekeepers: camera, voice, GPS, works offline |
-| **Windows PC/laptop** | `CONSTRUCT-DPR-…-setup.exe` (installer) or `…-portable.exe` (no install) | Planners, project managers, approvers, commercial |
+| **Android phone/tablet** | `CONSTRUCT-DPR-android.apk` | Site engineers, supervisors, storekeepers: camera, voice, GPS, works offline |
+| **Windows PC/laptop** | `CONSTRUCT-DPR-windows-setup.exe` (installer) or `CONSTRUCT-DPR-windows-portable.exe` (no install) | Planners, project managers, approvers, commercial |
 | **Any browser** | Nothing (or "Install app" from Chrome/Edge) | Anyone, any device, including iPhone and Mac |
 
 All three are the **same application** connected to the **same live database**:
@@ -15,10 +15,16 @@ All three are the **same application** connected to the **same live database**:
 
 ## Download
 
-Open the repository on GitHub → **Releases** (right-hand side) → **CONSTRUCT DPR apps (latest build)**. Every update to the code rebuilds these files automatically.
+Always the newest version (the page is replaced on every build; old files are removed):
+* Download page: https://github.com/garthag/parthag/releases/tag/apps-latest
+* Android: https://github.com/garthag/parthag/releases/download/apps-latest/CONSTRUCT-DPR-android.apk
+* Windows installer: https://github.com/garthag/parthag/releases/download/apps-latest/CONSTRUCT-DPR-windows-setup.exe
+* Windows, no install: https://github.com/garthag/parthag/releases/download/apps-latest/CONSTRUCT-DPR-windows-portable.exe
+
+The page title shows the version and build date. If the repository is private, sign in to GitHub first.
 
 ## Install on Android
-1. On the phone, open the release page and download **`CONSTRUCT-DPR-android-….apk`**.
+1. On the phone, open the release page and download **`CONSTRUCT-DPR-android.apk`**.
 2. Open the downloaded file. Android asks to allow installing from this source → **Settings → Allow from this source** → back → **Install**.
 3. Open **CONSTRUCT DPR**. On first start paste the **connection code** (see below) → **Connect** → sign in.
 4. The first time you take a photo, record a voice note or add a location, Android asks for that permission → **Allow** (only that one; you can change it in Android Settings → Apps → CONSTRUCT DPR → Permissions).
@@ -28,12 +34,12 @@ Updating: download and install the newer APK over the old one — your data and 
 > For a company roll-out through the Google Play Store (or Play's managed/private apps), add the signing secrets described below; the build then also produces a signed `…-playstore.aab`.
 
 ## Install on Windows
-1. On the PC, download **`CONSTRUCT-DPR-…-setup.exe`** from the release page.
+1. On the PC, download **`CONSTRUCT-DPR-windows-setup.exe`** from the release page.
 2. Run it. If **"Windows protected your PC"** appears: **More info → Run anyway** (the installer is not code-signed yet — see below).
 3. Choose the folder (or keep the default) → **Install**. A desktop and Start-menu shortcut **CONSTRUCT DPR** are created.
 4. On first start paste the **connection code** → **Connect** → sign in.
 
-No admin rights? Use **`CONSTRUCT-DPR-…-portable.exe`**: double-click to run, nothing installed.
+No admin rights? Use **`CONSTRUCT-DPR-windows-portable.exe`**: double-click to run, nothing installed.
 Updating: run the newer installer; it replaces the old version and keeps your data. Uninstall: Windows **Settings → Apps → CONSTRUCT DPR → Uninstall**.
 
 ## Connecting an app to your server
