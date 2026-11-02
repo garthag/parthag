@@ -120,5 +120,5 @@ jobs:
 
           **First start:** tap *Or enter the server address and public key*, enter your Supabase Project URL and public (publishable/anon) key, sign in or create an account, then tap **Load demo project**. Guide: docs/APPS.md
           NOTES
-          gh release create apps-latest dist/* --target "$GITHUB_SHA" --prerelease \
+          gh release create apps-latest dist/* --target "$GITHUB_SHA" --latest \
             --title "CONSTRUCT DPR apps — v1.0.${{ github.run_number }} ($(date -u '+%d %b %Y'))" --notes-file notes.md
