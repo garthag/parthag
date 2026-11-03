@@ -26,8 +26,8 @@ The same app, running **inside your Google account** as a private web app:
 
 ## Set it up (about 10 minutes, once)
 
-**Easiest:** use the 3 ready-made files in [`easy/`](easy/): `appsscript.json`, `Code.gs` and `Index.html` (create it as an
-HTML file named `Index`). They contain exactly the same app as the 6 files below, merged by `node build-easy.js`.
+**Easiest:** use the 2 ready-made files in [`easy/`](easy/): `appsscript.json` and `Code.gs`. The screen is built into
+that `Code.gs`, so no HTML file is needed. Same app as the 6 files below, merged by `node build-easy.js`.
 
 Using the 6 separate files instead:
 

@@ -100,7 +100,8 @@ class Sheet {
   setFrozenRows() { return this; } autoResizeColumns() { return this; }
 }
 
-function makeEnv({ messages = [], docTexts = {}, sheetsFromXlsx = {} } = {}) {
+function makeEnv({ messages = [], docTexts = {}, sheetsFromXlsx = {}, htmlFiles = {} } = {}) {
+  const page = (content) => { const o = { content, setTitle: () => o, addMetaTag: () => o, setXFrameOptionsMode: () => o, getContent: () => content }; return o; };
   const store = { props: {}, files: {}, spreadsheets: {}, sent: [], perms: [], nextId: 1 };
   const byId = Object.fromEntries(messages.map((m) => [m.id, m]));
   const newId = (p) => `${p}${store.nextId++}`;
@@ -154,7 +155,12 @@ function makeEnv({ messages = [], docTexts = {}, sheetsFromXlsx = {} } = {}) {
       Permissions: { create: (p, fileId, opt) => { store.perms.push({ ...p, fileId, opt }); return p; } },
     },
     MailApp: { getRemainingDailyQuota: () => 100, sendEmail: (o) => { store.sent.push(o); } },
-    HtmlService: {},
+    HtmlService: {
+      createTemplateFromFile: (name) => { if (!htmlFiles[name]) throw new Error(`No HTML file named ${name} was found.`); return { evaluate: () => page(htmlFiles[name]) }; },
+      createHtmlOutput: (h) => page(h),
+      createHtmlOutputFromFile: (name) => ({ getContent: () => htmlFiles[name] }),
+      XFrameOptionsMode: { DEFAULT: 'DEFAULT' },
+    },
   };
   const ctx = vm.createContext(env);
   for (const f of (process.env.EASY ? ['easy/Code.gs'] : ['SmartFields.gs', 'Code.gs'])) {

@@ -22,7 +22,17 @@ var FIELD_NAMES = ['doc_type', 'doc_no', 'doc_date', 'amount', 'currency', 'gsti
 
 // ------------------------------------------------------------------ web app
 function doGet() {
-  return HtmlService.createTemplateFromFile('Index').evaluate()
+  var page;
+  try {
+    page = HtmlService.createTemplateFromFile('Index').evaluate();
+  } catch (e) {
+    // The 2-file setup has the whole screen built into this script (EMBEDDED_PAGE), so no Index file is needed.
+    if (typeof EMBEDDED_PAGE === 'undefined') {
+      throw new Error('The screen file is missing: in the editor click + then HTML and name it exactly Index (capital I).');
+    }
+    page = HtmlService.createHtmlOutput(EMBEDDED_PAGE);
+  }
+  return page
     .setTitle(APP_NAME)
     .addMetaTag('viewport', 'width=device-width, initial-scale=1')
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.DEFAULT);   // cannot be framed by other sites

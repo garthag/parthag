@@ -204,3 +204,15 @@ test('Gmail data as byte arrays (Apps Script advanced-service form) works too', 
   const a = ctx.getAttachment(it.msgId, it.partId);
   assert.equal(Buf.from(a.b64, 'base64').toString('latin1'), '%PDF-1.4\n/Image /XObject\n%%EOF');
 });
+
+test('doGet: uses the Index file, or the built-in screen when there is none (2-file setup)', () => {
+  const withIndex = makeEnv({ htmlFiles: { Index: '<p>from file</p>' } });
+  assert.equal(withIndex.ctx.doGet().content, '<p>from file</p>');
+  const none = makeEnv();
+  if (process.env.EASY) {
+    assert.match(none.ctx.doGet().content, /Mail Attachment Agent/);
+    assert.match(none.ctx.doGet().content, /google\.script\.run/);
+  } else {
+    assert.throws(() => none.ctx.doGet(), /name it exactly Index/);
+  }
+});
