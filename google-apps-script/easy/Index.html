@@ -1,0 +1,1047 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <meta charset="utf-8">
+  <meta name="referrer" content="no-referrer">
+  <style>
+:root {
+  --bg: #f4f6f9; --card: #fff; --ink: #1c2430; --muted: #6b7686; --line: #e3e7ee;
+  --accent: #2563eb; --accent-ink: #fff; --sel: #e8f0ff; --ok: #15803d; --warn: #b45309; --err: #b91c1c;
+  --hex: #2563eb; --hexfill: rgba(37, 99, 235, .22); --grid: #cfd6e1;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0f141b; --card: #171d26; --ink: #e6ebf2; --muted: #93a0b2; --line: #273141;
+    --accent: #5b8cff; --sel: #1d2a44; --ok: #4ade80; --warn: #fbbf24; --err: #f87171;
+    --hex: #7aa2ff; --hexfill: rgba(122, 162, 255, .25); --grid: #3a475b;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+.hidden { display: none !important; }
+.muted { color: var(--muted); } .small { font-size: 12px; }
+.err { color: var(--err); min-height: 1em; margin: 6px 0 0; white-space: pre-line; }
+.top { display: flex; justify-content: space-between; align-items: center; padding: 10px 18px; border-bottom: 1px solid var(--line); background: var(--card); }
+.brand { display: flex; gap: 8px; align-items: center; font-weight: 650; color: var(--accent); }
+.account { display: flex; gap: 10px; align-items: center; color: var(--muted); }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 14px; }
+.login { max-width: 460px; margin: 40px auto; }
+label { display: block; margin: 8px 0; font-size: 13px; color: var(--muted); }
+input, select { display: block; width: 100%; margin-top: 4px; padding: 7px 9px; border: 1px solid var(--line); border-radius: 7px; background: var(--bg); color: var(--ink); font: inherit; }
+input[type=checkbox], input[type=radio] { display: inline; width: auto; margin: 0 6px 0 0; }
+input[type=range] { padding: 0; }
+.row { display: flex; gap: 8px; } .row > label { flex: 1; min-width: 0; } .narrow { max-width: 90px; }
+.check { color: var(--ink); }
+.hint { font-size: 12px; color: var(--muted); background: var(--bg); padding: 8px; border-radius: 7px; }
+.btn { border: 1px solid var(--line); background: var(--card); color: var(--ink); padding: 7px 12px; border-radius: 7px; cursor: pointer; font: inherit; white-space: nowrap; }
+.btn:hover { border-color: var(--accent); }
+.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.btn.ghost { background: transparent; }
+.btn:disabled { opacity: .45; cursor: default; }
+.wide { width: 100%; margin-top: 10px; padding: 10px; font-weight: 600; }
+
+.layout { display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: 14px; padding: 14px; height: calc(100vh - 50px); }
+.layout.with-preview { grid-template-columns: 280px minmax(0, 1fr) minmax(340px, 40%); }
+.side { overflow: auto; } .side h3 { margin: 0 0 6px; }
+.chips { display: flex; flex-wrap: wrap; gap: 5px; margin: 2px 0 6px; }
+.chips button { border: 1px solid var(--line); background: var(--bg); color: var(--ink); border-radius: 99px; padding: 2px 9px; font-size: 12px; cursor: pointer; }
+.chips button:hover { border-color: var(--accent); }
+.types { border: 1px solid var(--line); border-radius: 7px; margin: 8px 0; padding: 4px 10px 8px; }
+.types label { display: inline-block; margin: 4px 10px 4px 0; color: var(--ink); }
+details { margin: 8px 0; } summary { cursor: pointer; color: var(--accent); }
+.history { margin-top: 12px; font-size: 12px; }
+.history a { display: block; color: var(--muted); text-decoration: none; padding: 3px 0; border-top: 1px dashed var(--line); cursor: pointer; }
+.history a:hover { color: var(--accent); }
+
+.results { display: flex; flex-direction: column; min-height: 0; padding: 0; }
+.stats { padding: 12px 14px; border-bottom: 1px solid var(--line); }
+.stats b { color: var(--ink); }
+.toolbar { display: flex; gap: 6px; align-items: center; padding: 8px 14px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+.toolbar input { width: 220px; margin: 0; }
+.tablewrap { overflow: auto; flex: 1; }
+table { width: 100%; border-collapse: collapse; }
+th, td { padding: 6px 8px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: middle; }
+th { position: sticky; top: 0; background: var(--card); font-size: 12px; color: var(--muted); font-weight: 600; cursor: pointer; user-select: none; z-index: 1; }
+th.c, td.c { width: 32px; text-align: center; } .r { text-align: right; }
+tr { cursor: pointer; } tbody tr:hover { background: var(--bg); }
+tr.sel { background: var(--sel); } tr.active { outline: 2px solid var(--accent); outline-offset: -2px; }
+.fn { font-weight: 550; overflow-wrap: anywhere; }
+td.nw { white-space: nowrap; }
+.with-preview .cf { display: none; } .sub { font-size: 12px; color: var(--muted); }
+.badge { display: inline-block; font-size: 11px; padding: 0 6px; border-radius: 99px; background: var(--bg); color: var(--muted); border: 1px solid var(--line); margin-left: 4px; }
+.ext { font-size: 10px; font-weight: 700; text-transform: uppercase; padding: 1px 5px; border-radius: 4px; background: var(--accent); color: var(--accent-ink); margin-right: 6px; }
+.ext.x-pdf { background: #dc2626; } .ext.x-xlsx, .ext.x-xls, .ext.x-csv { background: #16a34a; } .ext.x-docx, .ext.x-doc { background: #2563eb; } .ext.x-jpg, .ext.x-png, .ext.x-jpeg { background: #9333ea; }
+.hexcell { display: flex; align-items: center; gap: 6px; font-variant-numeric: tabular-nums; }
+.empty { padding: 30px; text-align: center; color: var(--muted); }
+
+.dlbar { display: flex; gap: 10px; align-items: flex-end; padding: 10px 14px; border-top: 1px solid var(--line); flex-wrap: wrap; }
+.dlbar label { margin: 0; } .dlbar label:first-child { flex: 1; min-width: 200px; }
+.dlbtns { display: flex; gap: 6px; }
+.destrow { display: flex; gap: 6px; margin-top: 4px; } .destrow input { margin: 0; flex: 1; min-width: 0; }
+.saved { display: flex; gap: 6px; margin: 10px 0 14px; } .saved .btn.primary { flex: 1; }
+.report .btn { margin-left: 8px; padding: 2px 9px; font-size: 12px; }
+.report { padding: 8px 14px 12px; font-size: 13px; border-top: 1px solid var(--line); max-height: 140px; overflow: auto; }
+.report .ok { color: var(--ok); } .report .warn { color: var(--warn); } .report .bad { color: var(--err); }
+
+.preview { display: flex; flex-direction: column; min-height: 0; padding: 0; }
+.pvhead { display: flex; justify-content: space-between; gap: 8px; padding: 10px 12px; border-bottom: 1px solid var(--line); }
+.pvhead b { word-break: break-all; }
+.pvtools { display: flex; gap: 4px; align-items: flex-start; }
+.pvtools .btn { padding: 4px 9px; }
+.pvhex { display: flex; gap: 14px; align-items: center; padding: 8px 12px; border-bottom: 1px solid var(--line); font-size: 12px; }
+.pvhex table { width: auto; flex: none; } .pvhex table td { border: 0; padding: 1px 6px; white-space: nowrap; }
+.pvsnip { flex: 1; min-width: 0; }
+.pvtabs { display: flex; gap: 4px; padding: 6px 12px 0; border-bottom: 1px solid var(--line); }
+.pvtabs button { border: 0; background: none; color: var(--muted); padding: 6px 10px; cursor: pointer; font: inherit; border-bottom: 2px solid transparent; }
+.pvtabs button.on { color: var(--accent); border-bottom-color: var(--accent); }
+.pvbody { flex: 1; min-height: 0; overflow: auto; background: var(--bg); }
+.pvbody iframe { width: 100%; height: 100%; border: 0; background: #fff; }
+.pvbody img { max-width: 100%; display: block; margin: 10px auto; }
+.pvbody pre { white-space: pre-wrap; padding: 12px; margin: 0; font-size: 12px; }
+.pvbody .none { padding: 30px; text-align: center; color: var(--muted); }
+
+.busy { position: fixed; inset: 0; background: rgba(0,0,0,.25); display: flex; gap: 12px; align-items: center; justify-content: center; color: #fff; font-weight: 600; z-index: 10; }
+.spinner { width: 26px; height: 26px; border: 3px solid rgba(255,255,255,.4); border-top-color: #fff; border-radius: 50%; animation: spin .8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+@media (max-width: 900px) {
+  .layout, .layout.with-preview { grid-template-columns: 1fr; height: auto; }
+  .preview { position: fixed; inset: 8px; z-index: 5; }
+  .tablewrap { max-height: 60vh; }
+  .hide-sm { display: none; }
+}
+
+/* ===== v2: views, index, table, reader, share ===== */
+.tabs { display: flex; gap: 2px; background: var(--bg); border-radius: 9px; padding: 3px; }
+.tabs button { border: 0; background: none; color: var(--muted); padding: 6px 14px; border-radius: 7px; cursor: pointer; font: inherit; }
+.tabs button.on { background: var(--card); color: var(--accent); font-weight: 600; box-shadow: 0 1px 2px rgba(0,0,0,.08); }
+.pill { font-size: 11px; background: var(--accent); color: var(--accent-ink); border-radius: 99px; padding: 0 6px; margin-left: 3px; }
+.pill:empty { display: none; }
+.jobchip { font-size: 12px; background: var(--sel); color: var(--accent); padding: 3px 9px; border-radius: 99px; }
+.seg { display: flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; margin-bottom: 4px; }
+.seg label { flex: 1; margin: 0; }
+.seg input { display: none; }
+.seg span { display: block; text-align: center; padding: 7px 4px; cursor: pointer; color: var(--muted); font-size: 13px; }
+.seg small { display: block; font-size: 10px; }
+.seg input:checked + span { background: var(--accent); color: var(--accent-ink); font-weight: 600; }
+.inrow { display: flex; gap: 6px; margin-top: 4px; } .inrow input { margin: 0; flex: 1; min-width: 0; } .inrow select { margin: 0; width: auto; }
+.btnrow { align-items: center; margin-top: 10px; } .btnrow > .btn { flex: none; } .btnrow > .btn.wide { margin-top: 0; width: auto; flex: 1; }
+.view { min-height: 0; }
+.grow { flex: 1; }
+.spacer { flex: 1; }
+.pad { padding: 12px 16px; }
+.wrap { flex-wrap: wrap; }
+.inl { display: inline-flex; align-items: center; gap: 6px; margin: 0; } .inl select { margin: 0; width: auto; }
+.amt { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.doc { display: inline-block; white-space: nowrap; margin: 0 6px 0 0 !important; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .02em; padding: 1px 5px; border-radius: 4px; border: 1px solid var(--line); color: var(--muted); margin-left: 6px; }
+.doc.d-invoice { color: #b45309; border-color: #f2c48d; } .doc.d-receipt { color: var(--ok); border-color: #9ad6ae; }
+.src { font-size: 10px; padding: 0 5px; border-radius: 4px; background: var(--bg); color: var(--muted); }
+.src.s-ocr { background: #fef3c7; color: #92400e; }
+@media (prefers-color-scheme: dark) { .src.s-ocr { background: #3b2f12; color: #fbbf24; } }
+.menu { position: relative; } .menu summary { list-style: none; } .menu summary::-webkit-details-marker { display: none; }
+.menubody { position: absolute; right: 0; bottom: 110%; background: var(--card); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,.15); padding: 4px; min-width: 240px; z-index: 6; }
+.menubody button { display: block; width: 100%; text-align: left; border: 0; background: none; color: var(--ink); padding: 7px 10px; border-radius: 6px; cursor: pointer; font: inherit; }
+.menubody button:hover { background: var(--bg); } .menubody small { color: var(--muted); }
+.need-sel-s[aria-disabled=true] { opacity: .45; pointer-events: none; }
+.dlbar .dlbtns { flex-wrap: wrap; }
+
+.sheet td[contenteditable] { cursor: text; } .sheet td[contenteditable]:hover { background: var(--bg); }
+.sheet td[contenteditable]:focus { outline: 2px solid var(--accent); outline-offset: -2px; background: var(--card); }
+.sheet td.edited { box-shadow: inset 3px 0 0 var(--ok); }
+.sheet tfoot td { position: sticky; bottom: 0; background: var(--card); font-weight: 650; border-top: 2px solid var(--line); }
+.sheet td { font-size: 13px; } .sheet .sub { max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.groups { padding: 8px 14px; border-bottom: 1px solid var(--line); max-height: 200px; overflow: auto; }
+.groups table td, .groups table th { padding: 3px 10px; font-size: 13px; position: static; }
+
+.kpis { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; margin: 12px 0 16px; }
+.kpi { background: var(--bg); border-radius: 9px; padding: 10px 12px; }
+.kpi b { display: block; font-size: 20px; font-variant-numeric: tabular-nums; } .kpi span { font-size: 12px; color: var(--muted); }
+.btnrow2 { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin: 6px 0 12px; }
+.btn.danger { color: var(--err); }
+.jobbox { background: var(--bg); border-radius: 9px; padding: 10px 12px; margin-bottom: 12px; }
+.bar { height: 8px; background: var(--line); border-radius: 99px; overflow: hidden; margin-bottom: 6px; }
+.bar i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .3s; }
+.bar.indet i { width: 30% !important; animation: indet 1.2s ease-in-out infinite; }
+@keyframes indet { from { margin-left: -30%; } to { margin-left: 100%; } }
+.idxdetails { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; font-size: 13px; }
+.idxdetails table td, .idxdetails table th { padding: 3px 8px; position: static; }
+
+.pvtitle { min-width: 0; }
+.pvtext { display: flex; flex-direction: column; height: 100%; }
+.pvbar { display: flex; gap: 6px; align-items: center; padding: 8px 10px; border-bottom: 1px solid var(--line); background: var(--card); flex-wrap: wrap; }
+.pvbar input { margin: 0; width: 160px; }
+.pvbar .btn { padding: 4px 9px; font-size: 12px; }
+.pvtext pre { flex: 1; overflow: auto; }
+mark { background: #fde047; color: #111; border-radius: 2px; }
+.fieldsform { padding: 12px; display: grid; grid-template-columns: 120px 1fr; gap: 6px 10px; align-items: center; }
+.fieldsform label { margin: 0; } .fieldsform input, .fieldsform select { margin: 0; }
+.fieldsform .full { grid-column: 1 / -1; }
+.dt { margin: 10px; width: calc(100% - 20px); background: var(--card); font-size: 12px; }
+.dt td { border: 1px solid var(--line); padding: 3px 6px; }
+.dt tr:first-child td { font-weight: 600; background: var(--bg); }
+.tblhead { display: flex; gap: 6px; align-items: center; padding: 10px 10px 0; font-size: 13px; }
+
+.dlg { border: 1px solid var(--line); border-radius: 12px; background: var(--card); color: var(--ink); width: min(520px, 92vw); padding: 18px; }
+.dlg::backdrop { background: rgba(0,0,0,.35); }
+.dlg h3 { margin: 0 0 8px; }
+textarea { display: block; width: 100%; margin-top: 4px; padding: 7px 9px; border: 1px solid var(--line); border-radius: 7px; background: var(--bg); color: var(--ink); font: inherit; resize: vertical; }
+.dlgbtns { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
+.toast { position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%); background: #111827; color: #fff; padding: 10px 16px; border-radius: 9px; z-index: 20; max-width: 90vw; box-shadow: 0 6px 20px rgba(0,0,0,.25); }
+@media (max-width: 900px) { .tabs button { padding: 6px 8px; } }
+.detect { font-size: 13px; padding: 8px 10px; border-radius: 7px; background: var(--sel); margin: 4px 0 8px; }
+.detect.bad { background: #fde8e8; color: var(--err); }
+@media (prefers-color-scheme: dark) { .detect.bad { background: #3b1a1a; } }
+.risky { font-size: 10px; font-weight: 700; color: #fff; background: var(--err); border-radius: 4px; padding: 1px 5px; white-space: nowrap; }
+/* ---- Apps Script edition ---- */
+.pdfpages { padding: 10px; display: flex; flex-direction: column; gap: 10px; align-items: center; }
+.pdfpages canvas { max-width: 100%; box-shadow: 0 1px 4px rgba(0,0,0,.2); background: #fff; }
+.progress { position: fixed; left: 50%; top: 64px; transform: translateX(-50%); background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px; z-index: 15; box-shadow: 0 6px 20px rgba(0,0,0,.15); min-width: 320px; }
+.progress .row { align-items: center; gap: 10px; }
+a { color: var(--accent); }
+a.btn { text-decoration: none; display: inline-block; }
+.linklist a { display: block; padding: 2px 0; word-break: break-all; }
+</style>
+
+</head>
+<body>
+<header class="top">
+  <div class="brand"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M12 2l8.66 5v10L12 22l-8.66-5V7z" fill="none" stroke="currentColor" stroke-width="2"/><path d="M7 9l5 3.5L17 9" fill="none" stroke="currentColor" stroke-width="2"/></svg>
+    <span class="hide-sm">Mail Attachment Agent</span></div>
+  <nav id="tabs" class="tabs">
+    <button data-view="search" class="on">Search</button>
+    <button data-view="table">Table</button>
+    <button data-view="data">Data</button>
+  </nav>
+  <div class="account"><span id="account">…</span></div>
+</header>
+
+<main id="app" class="layout">
+  <form id="searchForm" class="card side" autocomplete="off">
+    <p class="muted small">Searches your Gmail directly – fast, and it also looks inside PDFs.</p>
+    <label>From <span class="muted">(name or email)</span>
+      <input name="senders" placeholder="mck kutty, billing@acme.in"></label>
+    <label>Keywords <span class="muted">(subject, body, file name, inside files)</span>
+      <span class="inrow"><input name="keywords" placeholder="invoice, bill">
+      <select name="match_mode" title="How keywords combine"><option value="any">any</option><option value="all">all</option><option value="phrase">exact phrase</option></select></span></label>
+    <div class="row">
+      <label>From date<input type="date" name="date_from"></label>
+      <label>To date<input type="date" name="date_to"></label>
+    </div>
+    <div class="chips" id="quickDates">
+      <button type="button" data-q="fy">This FY</button>
+      <button type="button" data-q="lfy">Last FY</button>
+      <button type="button" data-q="m">This month</button>
+      <button type="button" data-q="y">This year</button>
+      <button type="button" data-q="ly">Last year</button>
+      <button type="button" data-q="90">90 days</button>
+      <button type="button" data-q="clr">Any time</button>
+    </div>
+    <fieldset class="types">
+      <legend>File types</legend>
+      <label><input type="checkbox" name="t" value="pdf" checked> PDF</label>
+      <label><input type="checkbox" name="t" value="image"> Images</label>
+      <label><input type="checkbox" name="t" value="excel"> Excel/CSV</label>
+      <label><input type="checkbox" name="t" value="word"> Word</label>
+      <label><input type="checkbox" name="t" value="archive"> ZIP</label>
+      <input name="custom_types" placeholder="other: xml, txt">
+    </fieldset>
+    <fieldset class="types">
+      <legend>Document type <span class="muted">(auto-detected)</span></legend>
+      <label><input type="checkbox" name="dt" value="invoice"> Invoice</label>
+      <label><input type="checkbox" name="dt" value="receipt"> Receipt</label>
+      <label><input type="checkbox" name="dt" value="statement"> Statement</label>
+      <label><input type="checkbox" name="dt" value="payslip"> Payslip</label>
+      <label><input type="checkbox" name="dt" value="quotation"> Quotation</label>
+      <label><input type="checkbox" name="dt" value="order"> Order</label>
+      <label><input type="checkbox" name="dt" value="credit_note"> Credit note</label>
+      <label><input type="checkbox" name="dt" value="other"> Other</label>
+    </fieldset>
+    <details id="moreFilters">
+      <summary>More filters</summary>
+      <label>To / Cc<input name="recipients" placeholder="accounts@mckkutty.com"></label>
+      <label>Exclude words<input name="exclude" placeholder="reminder, cancelled"></label>
+      <label>File name pattern<input name="filename_pattern" placeholder="INV*2025*.pdf  or  part of name"></label>
+      <div class="row">
+        <label>Size min (MB)<input name="size_min_mb" inputmode="decimal" placeholder="0"></label>
+        <label>Size max (MB)<input name="size_max_mb" inputmode="decimal" placeholder="∞"></label>
+      </div>
+      <div class="row">
+        <label>Amount min<input name="amount_min" inputmode="decimal" placeholder="e.g. 10000"></label>
+        <label>Amount max<input name="amount_max" inputmode="decimal"></label>
+      </div>
+      <p class="muted small">Exact amounts are known after a file is read (Read text).</p>
+      <label>Document text
+        <select name="text_state"><option value="any">any</option><option value="has_text">read</option><option value="scanned">scanned (OCR)</option><option value="not_analyzed">not read yet</option></select></label>
+      <label class="check"><input type="checkbox" name="fuzzy" checked> Typo tolerant (kuty ≈ kutty)</label>
+      <label class="check"><input type="checkbox" name="hide_duplicates" checked> Hide duplicate files</label>
+      <label class="check"><input type="checkbox" name="include_inline"> Include inline images / logos</label>
+      <label class="check"><input type="checkbox" name="anywhere"> Also search Spam &amp; Bin</label>
+      <label>Minimum match score <output id="msOut">0%</output>
+        <input type="range" name="min_score" min="0" max="1" step="0.05" value="0"></label>
+      <label>Date-matrix window
+        <select name="window_months"><option value="1">1 month</option><option value="3" selected>3 months</option><option value="6">6 months</option><option value="12">12 months</option></select></label>
+    </details>
+    <div class="row btnrow">
+      <button class="btn primary wide" type="submit" id="goBtn">Search</button>
+      <button class="btn ghost" type="button" id="resetBtn">Reset</button>
+    </div>
+    <p id="searchErr" class="err"></p>
+    <div id="history" class="history"></div>
+  </form>
+
+  <!-- ======== SEARCH VIEW ======== -->
+  <section class="card results view" id="viewSearch">
+    <div id="stats" class="stats muted">Example: From <b>mck kutty</b>, keyword <b>invoice</b>, 2024-01-01 → 2025-12-25, PDF → <b>Search</b>.</div>
+    <div class="toolbar">
+      <input id="filter" placeholder="Filter results…" type="search">
+      <button class="btn ghost" id="selAll">Select all</button>
+      <button class="btn ghost" id="selNone">None</button>
+      <button class="btn ghost" id="selInv">Invert</button>
+      <span id="selInfo" class="muted">0 selected</span>
+    </div>
+    <div class="tablewrap">
+      <table id="tbl" class="grid">
+        <thead><tr>
+          <th class="c"><input type="checkbox" id="chkAll" aria-label="select all"></th>
+          <th data-sort="score" title="Hexagon match">Match</th>
+          <th data-sort="filename">File</th>
+          <th data-sort="fromName" class="cf">From</th>
+          <th data-sort="amount" class="r cf">Amount</th>
+          <th data-sort="date">Date ▾</th>
+          <th data-sort="size" class="r">Size</th>
+          <th></th>
+        </tr></thead>
+        <tbody></tbody>
+      </table>
+      <div id="empty" class="empty hidden">No attachments matched. Try fewer keywords or a wider date range.</div>
+    </div>
+    <div class="dlbar">
+      <label>Drive folders<select id="layout">
+        <option value="sender/year-month">sender / year-month</option><option value="sender/year">sender / year</option>
+        <option value="year/month">year / month</option><option value="sender">sender</option><option value="flat">one folder</option></select></label>
+      <label>File names<select id="naming"><option value="original">original</option><option value="date_original">date + original</option></select></label>
+      <div class="dlbtns">
+        <button class="btn primary need-sel" id="saveBtn" disabled>Save to Drive</button>
+        <button class="btn need-sel" id="zipBtn" disabled>Download ZIP</button>
+        <button class="btn need-sel" id="shareBtn" disabled>Share…</button>
+        <details class="menu"><summary class="btn need-sel-s">Export ▾</summary>
+          <div class="menubody">
+            <button data-export="sheet">Google Sheet <small>list + monthly totals</small></button>
+            <button data-export="csv">CSV file (.csv)</button>
+            <button data-export="txt">All text (.txt) <small>reads / scans files</small></button>
+          </div></details>
+        <button class="btn need-sel" id="readBtn" disabled title="Read text (OCR for scans) and detect number / date / amount">Read text</button>
+      </div>
+    </div>
+    <div id="dlReport" class="report hidden"></div>
+  </section>
+
+  <!-- ======== TABLE VIEW ======== -->
+  <section class="card results view hidden" id="viewTable">
+    <div class="toolbar">
+      <b>Document table</b><span class="muted" id="tblInfo">Run a search first.</span><span class="spacer"></span>
+      <label class="inl">Group by <select id="groupBy"><option value="">—</option><option value="month">month</option><option value="sender">sender</option><option value="doc_type">document type</option></select></label>
+      <button class="btn" id="tblRead">Read all rows</button>
+      <button class="btn" id="tblSheet">Google Sheet</button>
+      <button class="btn" id="tblCsv">CSV</button>
+    </div>
+    <div id="groupSummary" class="groups hidden"></div>
+    <div class="tablewrap">
+      <table class="grid sheet" id="sheet">
+        <thead><tr>
+          <th data-ssort="date">Email date</th><th data-ssort="fromName">From</th><th data-ssort="filename">File</th>
+          <th data-ssort="doc_type">Document</th><th data-ssort="doc_no">Number</th><th data-ssort="doc_date">Doc date</th>
+          <th data-ssort="amount" class="r">Amount</th><th data-ssort="currency">Cur</th><th data-ssort="gstin">GSTIN</th><th>Text</th>
+        </tr></thead>
+        <tbody></tbody>
+        <tfoot><tr><td colspan="6" id="sheetCount"></td><td class="r" id="sheetTotal"></td><td colspan="3"></td></tr></tfoot>
+      </table>
+    </div>
+    <p class="muted small pad">Click a Number, Date, Amount, Currency or GSTIN cell to correct it – corrections are saved and never overwritten.</p>
+  </section>
+
+  <!-- ======== DATA VIEW ======== -->
+  <section class="card results view hidden" id="viewData">
+    <div class="pad">
+      <h3>Your data</h3>
+      <p class="muted">Everything stays in your own Google account. The app keeps a small Google Sheet with the details it
+        detected (document type, number, amount, text it read, your corrections). Files you save go to the Drive folder
+        <b>Mail Attachments</b>.</p>
+      <div class="kpis" id="kpis"></div>
+      <div class="btnrow2">
+        <a class="btn" id="openStore" target="_blank" rel="noopener">Open data sheet</a>
+        <a class="btn" id="openDrive" target="_blank" rel="noopener" href="https://drive.google.com/drive/search?q=%22Mail%20Attachments%22">Open "Mail Attachments" in Drive</a>
+        <span class="spacer"></span>
+        <button class="btn ghost danger" id="eraseBtn">Erase app data</button>
+      </div>
+      <h3>Security</h3>
+      <ul class="muted small">
+        <li>Runs as you, inside Google. No password is typed or stored anywhere.</li>
+        <li>Gmail access is <b>read-only</b>. The app cannot delete, move or change your mail.</li>
+        <li>Drive access is limited to files this app creates. It cannot see your other Drive files.</li>
+        <li>Sending uses Google's send-only permission, and only when you press Share.</li>
+        <li>Remove access any time: myaccount.google.com → Security → Third-party apps.</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- ======== PREVIEW / READER ======== -->
+  <aside id="preview" class="card preview hidden">
+    <div class="pvhead">
+      <div class="pvtitle"><b id="pvName"></b><div class="muted small" id="pvMeta"></div></div>
+      <div class="pvtools">
+        <button class="btn ghost" id="pvPrev" title="Previous (↑)">‹</button>
+        <button class="btn ghost" id="pvNext" title="Next (↓)">›</button>
+        <button class="btn ghost" id="pvSel" title="Select (space)">Select</button>
+        <button class="btn ghost" id="pvClose" title="Close (Esc)">✕</button>
+      </div>
+    </div>
+    <div id="pvHex" class="pvhex"></div>
+    <div class="pvtabs" id="pvTabs">
+      <button data-m="doc" class="on">Document</button><button data-m="text">Text</button>
+      <button data-m="fields">Details</button><button data-m="tables">Tables</button>
+    </div>
+    <div id="pvBody" class="pvbody"></div>
+  </aside>
+</main>
+
+<dialog id="shareDlg" class="dlg">
+  <form method="dialog" id="shareForm">
+    <button value="noop" disabled hidden aria-hidden="true"></button>
+    <h3>Share <span id="shareCount"></span></h3>
+    <label>To <span class="muted">(comma separated)</span><input name="to" placeholder="accountant@firm.in"></label>
+    <label>Subject<input name="subject"></label>
+    <label>Message<textarea name="message" rows="4"></textarea></label>
+    <p class="muted small" id="shareNote"></p>
+    <div class="dlgbtns">
+      <button class="btn primary" value="email">Email the files</button>
+      <button class="btn" value="drive" title="Puts the files in a Drive folder and shares it with them">Share Drive link</button>
+      <button class="btn" value="copy">Copy list</button>
+      <span class="spacer"></span>
+      <button class="btn ghost" value="cancel">Close</button>
+    </div>
+    <p id="shareMsg" class="small"></p>
+  </form>
+</dialog>
+
+<div id="progress" class="progress hidden">
+  <div class="bar"><i id="progBar"></i></div>
+  <div class="row"><span id="progText" class="muted small"></span><span class="spacer"></span><button class="btn ghost" id="progCancel">Stop</button></div>
+</div>
+<div id="busy" class="busy hidden"><div class="spinner"></div><span id="busyMsg">Working…</span></div>
+<div id="toast" class="toast hidden"></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script>
+"use strict";
+/* ============================================================ basics */
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const FACETS = ["sender", "subject", "body", "filename", "filetype", "date"];
+const FACET_LABEL = { sender: "Sender", subject: "Subject", body: "Body/text", filename: "File name", filetype: "Type", date: "Date" };
+const DOC = { invoice: "Invoice", receipt: "Receipt", statement: "Statement", payslip: "Payslip", quotation: "Quotation", order: "Order", credit_note: "Credit note", other: "Other" };
+const TYPE_GROUPS = { image: ["jpg", "jpeg", "png", "gif", "webp", "heic", "tif", "tiff", "bmp"], excel: ["xls", "xlsx", "xlsm", "csv", "ods"], word: ["doc", "docx", "odt", "rtf"], archive: ["zip", "rar", "7z"], pdf: ["pdf"] };
+const MIME_EXT = { "application/pdf": "pdf", "image/jpeg": "jpg", "image/png": "png" };
+
+let rows = [], view = [], selected = new Set(), lastClick = -1, activeId = null, lastReq = null;
+let sortKey = "date", sortDir = -1, sheetSort = "date", sheetDir = -1, pvMode = "doc", stopFlag = false;
+const docCache = new Map(), fileCache = new Map();
+
+function store(k, v) { try { if (v === undefined) return JSON.parse(localStorage.getItem(k)); localStorage.setItem(k, JSON.stringify(v)); } catch { return null; } }
+
+/** google.script.run as a Promise */
+function run(fn, ...args) {
+  return new Promise((resolve, reject) => {
+    google.script.run.withSuccessHandler(resolve).withFailureHandler((e) => reject(new Error((e && e.message) || String(e))))[fn](...args);
+  });
+}
+/** run `worker` over items with at most n in flight (Apps Script handles parallel calls well up to ~10) */
+async function pool(items, n, worker, onEach) {
+  let i = 0, done = 0;
+  const errors = [];
+  async function next() {
+    while (i < items.length && !stopFlag) {
+      const k = i++;
+      try { await worker(items[k], k); } catch (e) { errors.push(e); }
+      done++; onEach?.(done, items.length);
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(n, items.length) }, next));
+  return errors;
+}
+const chunk = (a, n) => Array.from({ length: Math.ceil(a.length / n) }, (_, i) => a.slice(i * n, i * n + n));
+
+function busy(on, msg) { $("#busy").classList.toggle("hidden", !on); if (msg) $("#busyMsg").textContent = msg; }
+function progress(text, done, total) {
+  const p = $("#progress");
+  if (text == null) { p.classList.add("hidden"); return; }
+  p.classList.remove("hidden"); $("#progText").textContent = text;
+  const pct = total ? Math.round((100 * done) / total) : null;
+  $("#progBar").parentElement.classList.toggle("indet", pct == null);
+  $("#progBar").style.width = (pct ?? 30) + "%";
+}
+$("#progCancel").addEventListener("click", () => { stopFlag = true; });
+let toastT;
+function toast(msg, ms = 4000) { const t = $("#toast"); t.textContent = msg; t.classList.remove("hidden"); clearTimeout(toastT); toastT = setTimeout(() => t.classList.add("hidden"), ms); }
+function size(n) { if (n < 1024) return n + " B"; if (n < 1048576) return (n / 1024).toFixed(1) + " KB"; return (n / 1048576).toFixed(1) + " MB"; }
+function fmtDate(iso) { return iso ? iso.slice(0, 10) : "—"; }
+function money(v, cur) { if (v == null || v === "") return ""; const s = Number(v).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 }); return (cur && cur !== "INR" ? cur + " " : cur === "INR" ? "₹" : "") + s; }
+const byId = (id) => rows.find((x) => x.key === id);
+function report(html) { const r = $("#dlReport"); r.innerHTML = html; r.classList.remove("hidden"); }
+function downloadBlob(blob, name) {
+  const a = Object.assign(document.createElement("a"), { href: URL.createObjectURL(blob), download: name });
+  document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+}
+function b64ToBytes(b64) { const bin = atob(b64); const u = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i); return u; }
+
+/* ============================================================ hexagon scoring */
+const MATCH = 0.6, FUZZY = 0.84;
+const tokens = (s) => (String(s).toLowerCase().match(/[0-9a-z]+/g) || []);
+function withInitials(toks) { const out = new Set(toks); let run = ""; for (const t of [...toks, ""]) { if (t.length === 1) run += t; else { if (run.length > 1) out.add(run); run = ""; } } return out; }
+function similarity(a, b) {          // 1 - Levenshtein / max length
+  const m = a.length, n = b.length; if (!m || !n) return 0;
+  let prev = Array.from({ length: n + 1 }, (_, j) => j);
+  for (let i = 1; i <= m; i++) { const cur = [i]; for (let j = 1; j <= n; j++) cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1)); prev = cur; }
+  return 1 - prev[n] / Math.max(m, n);
+}
+function termScore(term, text, fuzzy = true) {
+  if (!term || !text) return 0;
+  const t = term.toLowerCase().trim(), x = String(text).toLowerCase();
+  if (x.includes(t)) return 1;
+  const tc = t.replace(/[^0-9a-z]/g, "");
+  if (tc.length >= 3 && x.slice(0, 30000).replace(/[^0-9a-z]/g, "").includes(tc)) return 1;
+  const want = tokens(term), have = withInitials(tokens(x.slice(0, 30000)));
+  if (!want.length || !have.size) return 0;
+  let got = 0;
+  for (const w of want) {
+    if (have.has(w)) { got++; continue; }
+    if (!fuzzy || w.length < 4) continue;
+    let best = 0;
+    for (const h of have) if (Math.abs(h.length - w.length) <= 2 && (h[0] === w[0] || h.slice(-2) === w.slice(-2))) best = Math.max(best, similarity(w, h));
+    if (best >= FUZZY) got += best;
+  }
+  return got / want.length;
+}
+const bestOf = (terms, text, fz) => Math.max(0, ...terms.map((t) => termScore(t, text, fz)));
+function normTypes(types) { const out = []; types.forEach((t) => { t = t.toLowerCase().replace(/^[.*]+/, ""); (TYPE_GROUPS[t] || [t]).forEach((e) => { if (e && !out.includes(e)) out.push(e); }); }); return out; }
+const extOf = (a) => a.ext || MIME_EXT[a.mime] || "";
+
+function scoreItem(a, q, types) {
+  const f = Object.fromEntries(FACETS.map((k) => [k, null]));
+  let fz = q.fuzzy, kws = q.keywords;
+  if (kws.length && q.match_mode === "phrase") { kws = [kws.join(" ")]; fz = false; }
+  if (q.senders.length) f.sender = bestOf(q.senders, `${a.fromName} ${a.fromEmail}`, fz);
+  let kwOk = true;
+  if (kws.length) {
+    const texts = { subject: a.subject, body: a.snippet + "\n" + (a.text || ""), filename: a.filename };
+    const per = kws.map((k) => Object.fromEntries(Object.entries(texts).map(([n, t]) => [n, termScore(k, t, fz)])));
+    for (const n of Object.keys(texts)) f[n] = Math.max(...per.map((p) => p[n]));
+    // Gmail also matches words *inside* attachments: trust its hit when our own text check can't see it
+    if (!a.text && a.gmailHit) f.body = Math.max(f.body, MATCH);
+    kwOk = q.match_mode === "all" ? per.every((p) => Math.max(...Object.values(p)) >= MATCH || (!a.text && a.gmailHit))
+                                  : Math.max(f.subject, f.body, f.filename) >= MATCH;
+  }
+  if (types.length) f.filetype = types.includes(extOf(a)) ? 1 : 0;
+  if (q.fromTs || q.toTs) { const t = Date.parse(a.date); f.date = (!q.fromTs || t >= q.fromTs) && (!q.toTs || t <= q.toTs) ? 1 : 0; }
+  let ok = kwOk;
+  if (f.date !== null && f.date < 1) ok = false;
+  if (f.filetype !== null && f.filetype < 1) ok = false;
+  if (f.sender !== null && f.sender < MATCH) ok = false;
+  if (q.exclude.some((e) => termScore(e, `${a.subject} ${a.filename}`, false) >= 1)) ok = false;
+  const active = Object.entries(f).filter(([k, v]) => v !== null && !["subject", "body", "filename"].includes(k)).map(([, v]) => v);
+  if (kws.length) { const kw = [f.subject, f.body, f.filename].sort((x, y) => y - x); active.push(Math.min(1, kw[0] + 0.1 * kw[1] + 0.05 * kw[2])); }
+  return { score: active.length ? active.reduce((s, v) => s + v, 0) / active.length : 1, facets: f, ok };
+}
+function wildcard(pat) { return new RegExp("^" + pat.replace(/[.+^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*").replace(/\?/g, ".") + "$", "i"); }
+function passesFilters(a, q) {
+  if (q.recipients.length && bestOf(q.recipients, a.to, q.fuzzy) < MATCH) return false;
+  const pat = q.filename_pattern.trim();
+  if (pat && (/[*?]/.test(pat) ? !wildcard(pat).test(a.filename) : !a.filename.toLowerCase().includes(pat.toLowerCase()))) return false;
+  const amt = a.fields.amount;
+  if (q.amount_min !== null && (amt == null || amt < q.amount_min)) return false;
+  if (q.amount_max !== null && (amt == null || amt > q.amount_max)) return false;
+  if (q.doc_types.length && !q.doc_types.includes(a.fields.doc_type || "other")) return false;
+  if (q.text_state === "has_text" && !a.text_source) return false;
+  if (q.text_state === "scanned" && a.text_source !== "ocr") return false;
+  if (q.text_state === "not_analyzed" && a.text_source) return false;
+  if (!q.include_inline && a.inline) return false;
+  return true;
+}
+function hexSVG(f, px = 30) {
+  const c = px / 2, R = px / 2 - 2;
+  const pt = (i, r) => { const a = -Math.PI / 2 + (i * Math.PI) / 3; return [c + r * Math.cos(a), c + r * Math.sin(a)]; };
+  const poly = (r) => FACETS.map((_, i) => pt(i, r).map((v) => v.toFixed(1)).join(",")).join(" ");
+  const vals = FACETS.map((k, i) => pt(i, R * (f[k] == null ? 0.15 : Math.max(0.08, f[k]))).map((v) => v.toFixed(1)).join(",")).join(" ");
+  const tip = FACETS.map((k) => `${FACET_LABEL[k]}: ${f[k] == null ? "not used" : Math.round(f[k] * 100) + "%"}`).join("\n");
+  return `<svg width="${px}" height="${px}" viewBox="0 0 ${px} ${px}" role="img" aria-label="match hexagon"><title>${esc(tip)}</title>
+    <polygon points="${poly(R)}" fill="none" stroke="var(--grid)" stroke-width="1"/><polygon points="${poly(R / 2)}" fill="none" stroke="var(--grid)" stroke-width=".6"/>
+    <polygon points="${vals}" fill="var(--hexfill)" stroke="var(--hex)" stroke-width="1.4" stroke-linejoin="round"/></svg>`;
+}
+
+/* ============================================================ form */
+const list = (s) => String(s || "").split(/[,;\n]/).map((x) => x.trim()).filter(Boolean);
+const num = (s) => { const t = String(s || "").replace(/,/g, "").trim(); return t === "" || isNaN(+t) ? null : +t; };
+function iso(d) { return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; }
+const TEXT_FIELDS = ["senders", "recipients", "keywords", "exclude", "date_from", "date_to", "filename_pattern", "size_min_mb", "size_max_mb", "amount_min", "amount_max"];
+function readForm() {
+  const f = $("#searchForm"), raw = {};
+  for (const k of TEXT_FIELDS) raw[k] = f[k].value.trim();
+  const types = $$("[name=t]:checked", f).map((x) => x.value).concat(f.custom_types.value.split(/[,\s]+/).filter(Boolean));
+  Object.assign(raw, { types, doc_types: $$("[name=dt]:checked", f).map((x) => x.value), match_mode: f.match_mode.value, text_state: f.text_state.value,
+    fuzzy: f.fuzzy.checked, hide_duplicates: f.hide_duplicates.checked, include_inline: f.include_inline.checked, anywhere: f.anywhere.checked,
+    min_score: +f.min_score.value, window_months: +f.window_months.value });
+  return raw;
+}
+function toQuery(raw) {
+  return { ...raw, senders: list(raw.senders), keywords: list(raw.keywords), exclude: list(raw.exclude), recipients: list(raw.recipients),
+    fromTs: raw.date_from ? new Date(raw.date_from + "T00:00:00").getTime() : null,
+    toTs: raw.date_to ? new Date(raw.date_to + "T23:59:59.999").getTime() : null,
+    amount_min: num(raw.amount_min), amount_max: num(raw.amount_max), size_min: num(raw.size_min_mb), size_max: num(raw.size_max_mb) };
+}
+function fillForm(q) {
+  const f = $("#searchForm");
+  for (const k of TEXT_FIELDS) f[k].value = q[k] || "";
+  const groups = $$("[name=t]", f).map((x) => x.value);
+  $$("[name=t]", f).forEach((x) => (x.checked = (q.types || []).includes(x.value)));
+  $$("[name=dt]", f).forEach((x) => (x.checked = (q.doc_types || []).includes(x.value)));
+  f.custom_types.value = (q.types || []).filter((t) => !groups.includes(t)).join(", ");
+  f.match_mode.value = q.match_mode || "any"; f.text_state.value = q.text_state || "any";
+  f.fuzzy.checked = q.fuzzy !== false; f.hide_duplicates.checked = q.hide_duplicates !== false;
+  f.include_inline.checked = !!q.include_inline; f.anywhere.checked = !!q.anywhere;
+}
+$("#quickDates").addEventListener("click", (e) => {
+  const q = e.target.dataset.q; if (!q) return;
+  const t = new Date(), y = t.getFullYear(), fy = t.getMonth() >= 3 ? y : y - 1;
+  const set = (a, b) => { $("[name=date_from]").value = a; $("[name=date_to]").value = b; };
+  ({ fy: () => set(`${fy}-04-01`, `${fy + 1}-03-31`), lfy: () => set(`${fy - 1}-04-01`, `${fy}-03-31`), m: () => set(iso(new Date(y, t.getMonth(), 1)), iso(t)),
+     y: () => set(`${y}-01-01`, `${y}-12-31`), ly: () => set(`${y - 1}-01-01`, `${y - 1}-12-31`), 90: () => set(iso(new Date(Date.now() - 90 * 864e5)), iso(t)), clr: () => set("", "") })[q]();
+});
+$("[name=min_score]").addEventListener("input", (e) => { $("#msOut").textContent = Math.round(e.target.value * 100) + "%"; });
+$("#resetBtn").addEventListener("click", () => fillForm({ types: ["pdf"] }));
+const qLabel = (q) => [q.senders, q.keywords, q.doc_types?.length && q.doc_types.join("/"), q.date_from && `${q.date_from}→${q.date_to || "…"}`].filter(Boolean).join(" · ") || "search";
+function renderHistory() {
+  const h = store("history") || [];
+  $("#history").innerHTML = h.length ? "<div class='muted'>Recent searches</div>" + h.map((q, i) => `<a data-i="${i}">${esc(qLabel(q))}</a>`).join("") : "";
+}
+$("#history").addEventListener("click", (e) => { const i = e.target.dataset.i; if (i != null) { fillForm(store("history")[i]); $("#searchForm").requestSubmit(); } });
+
+/* ============================================================ search */
+$("#searchForm").addEventListener("submit", async (e) => {
+  e.preventDefault(); $("#searchErr").textContent = "";
+  const raw = readForm(), q = toQuery(raw);
+  if (!q.senders.length && !q.keywords.length && !q.fromTs && !q.toTs && !q.recipients.length && !q.filename_pattern) {
+    $("#searchErr").textContent = "Give at least a sender, a keyword or a date range"; return;
+  }
+  stopFlag = false; const t0 = performance.now();
+  try {
+    progress("Planning search…");
+    const plan = await run("planSearch", { senders: q.senders, keywords: q.keywords, matchMode: q.match_mode, exclude: q.exclude, recipients: q.recipients,
+      fromTs: q.fromTs, toTs: q.toTs, types: q.types, sizeMinMb: q.size_min, sizeMaxMb: q.size_max, anywhere: q.anywhere, windowMonths: q.window_months });
+    // 1. matrix cells in parallel -> a Set of message ids (no duplicates)
+    const ids = new Set();
+    await pool(plan.queries, 6, async (query) => {
+      let tok = null;
+      do { const r = await run("listIds", query, tok); r.ids.forEach((i) => ids.add(i)); tok = r.next; } while (tok && ids.size < 5000 && !stopFlag);
+    }, (d, n) => progress(`Searching Gmail · ${d}/${n} matrix cells · ${ids.size} emails`, d, n));
+    // 2. attachment details in parallel batches
+    const items = [];
+    await pool(chunk([...ids], 15), 8, async (c) => { items.push(...(await run("getMeta", c))); },
+      (d, n) => progress(`Reading ${ids.size} emails · ${items.length} attachments`, d, n));
+    // 3. what we already know (read text, amounts, your corrections)
+    progress("Merging saved details…");
+    const known = items.length ? await run("getStored", items.map((i) => i.key)) : {};
+    items.forEach((it) => { const k = known[it.key]; it.gmailHit = true; if (k) { it.fields = k.fields; it.text_source = k.text_source; it.text = k.text; it.drive_id = k.drive_id; } });
+    // 4. same email under two ids (forwarded copies share Message-ID) -> keep one
+    const seen = new Set(); let dupMsgs = 0;
+    const uniq = items.filter((it) => { const k = (it.messageId || it.msgId) + "|" + it.partId; if (seen.has(k)) { dupMsgs++; return false; } seen.add(k); return true; });
+    // 5. hexagon + exact filters
+    const types = normTypes(q.types);
+    let matched = [];
+    for (const it of uniq) {
+      if (!passesFilters(it, q)) continue;
+      const s = scoreItem(it, q, types);
+      if (s.ok && s.score >= q.min_score) matched.push(Object.assign(it, { score: s.score, facets: s.facets, duplicates: 0 }));
+    }
+    // 6. same file sent again -> one row with "+n dup"
+    matched.sort((a, b) => Date.parse(a.date) - Date.parse(b.date));
+    let dupFiles = 0;
+    if (q.hide_duplicates) {
+      const keep = new Map();
+      for (const a of matched) { const k = a.filename.toLowerCase() + "|" + Math.floor(a.size / 64); if (keep.has(k)) { keep.get(k).duplicates++; dupFiles++; } else keep.set(k, a); }
+      matched = [...keep.values()];
+    }
+    matched.sort((a, b) => Date.parse(b.date) - Date.parse(a.date));
+    rows = matched; selected.clear(); lastClick = -1; docCache.clear(); lastReq = q;
+    store("lastQuery", raw);
+    store("history", [raw, ...(store("history") || []).filter((x) => qLabel(x) !== qLabel(raw))].slice(0, 8)); renderHistory();
+    const secs = ((performance.now() - t0) / 1000).toFixed(1), total = rows.reduce((s, r) => s + (r.fields.amount || 0), 0);
+    $("#stats").innerHTML = `<b>${rows.length}</b> attachment${rows.length === 1 ? "" : "s"} · <b>${size(rows.reduce((s, r) => s + r.size, 0))}</b>` +
+      (total ? ` · total <b>${money(total)}</b>` : "") + ` · <b>${secs} s</b> <span class="badge">${plan.cells} matrix cells</span>` +
+      `<span class="badge">${ids.size} emails</span>` + (dupMsgs ? `<span class="badge">${dupMsgs} duplicate emails removed</span>` : "") +
+      (dupFiles ? `<span class="badge">${dupFiles} duplicate files removed</span>` : "") + (stopFlag ? `<span class="badge">stopped early</span>` : "");
+    $("#dlReport").classList.add("hidden");
+    showView("search"); render(); renderSheet();
+  } catch (er) { $("#searchErr").textContent = er.message; }
+  finally { progress(null); }
+});
+
+/* ============================================================ results table */
+function sortVal(r, k) { return k === "amount" ? (r.fields.amount ?? -1) : (r[k] ?? ""); }
+function render() {
+  const f = $("#filter").value.trim().toLowerCase();
+  view = rows.filter((r) => !f || `${r.filename} ${r.fromName} ${r.fromEmail} ${r.subject} ${r.date} ${r.fields.doc_no || ""} ${r.fields.amount || ""}`.toLowerCase().includes(f));
+  view.sort((a, b) => { const x = sortVal(a, sortKey), y = sortVal(b, sortKey); return (x < y ? -1 : x > y ? 1 : 0) * sortDir; });
+  $("#tbl tbody").innerHTML = view.map((r, i) => {
+    const d = r.fields.doc_type && r.fields.doc_type !== "other" ? `<span class="doc d-${esc(r.fields.doc_type)}">${esc(DOC[r.fields.doc_type] || r.fields.doc_type)}${r.fields.doc_no ? " " + esc(r.fields.doc_no) : ""}</span>` : "";
+    return `<tr data-i="${i}" class="${selected.has(r.key) ? "sel" : ""} ${r.key === activeId ? "active" : ""}">
+      <td class="c"><input type="checkbox" ${selected.has(r.key) ? "checked" : ""} aria-label="select"></td>
+      <td><div class="hexcell">${hexSVG(r.facets)}<span>${Math.round(r.score * 100)}%</span></div></td>
+      <td><div class="fn"><span class="ext x-${esc(r.ext)}">${esc(r.ext || "file")}</span>${esc(r.filename)}${r.duplicates ? `<span class="badge" title="identical copies hidden">+${r.duplicates} dup</span>` : ""}${r.text_source === "ocr" ? ` <span class="src s-ocr">OCR</span>` : ""}${r.risky ? ` <span class="risky" title="Can run programs/macros – only open if you trust the sender">⚠ risky file</span>` : ""}</div>
+          <div class="sub">${d}${esc(r.subject)}</div></td>
+      <td class="cf"><div>${esc(r.fromName)}</div><div class="sub hide-sm">${esc(r.fromEmail)}</div></td>
+      <td class="r cf amt">${money(r.fields.amount, r.fields.currency)}</td>
+      <td class="nw">${fmtDate(r.date)}</td><td class="r nw">${size(r.size)}</td>
+      <td><button class="btn ghost pv" title="Preview">👁</button></td></tr>`;
+  }).join("");
+  $("#empty").classList.toggle("hidden", !!view.length || !rows.length);
+  $$("#tbl th[data-sort]").forEach((th) => { th.textContent = th.textContent.replace(/ [▴▾]$/, "") + (th.dataset.sort === sortKey ? (sortDir < 0 ? " ▾" : " ▴") : ""); });
+  updateSel();
+}
+function updateSel() {
+  const sel = rows.filter((r) => selected.has(r.key));
+  const amt = sel.reduce((a, r) => a + (r.fields.amount || 0), 0);
+  $("#selInfo").textContent = `${selected.size} selected${selected.size ? " · " + size(sel.reduce((a, r) => a + r.size, 0)) : ""}${amt ? " · " + money(amt) : ""}`;
+  $$(".need-sel").forEach((b) => (b.disabled = !selected.size));
+  $$(".need-sel-s").forEach((b) => b.setAttribute("aria-disabled", String(!selected.size)));
+  $("#chkAll").checked = view.length > 0 && view.every((r) => selected.has(r.key));
+  $("#pvSel").textContent = activeId && selected.has(activeId) ? "Selected ✓" : "Select";
+}
+function toggle(id, on) { (on ?? !selected.has(id)) ? selected.add(id) : selected.delete(id); }
+$("#tbl tbody").addEventListener("click", (e) => {
+  const tr = e.target.closest("tr"); if (!tr) return;
+  const i = +tr.dataset.i, r = view[i];
+  if (e.target.closest(".pv")) { openPreview(r.key); return; }
+  if (e.shiftKey && lastClick >= 0) { const [a, b] = [Math.min(lastClick, i), Math.max(lastClick, i)]; const on = !selected.has(r.key); for (let k = a; k <= b; k++) toggle(view[k].key, on); }
+  else if (e.target.type === "checkbox" || e.ctrlKey || e.metaKey) toggle(r.key);
+  else { openPreview(r.key); return; }
+  lastClick = i; render();
+});
+$("#tbl thead").addEventListener("click", (e) => {
+  const th = e.target.closest("th[data-sort]"); if (!th) return;
+  sortDir = th.dataset.sort === sortKey ? -sortDir : (["date", "score", "amount", "size"].includes(th.dataset.sort) ? -1 : 1);
+  sortKey = th.dataset.sort; render();
+});
+$("#chkAll").addEventListener("click", (e) => { e.stopPropagation(); const on = e.target.checked; view.forEach((r) => toggle(r.key, on)); render(); });
+$("#selAll").addEventListener("click", () => { view.forEach((r) => selected.add(r.key)); render(); });
+$("#selNone").addEventListener("click", () => { selected.clear(); render(); });
+$("#selInv").addEventListener("click", () => { view.forEach((r) => toggle(r.key)); render(); });
+$("#filter").addEventListener("input", render);
+const selItems = () => rows.filter((r) => selected.has(r.key));
+const slim = (r) => ({ key: r.key, msgId: r.msgId, partId: r.partId, filename: r.filename, ext: r.ext, mime: r.mime, fromName: r.fromName, fromEmail: r.fromEmail, subject: r.subject, date: r.date, size: r.size, fields: r.fields, text_source: r.text_source });
+
+/* ============================================================ preview / reader */
+async function getFile(r) {
+  if (fileCache.has(r.key)) return fileCache.get(r.key);
+  const f = await run("getAttachment", r.msgId, r.partId);
+  if (fileCache.size > 30) fileCache.delete(fileCache.keys().next().value);
+  fileCache.set(r.key, f);
+  return f;
+}
+async function getDoc(r, force) {
+  if (!force && docCache.has(r.key)) return docCache.get(r.key);
+  const d = await run("readText", slim(r), !!force);
+  docCache.set(r.key, d);
+  Object.assign(r, { fields: d.fields, text_source: d.source, text: d.text });
+  return d;
+}
+async function openPreview(id) {
+  activeId = id;
+  const r = byId(id); if (!r) return;
+  $("#preview").classList.remove("hidden"); $("#app").classList.add("with-preview");
+  $("#pvName").textContent = r.filename;
+  $("#pvMeta").textContent = `${r.fromName} · ${fmtDate(r.date)} · ${size(r.size)}`;
+  $("#pvHex").innerHTML = hexSVG(r.facets, 86) + "<table>" + FACETS.map((k) => `<tr><td class="muted">${FACET_LABEL[k]}</td><td>${r.facets[k] == null ? "—" : Math.round(r.facets[k] * 100) + "%"}</td></tr>`).join("") + "</table>" +
+    `<div class="sub pvsnip">${esc(r.subject)}<br>${esc(r.snippet.slice(0, 180))}</div>`;
+  $$("#pvTabs button").forEach((b) => b.classList.toggle("on", b.dataset.m === pvMode));
+  render();
+  const body = $("#pvBody");
+  body.innerHTML = `<div class='none'>${pvMode === "doc" ? "Loading…" : r.text_source ? "Loading…" : "Reading the file with Google (scans are OCR'd)…"}</div>`;
+  try {
+    if (pvMode === "doc") return await showDocument(r);
+    const d = await getDoc(r);
+    if (activeId !== id) return;
+    ({ text: showText, fields: showFields, tables: showTables })[pvMode](r, d);
+    render();
+  } catch (er) { if (activeId === id) body.innerHTML = `<div class='none'>${esc(er.message)}</div>`; }
+}
+async function showDocument(r) {
+  const f = await getFile(r);
+  if (activeId !== r.key) return;
+  const body = $("#pvBody");
+  if (f.tooBig) { body.innerHTML = `<div class="none">File is ${size(f.size)} – too big to preview here.<br>Use <b>Save to Drive</b> and open it there.</div>`; return; }
+  const ext = extOf(r), mime = (f.mime || r.mime || "").toLowerCase();
+  if (ext === "pdf" || mime === "application/pdf") return renderPdf(b64ToBytes(f.b64), body, r.key);
+  if (/^image\/(png|jpe?g|gif|webp|bmp)$/.test(mime)) { body.innerHTML = `<img alt="" src="data:${mime};base64,${f.b64}">`; return; }
+  if (/^text\//.test(mime) || ["txt", "csv", "json", "xml", "log", "eml", "html", "htm", "md"].includes(ext)) {
+    body.innerHTML = `<pre>${esc(new TextDecoder().decode(b64ToBytes(f.b64)).slice(0, 400000))}</pre>`; return;   // HTML shown as text, never rendered
+  }
+  body.innerHTML = `<div class="none">No picture preview for .${esc(ext || "?")} files.<br>Open the <b>Text</b> or <b>Tables</b> tab, or Save to Drive.</div>`;
+}
+let pdfWorkerReady = null;
+async function pdfReady() {
+  if (!window.pdfjsLib) throw new Error("PDF viewer could not load – use the Text tab or Save to Drive");
+  if (!pdfWorkerReady) {
+    pdfWorkerReady = (async () => {
+      // Apps Script pages run in a sandbox: load the worker as a same-origin blob
+      try {
+        const src = await (await fetch("https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js")).text();
+        pdfjsLib.GlobalWorkerOptions.workerSrc = URL.createObjectURL(new Blob([src], { type: "text/javascript" }));
+      } catch { pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js"; }
+    })();
+  }
+  return pdfWorkerReady;
+}
+async function renderPdf(bytes, body, key) {
+  await pdfReady();
+  const pdf = await pdfjsLib.getDocument({ data: bytes, isEvalSupported: false }).promise;
+  if (activeId !== key) return;
+  body.innerHTML = `<div class="pdfpages"></div>${pdf.numPages > 10 ? `<div class="none small">Showing 10 of ${pdf.numPages} pages</div>` : ""}`;
+  const wrap = body.querySelector(".pdfpages"), width = Math.max(320, body.clientWidth - 30);
+  for (let p = 1; p <= Math.min(pdf.numPages, 10); p++) {
+    if (activeId !== key) return;
+    const page = await pdf.getPage(p), vp0 = page.getViewport({ scale: 1 });
+    const vp = page.getViewport({ scale: (width / vp0.width) * (window.devicePixelRatio || 1) });
+    const c = document.createElement("canvas"); c.width = vp.width; c.height = vp.height; c.style.width = width + "px";
+    wrap.append(c);
+    await page.render({ canvasContext: c.getContext("2d"), viewport: vp }).promise;
+  }
+}
+function highlight(text, q) {
+  const safe = esc(text), words = (q || "").split(/[,\s]+/).filter((w) => w.length > 1).map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+  return words.length ? safe.replace(new RegExp(`(${words.join("|")})`, "gi"), "<mark>$1</mark>") : safe;
+}
+function showText(r, d) {
+  const src = { pdf: "PDF text", ocr: "scanned – Google OCR", office: "Office document", plain: "text file", none: "no text found" }[d.source] || d.source || "";
+  const q = $("[name=keywords]").value;
+  $("#pvBody").innerHTML = `<div class="pvtext"><div class="pvbar"><span class="src ${d.source === "ocr" ? "s-ocr" : ""}">${esc(src)}</span>
+      <input id="pvFind" type="search" placeholder="Find in text…" value="${esc(q)}"><span class="spacer"></span>
+      <button class="btn" id="pvCopy">Copy</button><button class="btn" id="pvTxt">Save .txt</button><button class="btn" id="pvRe">Re-scan</button></div>
+    <pre id="pvPre">${d.text ? highlight(d.text, q) : "(no text)"}</pre></div>`;
+  $("#pvFind").addEventListener("input", (e) => { $("#pvPre").innerHTML = highlight(d.text || "", e.target.value); $("#pvPre mark")?.scrollIntoView({ block: "center" }); });
+  $("#pvCopy").addEventListener("click", async () => { try { await navigator.clipboard.writeText(d.text || ""); toast("Text copied"); } catch { toast("Select the text and press Ctrl+C"); } });
+  $("#pvTxt").addEventListener("click", () => downloadBlob(new Blob([d.text || ""], { type: "text/plain" }), r.filename.replace(/\.[^.]+$/, "") + ".txt"));
+  $("#pvRe").addEventListener("click", async () => { $("#pvPre").textContent = "Reading again…"; try { const nd = await getDoc(r, true); if (activeId === r.key) showText(r, nd); render(); } catch (er) { $("#pvPre").textContent = er.message; } });
+}
+function showFields(r, d) {
+  const f = d.fields || {};
+  $("#pvBody").innerHTML = `<form class="fieldsform" id="fieldsForm">
+    <label>Document</label><select name="doc_type">${Object.entries(DOC).map(([k, v]) => `<option value="${k}" ${f.doc_type === k ? "selected" : ""}>${v}</option>`).join("")}</select>
+    <label>Number</label><input name="doc_no" value="${esc(f.doc_no || "")}">
+    <label>Document date</label><input name="doc_date" type="date" value="${esc(f.doc_date || "")}">
+    <label>Amount</label><input name="amount" inputmode="decimal" value="${f.amount ?? ""}">
+    <label>Currency</label><input name="currency" value="${esc(f.currency || "")}" placeholder="INR">
+    <label>GSTIN</label><input name="gstin" value="${esc(f.gstin || "")}">
+    <div class="full muted small">Detected automatically. Corrections are saved instantly and kept.</div><div class="full"><hr></div>
+    <label>From</label><div>${esc(r.fromName)} &lt;${esc(r.fromEmail)}&gt;</div><label>To</label><div class="small">${esc(r.to || "—")}</div>
+    <label>Subject</label><div>${esc(r.subject)}</div><label>Email date</label><div>${esc(r.date.replace("T", " ").slice(0, 16))}</div>
+    <label>Open in Gmail</label><div><a href="https://mail.google.com/mail/u/0/#all/${esc(r.threadId)}" target="_blank" rel="noopener">open email ↗</a></div></form>`;
+  $("#fieldsForm").addEventListener("change", async (e) => {
+    const el = e.target; if (!el.name) return;
+    try { r.fields = await run("saveField", slim(r), el.name, el.value); d.fields = r.fields; toast("Saved"); render(); } catch (er) { toast(er.message); }
+  });
+}
+function tablesCsv(tables) { return "﻿" + tables.map((t) => t.map((row) => row.map((c) => /[",\n]/.test(c) ? `"${String(c).replace(/"/g, '""')}"` : c).join(",")).join("\n")).join("\n\n"); }
+function showTables(r, d) {
+  const t = d.tables || [];
+  if (!t.length) { $("#pvBody").innerHTML = `<div class="none">No tables found in this file.</div>`; return; }
+  $("#pvBody").innerHTML = `<div class="tblhead"><b>${t.length} table${t.length > 1 ? "s" : ""}</b><span class="spacer"></span><button class="btn" data-tx="sheet">All → Google Sheet</button><button class="btn" data-tx="csv">All → CSV</button></div>` +
+    t.map((tb, i) => `<div class="tblhead"><span class="muted">Table ${i + 1} · ${tb.length} rows</span><span class="spacer"></span><button class="btn" data-tcopy="${i}">Copy</button></div>
+      <table class="dt">${tb.slice(0, 300).map((row) => `<tr>${row.map((c) => `<td>${esc(c)}</td>`).join("")}</tr>`).join("")}</table>`).join("");
+  $("#pvBody").onclick = async (e) => {
+    const b = e.target.closest("button"); if (!b) return;
+    if (b.dataset.tcopy != null) { try { await navigator.clipboard.writeText(t[+b.dataset.tcopy].map((row) => row.join("\t")).join("\n")); toast("Copied – paste into Sheets / Excel"); } catch { toast("Copy not allowed here"); } return; }
+    if (b.dataset.tx === "csv") downloadBlob(new Blob([tablesCsv(t)], { type: "text/csv" }), r.filename.replace(/\.[^.]+$/, "") + "-tables.csv");
+    if (b.dataset.tx === "sheet") { busy(true, "Creating Google Sheet…"); try { const res = await run("tablesToSheet", r.filename, t); report(`<div class="ok">✔ Tables sheet: <a href="${esc(res.url)}" target="_blank" rel="noopener">open ↗</a></div>`); window.open(res.url, "_blank", "noopener"); } catch (er) { toast(er.message); } finally { busy(false); } }
+  };
+}
+function closePreview(silent) { activeId = null; $("#preview").classList.add("hidden"); $("#app").classList.remove("with-preview"); $("#pvBody").innerHTML = ""; if (!silent) render(); }
+function step(d) { const i = view.findIndex((r) => r.key === activeId); const n = view[i + d]; if (n) openPreview(n.key); }
+$("#pvTabs").addEventListener("click", (e) => { const m = e.target.dataset.m; if (!m || !activeId) return; pvMode = m; store("pvMode", m); openPreview(activeId); });
+$("#pvClose").addEventListener("click", () => closePreview());
+$("#pvPrev").addEventListener("click", () => step(-1));
+$("#pvNext").addEventListener("click", () => step(1));
+$("#pvSel").addEventListener("click", () => { if (activeId) { toggle(activeId); render(); } });
+document.addEventListener("keydown", (e) => {
+  if (!activeId || ["INPUT", "SELECT", "TEXTAREA"].includes(document.activeElement.tagName) || document.activeElement.isContentEditable) return;
+  if (e.key === "Escape") closePreview();
+  else if (["ArrowDown", "ArrowRight", "j"].includes(e.key)) { e.preventDefault(); step(1); }
+  else if (["ArrowUp", "ArrowLeft", "k"].includes(e.key)) { e.preventDefault(); step(-1); }
+  else if (e.key === " ") { e.preventDefault(); toggle(activeId); render(); }
+});
+
+/* ============================================================ save / zip / export / read */
+$("#saveBtn").addEventListener("click", async () => {
+  const items = selItems().map(slim); stopFlag = false;
+  const rep = { saved: [], skipped: [], failed: [], folderUrl: "" };
+  await pool(chunk(items, 5), 4, async (c) => { const r = await run("saveToDrive", c, $("#layout").value, $("#naming").value); rep.saved.push(...r.saved); rep.skipped.push(...r.skipped); rep.failed.push(...r.failed); rep.folderUrl = r.folderUrl; },
+    (d, n) => progress(`Saving to Drive · ${rep.saved.length + rep.skipped.length}/${items.length}`, d, n));
+  progress(null);
+  store("layout", $("#layout").value); store("naming", $("#naming").value);
+  report(`<div class="ok">✔ Saved ${rep.saved.length} file(s) to Drive → <a href="${esc(rep.folderUrl)}" target="_blank" rel="noopener">open "Mail Attachments" ↗</a></div>` +
+    (rep.skipped.length ? `<div class="warn">↷ ${rep.skipped.length} skipped – identical file already in Drive</div>` : "") +
+    rep.failed.map((f) => `<div class="bad">✖ ${esc(f.filename)}: ${esc(f.error)}</div>`).join(""));
+});
+$("#zipBtn").addEventListener("click", async () => {
+  const items = selItems();
+  if (items.reduce((s, r) => s + r.size, 0) > 60 * 1048576 || items.length > 200) { toast("Too many files for one ZIP – select fewer (max ~60 MB) or use Save to Drive", 6000); return; }
+  busy(true, `Packing ${items.length} files…`);
+  try {
+    const z = await run("makeZip", items.map(slim), $("#layout").value);
+    if (z.b64) { downloadBlob(new Blob([b64ToBytes(z.b64)], { type: "application/zip" }), z.name); report(`<div class="ok">✔ ZIP downloaded: ${z.files} files${z.skipped ? `, ${z.skipped} duplicate skipped` : ""}. If nothing downloaded, your browser blocked it – use Save to Drive.</div>`); }
+    else report(`<div class="ok">✔ ZIP is large, so it was saved to Drive: <a href="${esc(z.link)}" target="_blank" rel="noopener">${esc(z.name)} ↗</a> (download it from there)</div>`);
+  } catch (er) { report(`<div class="bad">✖ ${esc(er.message)}</div>`); }
+  finally { busy(false); }
+});
+async function readMany(list) {
+  const todo = list.filter((r) => !r.text_source); stopFlag = false;
+  let ocr = 0, failed = 0;
+  await pool(todo, 4, async (r) => { try { const d = await getDoc(r); if (d.source === "ocr") ocr++; } catch { failed++; } },
+    (d, n) => progress(`Reading files with Google (OCR for scans) · ${d}/${n}`, d, n));
+  progress(null); render(); renderSheet();
+  toast(`Read ${todo.length - failed} file(s)${ocr ? `, ${ocr} scanned with OCR` : ""}${failed ? `, ${failed} failed` : ""}`);
+}
+$("#readBtn").addEventListener("click", () => readMany(selItems()));
+function csvOf(list) {
+  const head = ["Email date", "From", "From email", "Subject", "File", "Type", "Size (KB)", "Document", "Number", "Document date", "Amount", "Currency", "GSTIN", "Text"];
+  const q = (v) => { v = v == null ? "" : String(v); return /[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v; };
+  return "﻿" + [head.join(",")].concat(list.map((r) => [r.date.replace("T", " ").slice(0, 16), r.fromName, r.fromEmail, r.subject, r.filename, r.ext, (r.size / 1024).toFixed(1),
+    DOC[r.fields.doc_type] || "", r.fields.doc_no, r.fields.doc_date, r.fields.amount, r.fields.currency, r.fields.gstin, r.text_source].map(q).join(","))).join("\n");
+}
+async function doExport(fmt, list) {
+  $$(".menu").forEach((m) => (m.open = false));
+  const stamp = new Date().toISOString().slice(0, 16).replace(/[-:]/g, "").replace("T", "-");
+  if (fmt === "csv") { downloadBlob(new Blob([csvOf(list)], { type: "text/csv" }), `attachments-${stamp}.csv`); return; }
+  if (fmt === "txt") {
+    await readMany(list);
+    const parts = list.map((r) => `${"=".repeat(70)}\nFILE    : ${r.filename}\nFROM    : ${r.fromName} <${r.fromEmail}>\nDATE    : ${r.date.slice(0, 16).replace("T", " ")}\nSUBJECT : ${r.subject}\n` +
+      (r.fields.amount != null ? `DETECTED: ${DOC[r.fields.doc_type] || ""} ${r.fields.doc_no || ""} ${r.fields.doc_date || ""} ${money(r.fields.amount, r.fields.currency)}\n` : "") +
+      `${"-".repeat(70)}\n${(r.text || "").trim() || "(no text)"}\n`);
+    downloadBlob(new Blob([parts.join("\n")], { type: "text/plain" }), `attachments-text-${stamp}.txt`); return;
+  }
+  busy(true, "Creating Google Sheet…");
+  try { const res = await run("exportSheet", list.map(slim)); report(`<div class="ok">✔ Google Sheet created: <a href="${esc(res.url)}" target="_blank" rel="noopener">${esc(res.name)} ↗</a></div>`); window.open(res.url, "_blank", "noopener"); }
+  catch (er) { report(`<div class="bad">✖ ${esc(er.message)}</div>`); }
+  finally { busy(false); }
+}
+$$("[data-export]").forEach((b) => b.addEventListener("click", () => doExport(b.dataset.export, selItems())));
+document.addEventListener("click", (e) => { $$(".menu[open]").forEach((m) => { if (!m.contains(e.target)) m.open = false; }); });
+
+/* ============================================================ table view */
+const SHEET_EDIT = ["doc_no", "doc_date", "amount", "currency", "gstin"];
+const tableRows = () => (view.length || !rows.length ? view : rows);
+function sheetVal(r, k) { return ["date", "fromName", "filename"].includes(k) ? (r[k] ?? "") : (r.fields[k] ?? (k === "amount" ? -Infinity : "")); }
+function renderSheet() {
+  const listR = [...tableRows()];
+  $("#tblInfo").textContent = listR.length ? `${listR.length} rows from the current results` : "Run a search first.";
+  listR.sort((a, b) => { const x = sheetVal(a, sheetSort), y = sheetVal(b, sheetSort); return (x < y ? -1 : x > y ? 1 : 0) * sheetDir; });
+  $("#sheet tbody").innerHTML = listR.map((r) => `<tr data-id="${esc(r.key)}"><td class="nw">${fmtDate(r.date)}</td><td><div class="sub">${esc(r.fromName)}</div></td><td><div class="sub" title="${esc(r.filename)}">${esc(r.filename)}</div></td>
+    <td><select data-f="doc_type">${Object.entries(DOC).map(([k, v]) => `<option value="${k}" ${r.fields.doc_type === k ? "selected" : ""}>${v}</option>`).join("")}</select></td>
+    ${SHEET_EDIT.map((k) => `<td contenteditable="plaintext-only" data-f="${k}" class="${k === "amount" ? "r amt" : ""}">${esc(k === "amount" ? (r.fields.amount != null ? Number(r.fields.amount).toFixed(2) : "") : r.fields[k] || "")}</td>`).join("")}
+    <td>${r.text_source ? `<span class="src ${r.text_source === "ocr" ? "s-ocr" : ""}">${esc(r.text_source)}</span>` : `<span class="muted small">not read</span>`}</td></tr>`).join("");
+  const total = listR.reduce((a, r) => a + (r.fields.amount || 0), 0);
+  $("#sheetCount").textContent = `${listR.length} documents · ${listR.filter((r) => r.fields.amount != null).length} with amount`;
+  $("#sheetTotal").textContent = money(total);
+  const g = $("#groupBy").value, box = $("#groupSummary");
+  if (!g || !listR.length) { box.classList.add("hidden"); return; }
+  const groups = new Map();
+  for (const r of listR) {
+    const k = g === "month" ? ((r.fields.doc_date || r.date || "").slice(0, 7) || "unknown") : g === "sender" ? (r.fromName || r.fromEmail) : (DOC[r.fields.doc_type] || "Other");
+    const v = groups.get(k) || [0, 0]; v[0]++; v[1] += r.fields.amount || 0; groups.set(k, v);
+  }
+  const ent = [...groups.entries()].sort((a, b) => (g === "month" ? (a[0] < b[0] ? 1 : -1) : b[1][1] - a[1][1]));
+  box.innerHTML = `<table><tr><th>${esc($("#groupBy").selectedOptions[0].text)}</th><th class="r">Files</th><th class="r">Total</th></tr>` + ent.map(([k, [n, s]]) => `<tr><td>${esc(k)}</td><td class="r">${n}</td><td class="r amt">${money(s)}</td></tr>`).join("") + "</table>";
+  box.classList.remove("hidden");
+}
+$("#groupBy").addEventListener("change", renderSheet);
+$("#sheet thead").addEventListener("click", (e) => { const th = e.target.closest("th[data-ssort]"); if (!th) return; sheetDir = th.dataset.ssort === sheetSort ? -sheetDir : (["date", "amount", "doc_date"].includes(th.dataset.ssort) ? -1 : 1); sheetSort = th.dataset.ssort; renderSheet(); });
+async function saveCell(el) {
+  const r = byId(el.closest("tr").dataset.id), field = el.dataset.f;
+  const value = el.tagName === "SELECT" ? el.value : el.textContent.trim();
+  const old = field === "amount" ? (r.fields.amount != null ? Number(r.fields.amount).toFixed(2) : "") : (r.fields[field] || "");
+  if (value === old) return;
+  try { r.fields = await run("saveField", slim(r), field, value); el.classList.add("edited"); render(); $("#sheetTotal").textContent = money(tableRows().reduce((a, x) => a + (x.fields.amount || 0), 0)); }
+  catch (er) { toast(er.message); el.textContent = old; }
+}
+$("#sheet tbody").addEventListener("focusout", (e) => { if (e.target.dataset?.f) saveCell(e.target); });
+$("#sheet tbody").addEventListener("change", (e) => { if (e.target.tagName === "SELECT") saveCell(e.target); });
+$("#sheet tbody").addEventListener("keydown", (e) => { if (e.key === "Enter" && e.target.isContentEditable) { e.preventDefault(); e.target.blur(); } });
+$("#sheet tbody").addEventListener("dblclick", (e) => { const tr = e.target.closest("tr"); if (tr && !e.target.isContentEditable) { showView("search"); openPreview(tr.dataset.id); } });
+$("#tblRead").addEventListener("click", () => readMany(tableRows()));
+$("#tblSheet").addEventListener("click", () => tableRows().length && doExport("sheet", tableRows()));
+$("#tblCsv").addEventListener("click", () => tableRows().length && doExport("csv", tableRows()));
+
+/* ============================================================ share */
+$("#shareBtn").addEventListener("click", () => {
+  const sel = selItems(), f = $("#shareForm"), bytes = sel.reduce((a, r) => a + r.size, 0);
+  $("#shareCount").textContent = `${sel.length} file${sel.length > 1 ? "s" : ""}`;
+  $("#shareNote").textContent = `${size(bytes)} total` + (bytes > 18 * 1048576 ? " – too large for email, use Share Drive link." : "");
+  if (!f.subject.value) f.subject.value = sel.length === 1 ? sel[0].filename : `${sel.length} attachments`;
+  $("#shareMsg").textContent = ""; $("#shareDlg").showModal();
+});
+function shareText(list) {
+  let total = 0;
+  const lines = list.map((r) => { const a = r.fields.amount; total += a || 0; return [fmtDate(r.date), r.filename, r.fromName, r.fields.doc_no && "#" + r.fields.doc_no, a != null && money(a, r.fields.currency)].filter(Boolean).join(" | "); });
+  if (total) lines.push(`Total: ${money(total)} (${list.length} files)`);
+  return lines.join("\n");
+}
+$("#shareForm").addEventListener("submit", async (e) => {
+  const action = e.submitter?.value; if (!action || action === "cancel") return;
+  e.preventDefault();
+  const f = $("#shareForm"), items = selItems(), msg = $("#shareMsg");
+  try {
+    if (action === "copy") { try { await navigator.clipboard.writeText(shareText(items)); msg.textContent = "✔ List copied – paste it in WhatsApp, email or a document."; } catch { msg.textContent = "Copy not allowed here."; } return; }
+    msg.textContent = action === "email" ? "Sending…" : "Creating shared folder…";
+    if (action === "email") { const r = await run("shareEmail", items.map(slim), f.to.value, f.subject.value, f.message.value); msg.innerHTML = `✔ Sent ${r.files} file(s) to ${esc(r.sentTo.join(", "))}`; }
+    else { const r = await run("shareDrive", items.map(slim), f.to.value, f.message.value); msg.innerHTML = `✔ Shared ${r.files} file(s) with ${esc(r.sharedWith.join(", "))} – <a href="${esc(r.link)}" target="_blank" rel="noopener">open folder ↗</a>`; }
+  } catch (er) { msg.innerHTML = `<span class="err">${esc(er.message)}</span>`; }
+});
+
+/* ============================================================ views / data */
+function showView(v) {
+  $$("#tabs button").forEach((b) => b.classList.toggle("on", b.dataset.view === v));
+  $("#viewSearch").classList.toggle("hidden", v !== "search");
+  $("#viewTable").classList.toggle("hidden", v !== "table");
+  $("#viewData").classList.toggle("hidden", v !== "data");
+  if (v !== "search") closePreview(true);
+  if (v === "table") renderSheet();
+  if (v === "data") refreshData();
+}
+$("#tabs").addEventListener("click", (e) => { const v = e.target.closest("button")?.dataset.view; if (v) showView(v); });
+async function refreshData() {
+  try {
+    const u = await run("getUser");
+    $("#account").textContent = u.email;
+    const s = u.store, k = (v, l) => `<div class="kpi"><b>${v}</b><span>${l}</span></div>`;
+    $("#kpis").innerHTML = k(s.rows || 0, "documents read / corrected") + k(rows.length, "in current results") + k(esc(u.timeZone), "time zone");
+    const a = $("#openStore"); if (s.url) { a.href = s.url; a.classList.remove("hidden"); } else a.classList.add("hidden");
+  } catch (er) { toast(er.message); }
+}
+$("#eraseBtn").addEventListener("click", async () => {
+  if (!confirm("Erase this app's data?\n\nThe data sheet (detected fields, text read from files, your corrections) is moved to the Drive Bin.\nYour email and files saved in \"Mail Attachments\" are NOT touched.")) return;
+  try { const r = await run("eraseData"); try { localStorage.clear(); } catch { /* ignore */ } toast(r.note, 6000); refreshData(); } catch (er) { toast(er.message); }
+});
+
+/* ============================================================ start */
+(function init() {
+  pvMode = store("pvMode") || "doc";
+  const last = store("lastQuery"); if (last) fillForm(last);
+  if (store("layout")) $("#layout").value = store("layout");
+  if (store("naming")) $("#naming").value = store("naming");
+  renderHistory();
+  run("getUser").then((u) => { $("#account").textContent = u.email; }).catch((e) => { $("#account").textContent = ""; toast(e.message, 8000); });
+})();
+</script>
+
+</body>
+</html>

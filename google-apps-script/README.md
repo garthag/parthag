@@ -26,6 +26,11 @@ The same app, running **inside your Google account** as a private web app:
 
 ## Set it up (about 10 minutes, once)
 
+**Easiest:** use the 3 ready-made files in [`easy/`](easy/): `appsscript.json`, `Code.gs` and `Index.html` (create it as an
+HTML file named `Index`). They contain exactly the same app as the 6 files below, merged by `node build-easy.js`.
+
+Using the 6 separate files instead:
+
 You need the 6 files from this folder: `appsscript.json`, `Code.gs`, `SmartFields.gs`, `Index.html`,
 `Styles.html`, `App.html`. On GitHub, open each file → **Raw** → select all → copy.
 

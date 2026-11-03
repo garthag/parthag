@@ -157,7 +157,7 @@ function makeEnv({ messages = [], docTexts = {}, sheetsFromXlsx = {} } = {}) {
     HtmlService: {},
   };
   const ctx = vm.createContext(env);
-  for (const f of ['SmartFields.gs', 'Code.gs']) {
+  for (const f of (process.env.EASY ? ['easy/Code.gs'] : ['SmartFields.gs', 'Code.gs'])) {
     vm.runInContext(fs.readFileSync(path.join(__dirname, '..', f), 'utf8'), ctx, { filename: f });
   }
   return { ctx, store, b64url };
