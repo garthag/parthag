@@ -1,4 +1,5 @@
 # Extra packages for the Windows desktop app (on top of ../requirements.txt)
 pywebview>=5.0
 keyring>=24.0
+winocr>=0.0.13       # Windows' own built-in OCR engine (no Tesseract needed)
 pyinstaller>=6.6

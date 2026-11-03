@@ -20,6 +20,7 @@ from pathlib import Path
 
 from werkzeug.serving import make_server
 
+from . import textract
 from .config import app_dir, settings
 
 TITLE = "Mail Attachment Agent"
@@ -60,6 +61,32 @@ class DesktopApi:
         if not r:
             return None
         return r if isinstance(r, str) else r[0]
+
+    def save_path(self, name: str, kind: str = "", start: str = ""):
+        """Generic native 'Save as' dialog. kind = xlsx | csv | json | txt | eml | zip."""
+        labels = {"xlsx": "Excel workbook (*.xlsx)", "csv": "CSV file (*.csv)", "json": "JSON file (*.json)",
+                  "txt": "Text file (*.txt)", "eml": "Email draft (*.eml)", "zip": "ZIP files (*.zip)"}
+        start = os.path.expanduser(start or "")
+        r = self._window.create_file_dialog(_dialog_kind(self._webview, "SAVE"),
+                                            directory=start if os.path.isdir(start) else "",
+                                            save_filename=name,
+                                            file_types=(labels[kind], "All files (*.*)") if kind in labels else ())
+        if not r:
+            return None
+        return r if isinstance(r, str) else r[0]
+
+    def open_path(self, path: str):
+        """Open a file with its default app (e.g. .eml draft -> Outlook, .xlsx -> Excel)."""
+        p = Path(os.path.expanduser(path or ""))
+        if not p.is_file():
+            return False
+        if sys.platform == "win32":
+            os.startfile(str(p))  # noqa: S606 - a file this app just wrote where the user chose
+        elif sys.platform == "darwin":
+            subprocess.Popen(["open", str(p)])
+        else:
+            subprocess.Popen(["xdg-open", str(p)])
+        return True
 
     def open_folder(self, path: str):
         p = Path(os.path.expanduser(path or ""))
@@ -144,7 +171,18 @@ def selftest(out: str | None = None) -> int:
                                        "date_to": "2025-12-25", "file_types": ["pdf"], "match_pdf_text": True})
         n = len(json.loads(data)["results"])
         lines.append(f"search -> {n} results")
-        ok &= n == 26
+        ok &= n >= 26
+        ocr = textract.ocr_engine()
+        lines.append(f"OCR engine: {ocr or 'none'}")
+        if ocr:
+            from .demo import scanned_pdf
+            t, src = textract.extract_text(scanned_pdf(["TAX INVOICE", "Grand Total 1,234.00"]), "s.pdf",
+                                           "application/pdf")
+            lines.append(f"OCR test ({src}): {t.strip()[:60]!r}")
+        st, data = get("/api/export", {"ids": [json.loads(get("/api/search", {"senders": "mck kutty"})[1])
+                                                ["results"][0]["id"]], "format": "xlsx"})
+        lines.append(f"excel export -> {st} ({len(data)} bytes)")
+        ok &= st == 200 and data[:2] == b"PK"
         srv.shutdown()
         try:
             import webview  # noqa: F401

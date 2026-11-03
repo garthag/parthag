@@ -6,6 +6,8 @@ import base64
 from dataclasses import dataclass, field
 from datetime import date, datetime
 
+FIELD_NAMES = ("doc_type", "doc_no", "doc_date", "amount", "currency", "gstin")
+
 
 @dataclass
 class SearchRequest:
@@ -21,6 +23,18 @@ class SearchRequest:
     include_inline: bool = False      # inline images = usually signature logos
     min_score: float = 0.0
     window_months: int = 3            # date-matrix row size
+    # --- extra filters
+    recipients: list[str] = field(default_factory=list)   # To / Cc
+    match_mode: str = "any"           # any | all | phrase  (how keywords combine)
+    fuzzy: bool = True                # typo tolerant matching
+    filename_pattern: str = ""        # wildcard, e.g. "INV*2025*.pdf"
+    size_min: int = 0                 # bytes
+    size_max: int = 0                 # bytes, 0 = no limit
+    amount_min: float | None = None   # uses auto-detected amount
+    amount_max: float | None = None
+    doc_types: list[str] = field(default_factory=list)    # invoice, receipt, statement ...
+    text_state: str = "any"           # any | has_text | scanned | not_analyzed
+    source: str = "live"              # live (mail server) | index (local database)
 
 
 @dataclass
@@ -31,6 +45,7 @@ class SearchCell:
     file_types: list[str]
     since: date | None            # inclusive
     before: date | None           # exclusive
+    recipients: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -54,6 +69,7 @@ class MessageMeta:
     subject: str
     date: datetime | None
     snippet: str = ""
+    to: str = ""
     attachments: list[AttachmentPart] = field(default_factory=list)
 
 
@@ -74,9 +90,13 @@ class Attachment:
     subject: str
     date: datetime | None
     snippet: str
+    to: str = ""
     score: float = 0.0
     facets: dict = field(default_factory=dict)
     duplicates: int = 0          # how many identical copies were folded into this one
+    fields: dict = field(default_factory=dict)   # smart fields: doc_type, doc_no, amount ...
+    text: str = ""               # extracted / OCR text (from the index)
+    text_source: str = ""        # "", pdf, ocr, office, plain, none
 
     @property
     def ext(self) -> str:
@@ -93,12 +113,15 @@ class Attachment:
             "inline": self.inline,
             "from_name": self.from_name,
             "from_email": self.from_email,
+            "to": self.to,
             "subject": self.subject,
             "date": self.date.isoformat() if self.date else None,
             "snippet": self.snippet[:300],
             "score": round(self.score, 3),
             "facets": {k: (None if v is None else round(v, 3)) for k, v in self.facets.items()},
             "duplicates": self.duplicates,
+            "fields": {k: self.fields.get(k) for k in FIELD_NAMES},
+            "text_source": self.text_source,
         }
 
 

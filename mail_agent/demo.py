@@ -6,6 +6,7 @@ de-duplication and downloading can all be tried end-to-end.
 
 from __future__ import annotations
 
+import io
 import random
 from datetime import datetime, timedelta, timezone
 from email import message_from_bytes, policy
@@ -46,6 +47,27 @@ def make_pdf(lines: list[str]) -> bytes:
     return bytes(out)
 
 
+def scanned_pdf(lines: list[str]) -> bytes:
+    """An image-only PDF, like a phone/scanner capture."""
+    from PIL import Image, ImageDraw, ImageFont
+    img = Image.new("L", (1240, 160 + 110 * len(lines)), 255)
+    d = ImageDraw.Draw(img)
+    font = None
+    for name in ("DejaVuSans.ttf", "arial.ttf", "Arial.ttf"):
+        try:
+            font = ImageFont.truetype(name, 40)
+            break
+        except OSError:
+            continue
+    if font is None:
+        font = ImageFont.load_default(40)
+    for i, line in enumerate(lines):
+        d.text((70, 80 + i * 110), line, fill=0, font=font)
+    buf = io.BytesIO()
+    img.save(buf, "PDF", resolution=150)
+    return buf.getvalue()
+
+
 # 1x1 PNG
 PNG = bytes.fromhex("89504e470d0a1a0a0000000d4948445200000001000000010806000000"
                     "1f15c4890000000d49444154789c6360f8cf000000030101005fa1e6c90000000049454e44ae426082")
@@ -77,9 +99,13 @@ def build_mailbox(seed: int = 7) -> dict[str, list[bytes]]:
     d = datetime(2023, 10, 5, 10, 30, tzinfo=IST)
     n = 1001
     while d < datetime(2026, 4, 1, tzinfo=IST):
-        amt = rnd.randint(8, 95) * 1000
-        pdf = make_pdf([f"MCK KUTTY TRADERS - TAX INVOICE #{n}", f"Date: {d:%d %b %Y}",
-                        f"Amount: INR {amt:,}", "GSTIN 32ABCDE1234F1Z5"])
+        q1, q2 = rnd.randint(2, 40), rnd.randint(1, 20)
+        amt = q1 * 450 + q2 * 1200
+        pdf = make_pdf([f"MCK KUTTY TRADERS - TAX INVOICE #{n}", f"Date: {d:%d %b %Y}", "GSTIN 32ABCDE1234F1Z5", "",
+                        "Item              Qty      Rate        Amount",
+                        f"Cement bags       {q1:<6}   450.00      {q1 * 450:,.2f}",
+                        f"Steel rods        {q2:<6}   1,200.00    {q2 * 1200:,.2f}",
+                        f"Grand Total                           INR {amt:,.2f}"])
         raw = _msg(mck, me, f"Invoice #{n} for {d:%B %Y}", d,
                    f"Dear customer, please find attached invoice {n} for {d:%B %Y}. Regards, MCK Kutty",
                    [(f"MCK_Invoice_{n}.pdf", pdf, "application", "pdf")], inline_logo=True)
@@ -100,6 +126,11 @@ def build_mailbox(seed: int = 7) -> dict[str, list[bytes]]:
     inbox.append(_msg(mck, me, "Documents", datetime(2025, 6, 20, tzinfo=IST), "See attached.",
                       [("scan_0620.pdf", make_pdf(["TAX INVOICE", "MCK Kutty Traders", "INR 12,500"]),
                         "application", "pdf")]))
+    # A scanned (image-only) invoice: no text layer, only OCR can read it
+    inbox.append(_msg(mck, me, "Scanned copy", datetime(2025, 9, 15, tzinfo=IST), "Scanned copy attached.",
+                      [("IMG_2207.pdf", scanned_pdf(["MCK KUTTY TRADERS", "TAX INVOICE",
+                                                      "Invoice No: MK-5521   Date: 15/09/2025",
+                                                      "Grand Total  Rs. 18,750.00"]), "application", "pdf")]))
     # Typo in display name
     inbox.append(_msg("M.C.K Kuty <billing@mckkutty.in>", me, "Invoice 2024-Special",
                       datetime(2024, 8, 14, tzinfo=IST), "Special order invoice.",
@@ -110,7 +141,8 @@ def build_mailbox(seed: int = 7) -> dict[str, list[bytes]]:
         when = datetime(2024, 1, 1, tzinfo=IST) + timedelta(days=rnd.randint(0, 700))
         who = rnd.choice(["Amazon <auto@amazon.in>", "KSEB <bills@kseb.in>", "HR <hr@company.com>",
                           "Ravi Kumar <ravi@gmail.com>"])
-        inbox.append(_msg(who, me, rnd.choice(["Your invoice", "Monthly statement", "Photos", "Payslip"]), when,
+        inbox.append(_msg(who, "you@example.com, payroll@company.com" if who.startswith("HR") else me,
+                          rnd.choice(["Your invoice", "Monthly statement", "Photos", "Payslip"]), when,
                           "Attached.", [(f"doc_{i}.pdf", make_pdf([f"Document {i}", who]), "application", "pdf"),
                                         (f"sheet_{i}.xlsx", b"PK\x03\x04demo", "application",
                                          "vnd.openxmlformats-officedocument.spreadsheetml.sheet")]))
@@ -168,7 +200,7 @@ class DemoSource:
             name, email = getaddresses([str(m["From"])])[0]
             meta = MessageMeta(folder=folder, uid=uid, message_id=str(m["Message-ID"]),
                                from_name=name or email, from_email=email.lower(),
-                               subject=str(m["Subject"]), date=self._date(m))
+                               subject=str(m["Subject"]), date=self._date(m), to=str(m["To"] or ""))
             for part, p in self._parts(m):
                 fn = p.get_filename()
                 disp = p.get_content_disposition()
@@ -184,6 +216,17 @@ class DemoSource:
             if meta.attachments:
                 out.append(meta)
         return out
+
+    def folder_info(self, folder):
+        uids = list(self.folders.get(folder, {}))
+        return {"uidvalidity": 1, "uidnext": (max(uids) + 1) if uids else 1, "messages": len(uids)}
+
+    def uids_since(self, folder, start_uid, since=None):
+        return [u for u, m in self.folders.get(folder, {}).items()
+                if u >= start_uid and (since is None or self._date(m).date() >= since)]
+
+    def all_uids(self, folder):
+        return set(self.folders.get(folder, {}))
 
     def fetch_part(self, folder, uid, part, encoding):
         for num, p in self._parts(self.folders[folder][uid]):

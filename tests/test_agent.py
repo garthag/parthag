@@ -105,7 +105,8 @@ def test_partial_base64():
 
 
 # ------------------------------------------------------------------ engine
-def test_mck_kutty_invoices_exact(engine):
+def test_mck_kutty_invoices_exact():
+    engine = SearchEngine(DemoSource(), workers=4)
     res = engine.search(SearchRequest(**MCK))
     names = [r["filename"] for r in res["results"]]
     # 24 monthly invoices Jan-2024..Dec-2025 + "M.C.K Kuty" special invoice
@@ -120,10 +121,16 @@ def test_mck_kutty_invoices_exact(engine):
     assert s["duplicate_messages"] > 0 and s["duplicate_attachments"] > 0
 
 
-def test_deep_pdf_text_finds_hidden_invoice(engine):
-    res = engine.search(SearchRequest(**MCK, match_pdf_text=True))
+def test_deep_pdf_text_finds_hidden_invoice():
+    from mail_agent import textract
+    eng = SearchEngine(DemoSource(), workers=4)
+    res = eng.search(SearchRequest(**MCK, match_pdf_text=True))
     names = [r["filename"] for r in res["results"]]
-    assert "scan_0620.pdf" in names and len(names) == 26
+    assert "scan_0620.pdf" in names                       # found via PDF text
+    if textract.ocr_engine():
+        assert "IMG_2207.pdf" in names and len(names) == 27   # image-only PDF found via OCR
+    else:
+        assert len(names) == 26
 
 
 def test_inline_logos_skipped_by_default(engine):
@@ -135,7 +142,8 @@ def test_inline_logos_skipped_by_default(engine):
 
 
 # -------------------------------------------------------------- downloader
-def test_save_organises_and_never_duplicates(engine, tmp_path):
+def test_save_organises_and_never_duplicates(tmp_path):
+    engine = SearchEngine(DemoSource(), workers=4)
     res = engine.search(SearchRequest(**MCK))
     ids = [r["id"] for r in res["results"]][:5]
     rep = save_all(engine, ids, str(tmp_path))
@@ -149,7 +157,8 @@ def test_save_organises_and_never_duplicates(engine, tmp_path):
     assert len(json.loads((tmp_path / INDEX).read_text())) == 5
 
 
-def test_zip(engine):
+def test_zip():
+    engine = SearchEngine(DemoSource(), workers=4)
     res = engine.search(SearchRequest(**MCK))
     data, rep = build_zip(engine, [r["id"] for r in res["results"]])
     assert rep["added"] == 25

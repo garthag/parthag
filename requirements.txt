@@ -1,3 +1,7 @@
 imapclient>=3.0
 flask>=3.0
 pypdf>=4.0
+openpyxl>=3.1        # Excel export / reading .xlsx attachments
+pypdfium2>=4.20      # renders scanned PDF pages for OCR
+pillow>=10.1
+pytesseract>=0.3.10  # OCR via Tesseract when it is installed (Windows uses its built-in OCR)

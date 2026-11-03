@@ -9,8 +9,13 @@
 <body>
 <header class="top">
   <div class="brand"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M12 2l8.66 5v10L12 22l-8.66-5V7z" fill="none" stroke="currentColor" stroke-width="2"/><path d="M7 9l5 3.5L17 9" fill="none" stroke="currentColor" stroke-width="2"/></svg>
-    Mail Attachment Agent</div>
-  <div id="account" class="account"></div>
+    <span class="hide-sm">Mail Attachment Agent</span></div>
+  <nav id="tabs" class="tabs hidden">
+    <button data-view="search" class="on">Search</button>
+    <button data-view="table">Table</button>
+    <button data-view="index">Index <span id="idxBadge" class="pill"></span></button>
+  </nav>
+  <div class="account"><span id="jobChip" class="jobchip hidden"></span><span id="account"></span></div>
 </header>
 
 <!-- ============ LOGIN ============ -->
@@ -51,12 +56,17 @@
 
 <!-- ============ APP ============ -->
 <main id="app" class="layout hidden">
-  <form id="searchForm" class="card side">
-    <h3>Find attachments</h3>
-    <label>From (sender name or email)
+  <form id="searchForm" class="card side" autocomplete="off">
+    <div class="seg" role="radiogroup" aria-label="Search in">
+      <label><input type="radio" name="source" value="index"><span>⚡ Index <small>instant</small></span></label>
+      <label><input type="radio" name="source" value="live" checked><span>☁ Mail server <small>live</small></span></label>
+    </div>
+    <p id="srcHint" class="muted small"></p>
+    <label>From <span class="muted">(name or email)</span>
       <input name="senders" placeholder="mck kutty, billing@acme.in"></label>
-    <label>Keywords (subject, body or file name)
-      <input name="keywords" placeholder="invoice, bill"></label>
+    <label>Keywords <span class="muted">(subject, body, file, document text)</span>
+      <span class="inrow"><input name="keywords" placeholder="invoice, bill">
+      <select name="match_mode" title="How keywords combine"><option value="any">any</option><option value="all">all</option><option value="phrase">exact phrase</option></select></span></label>
     <div class="row">
       <label>From date<input type="date" name="date_from"></label>
       <label>To date<input type="date" name="date_to"></label>
@@ -64,6 +74,7 @@
     <div class="chips" id="quickDates">
       <button type="button" data-q="fy">This FY</button>
       <button type="button" data-q="lfy">Last FY</button>
+      <button type="button" data-q="m">This month</button>
       <button type="button" data-q="y">This year</button>
       <button type="button" data-q="ly">Last year</button>
       <button type="button" data-q="90">90 days</button>
@@ -78,25 +89,47 @@
       <label><input type="checkbox" name="t" value="archive"> ZIP</label>
       <input name="custom_types" placeholder="other: xml, txt">
     </fieldset>
-    <details>
-      <summary>More options</summary>
+    <fieldset class="types">
+      <legend>Document type <span class="muted">(auto-detected)</span></legend>
+      {% for k, v in doc_labels.items() %}<label><input type="checkbox" name="dt" value="{{k}}"> {{v}}</label>{% endfor %}
+    </fieldset>
+    <details id="moreFilters">
+      <summary>More filters</summary>
+      <label>To / Cc<input name="recipients" placeholder="accounts@mycompany.in"></label>
       <label>Exclude words<input name="exclude" placeholder="reminder, cancelled"></label>
+      <label>File name pattern<input name="filename_pattern" placeholder="INV*2025*.pdf  or  part of name"></label>
+      <div class="row">
+        <label>Size min (MB)<input name="size_min_mb" inputmode="decimal" placeholder="0"></label>
+        <label>Size max (MB)<input name="size_max_mb" inputmode="decimal" placeholder="∞"></label>
+      </div>
+      <div class="row">
+        <label>Amount min<input name="amount_min" inputmode="decimal" placeholder="e.g. 10000"></label>
+        <label>Amount max<input name="amount_max" inputmode="decimal"></label>
+      </div>
+      <p class="muted small">Amounts are known after a file is read (Read text / Index → Read all documents).</p>
+      <label>Document text
+        <select name="text_state"><option value="any">any</option><option value="has_text">has text (read)</option><option value="scanned">scanned (OCR)</option><option value="not_analyzed">not read yet</option></select></label>
       <label>Folders <span class="muted">(empty = default)</span>
         <select name="folders" id="folders" multiple size="5"></select></label>
-      <label class="check"><input type="checkbox" name="match_pdf_text"> Also search <b>inside PDF text</b> (slower)</label>
+      <label class="check"><input type="checkbox" name="fuzzy" checked> Typo tolerant (kuty ≈ kutty)</label>
+      <label class="check"><input type="checkbox" name="match_pdf_text"> Read unread files to find keywords <b>inside</b> them (PDF text + OCR, slower)</label>
       <label class="check"><input type="checkbox" name="hide_duplicates" checked> Hide duplicate files</label>
       <label class="check"><input type="checkbox" name="include_inline"> Include inline images / logos</label>
       <label>Minimum match score <output id="msOut">0%</output>
         <input type="range" name="min_score" min="0" max="1" step="0.05" value="0"></label>
-      <label>Date-matrix window
+      <label>Date-matrix window <span class="muted">(live search)</span>
         <select name="window_months"><option value="1">1 month</option><option value="3" selected>3 months</option><option value="6">6 months</option><option value="12">12 months</option></select></label>
     </details>
-    <button class="btn primary wide" type="submit" id="goBtn">Search</button>
+    <div class="row btnrow">
+      <button class="btn primary wide" type="submit" id="goBtn">Search</button>
+      <button class="btn ghost" type="button" id="resetBtn" title="Clear all filters">Reset</button>
+    </div>
     <p id="searchErr" class="err"></p>
     <div id="history" class="history"></div>
   </form>
 
-  <section class="card results">
+  <!-- ======== SEARCH VIEW ======== -->
+  <section class="card results view" id="viewSearch">
     <div id="stats" class="stats muted">Fill in the search on the left. Example: From <b>mck kutty</b>, keyword <b>invoice</b>, 2024-01-01 → 2025-12-25, PDF.</div>
     <div class="toolbar">
       <input id="filter" placeholder="Filter results…" type="search">
@@ -106,22 +139,23 @@
       <span id="selInfo" class="muted">0 selected</span>
     </div>
     <div class="tablewrap">
-      <table id="tbl">
+      <table id="tbl" class="grid">
         <thead><tr>
           <th class="c"><input type="checkbox" id="chkAll" aria-label="select all"></th>
           <th data-sort="score" title="Hexagon match">Match</th>
           <th data-sort="filename">File</th>
           <th data-sort="from_name" class="cf">From</th>
+          <th data-sort="amount" class="r cf">Amount</th>
           <th data-sort="date">Date ▾</th>
           <th data-sort="size" class="r">Size</th>
           <th></th>
         </tr></thead>
         <tbody></tbody>
       </table>
-      <div id="empty" class="empty hidden">No attachments matched. Try fewer keywords, a wider date range or turn on “search inside PDF text”.</div>
+      <div id="empty" class="empty hidden">No attachments matched. Try fewer keywords, a wider date range, or turn on “read files to find keywords inside them”.</div>
     </div>
     <div class="dlbar">
-      <label>Save into folder<span class="destrow"><input id="dest" placeholder="~/MailAttachments"><button type="button" class="btn desk-only hidden" id="browse">Browse…</button></span></label>
+      <label class="grow">Save into folder<span class="destrow"><input id="dest" placeholder="~/MailAttachments"><button type="button" class="btn desk-only hidden" id="browse">Browse…</button></span></label>
       <label>Sub-folders<select id="ftpl">
         {% for k, v in folder_templates.items() %}<option value="{{k}}">{{k}}</option>{% endfor %}
       </select></label>
@@ -129,30 +163,118 @@
         {% for k, v in name_templates.items() %}<option value="{{k}}">{{k.replace('_',' + ')}}</option>{% endfor %}
       </select></label>
       <div class="dlbtns">
-        <button class="btn primary" id="saveBtn" disabled>Save to folder</button>
-        <button class="btn" id="zipBtn" disabled>Download ZIP</button>
+        <button class="btn primary need-sel" id="saveBtn" disabled>Save to folder</button>
+        <button class="btn need-sel" id="zipBtn" disabled>ZIP</button>
+        <button class="btn need-sel" id="shareBtn" disabled>Share…</button>
+        <details class="menu"><summary class="btn need-sel-s">Export ▾</summary>
+          <div class="menubody">
+            <button data-export="xlsx">Excel list (.xlsx) <small>with monthly totals</small></button>
+            <button data-export="csv">CSV list (.csv)</button>
+            <button data-export="json">JSON (.json)</button>
+            <button data-export="txt">All text (.txt) <small>reads / scans files</small></button>
+          </div></details>
+        <button class="btn need-sel" id="readBtn" disabled title="Read text, scan (OCR) and detect number / date / amount">Read text</button>
       </div>
     </div>
     <div id="dlReport" class="report hidden"></div>
   </section>
 
+  <!-- ======== TABLE VIEW ======== -->
+  <section class="card results view hidden" id="viewTable">
+    <div class="toolbar">
+      <b>Document table</b>
+      <span class="muted" id="tblInfo">Run a search first.</span>
+      <span class="spacer"></span>
+      <label class="inl">Group by <select id="groupBy"><option value="">—</option><option value="month">month</option><option value="sender">sender</option><option value="doc_type">document type</option></select></label>
+      <button class="btn" id="tblRead" title="Read text + detect fields for every row not read yet">Read all rows</button>
+      <button class="btn" data-texport="xlsx">Excel</button>
+      <button class="btn" data-texport="csv">CSV</button>
+    </div>
+    <div id="groupSummary" class="groups hidden"></div>
+    <div class="tablewrap">
+      <table class="grid sheet" id="sheet">
+        <thead><tr>
+          <th data-ssort="date">Email date</th><th data-ssort="from_name">From</th><th data-ssort="filename">File</th>
+          <th data-ssort="doc_type">Document</th><th data-ssort="doc_no">Number</th><th data-ssort="doc_date">Doc date</th>
+          <th data-ssort="amount" class="r">Amount</th><th data-ssort="currency">Cur</th><th data-ssort="gstin">GSTIN</th><th>Text</th>
+        </tr></thead>
+        <tbody></tbody>
+        <tfoot><tr><td colspan="6" id="sheetCount"></td><td class="r" id="sheetTotal"></td><td colspan="3"></td></tr></tfoot>
+      </table>
+    </div>
+    <p class="muted small pad">Click a Number, Date, Amount, Currency or GSTIN cell to correct it. Your corrections are kept in the index and never overwritten.</p>
+  </section>
+
+  <!-- ======== INDEX VIEW ======== -->
+  <section class="card results view hidden" id="viewIndex">
+    <div class="pad">
+      <h3>Local index</h3>
+      <p class="muted">A small database on this computer with the details of every attachment (not the files themselves).
+        Searching it is instant and works on text read from inside the documents. Syncing only fetches new mail.</p>
+      <div class="kpis" id="kpis"></div>
+      <div class="row wrap">
+        <label class="grow">Folders to index <span class="muted">(empty = All Mail / Inbox)</span>
+          <select id="idxFolders" multiple size="4"></select></label>
+        <label>Only mail since <span class="muted">(first sync)</span><input type="date" id="idxSince"></label>
+      </div>
+      <div class="btnrow2">
+        <button class="btn primary" id="syncBtn">Sync now</button>
+        <button class="btn" id="readAllBtn">Read all documents</button>
+        <label class="check inl"><input type="checkbox" id="readOcr" checked> scan images / scanned PDFs (OCR)</label>
+        <label class="check inl"><input type="checkbox" id="autoSync" checked> sync automatically when I connect</label>
+        <span class="spacer"></span>
+        <button class="btn ghost" id="rebuildBtn">Full rebuild</button>
+        <button class="btn ghost danger" id="clearBtn">Clear index</button>
+      </div>
+      <div id="jobBox" class="jobbox hidden">
+        <div class="bar"><i id="jobBar"></i></div>
+        <div class="row"><span id="jobText" class="muted"></span><span class="spacer"></span><button class="btn ghost" id="jobCancel">Cancel</button></div>
+      </div>
+      <div id="idxDetails" class="idxdetails"></div>
+    </div>
+  </section>
+
+  <!-- ======== PREVIEW / READER ======== -->
   <aside id="preview" class="card preview hidden">
     <div class="pvhead">
-      <div><b id="pvName"></b><div class="muted small" id="pvMeta"></div></div>
+      <div class="pvtitle"><b id="pvName"></b><div class="muted small" id="pvMeta"></div></div>
       <div class="pvtools">
-        <button class="btn ghost" id="pvPrev" title="Previous (←)">‹</button>
-        <button class="btn ghost" id="pvNext" title="Next (→)">›</button>
+        <button class="btn ghost" id="pvPrev" title="Previous (↑)">‹</button>
+        <button class="btn ghost" id="pvNext" title="Next (↓)">›</button>
         <button class="btn ghost" id="pvSel" title="Select (space)">Select</button>
         <button class="btn ghost" id="pvClose" title="Close (Esc)">✕</button>
       </div>
     </div>
     <div id="pvHex" class="pvhex"></div>
-    <div class="pvtabs" id="pvTabs"><button data-m="doc" class="on">Document</button><button data-m="text">Text</button></div>
+    <div class="pvtabs" id="pvTabs">
+      <button data-m="doc" class="on">Document</button><button data-m="text">Text</button>
+      <button data-m="fields">Details</button><button data-m="tables">Tables</button>
+    </div>
     <div id="pvBody" class="pvbody"></div>
   </aside>
 </main>
 
+<dialog id="shareDlg" class="dlg">
+  <form method="dialog" id="shareForm">
+    <button value="noop" disabled hidden aria-hidden="true"></button><!-- Enter key must never send -->
+    <h3>Share <span id="shareCount"></span></h3>
+    <label>To <span class="muted">(comma separated)</span><input name="to" placeholder="accountant@firm.in"></label>
+    <label>Subject<input name="subject"></label>
+    <label>Message<textarea name="message" rows="5"></textarea></label>
+    <p class="muted small" id="shareNote"></p>
+    <div class="dlgbtns">
+      <button class="btn primary" value="send" id="shareSend">Send email now</button>
+      <button class="btn" value="eml" id="shareEml" title="Opens in Outlook / Mail as a new draft">Open as draft</button>
+      <button class="btn" value="copy" id="shareCopy">Copy list</button>
+      <span class="spacer"></span>
+      <button class="btn ghost" value="cancel">Close</button>
+    </div>
+    <p id="shareMsg" class="small"></p>
+  </form>
+</dialog>
+
 <div id="busy" class="busy hidden"><div class="spinner"></div><span id="busyMsg">Searching…</span></div>
+<div id="toast" class="toast hidden"></div>
 <script src="{{ url_for('static', filename='app.js') }}"></script>
 </body>
 </html>

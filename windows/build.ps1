@@ -15,6 +15,12 @@ python -m PyInstaller --noconfirm --clean --windowed `
     --add-data "mail_agent/web/static;mail_agent/web/static" `
     --add-data "windows/icon.ico;." `
     --collect-submodules webview `
+    --collect-all pypdfium2 `
+    --collect-all pypdfium2_raw `
+    --collect-all winocr `
+    --collect-all winrt `
+    --collect-submodules openpyxl `
+    --exclude-module tkinter `
     --collect-submodules keyring.backends `
     --hidden-import keyring.backends.Windows `
     windows/MailAgent.py

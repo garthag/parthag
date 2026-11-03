@@ -34,7 +34,7 @@ PROVIDERS = {
     "rediff": ("imap.rediffmail.com", 993),
 }
 
-HEADER_KEY = "BODY.PEEK[HEADER.FIELDS (FROM SUBJECT DATE MESSAGE-ID)]"
+HEADER_KEY = "BODY.PEEK[HEADER.FIELDS (FROM TO CC SUBJECT DATE MESSAGE-ID)]"
 
 
 class _Conn:
@@ -141,6 +141,27 @@ class IMAPSource:
             charset = "UTF-8" if any(ord(ch) > 127 for ch in repr(crit)) else None
             return list(c.search(crit, charset=charset))
 
+    # ---------------------------------------------------- incremental index
+    def folder_info(self, folder: str) -> dict:
+        with self._conn() as c:
+            st = c.folder_status(folder, ["UIDVALIDITY", "UIDNEXT", "MESSAGES"])
+        return {"uidvalidity": int(st.get(b"UIDVALIDITY", 0)), "uidnext": int(st.get(b"UIDNEXT", 0)),
+                "messages": int(st.get(b"MESSAGES", 0))}
+
+    def uids_since(self, folder: str, start_uid: int, since=None) -> list[int]:
+        """UIDs >= start_uid (only mails with attachments on Gmail)."""
+        crit: list = ["UID", f"{max(1, start_uid)}:*"]
+        if since:
+            crit += ["SINCE", since]
+        if self.is_gmail:
+            crit += ["X-GM-RAW", "has:attachment"]
+        with self._conn(folder) as c:
+            return [u for u in c.search(crit) if u >= start_uid]   # "n:*" always returns the last UID
+
+    def all_uids(self, folder: str) -> set[int]:
+        with self._conn(folder) as c:
+            return set(c.search("ALL"))
+
     # ----------------------------------------------------------------- fetch
     def fetch_meta(self, folder: str, uids: list[int]) -> list[MessageMeta]:
         if not uids:
@@ -184,11 +205,12 @@ def _meta_from_headers(folder: str, uid: int, raw: bytes, internal) -> MessageMe
     try:
         msg = message_from_bytes(raw, policy=policy.default)
         frm = str(msg.get("From", "") or "")
+        to = ", ".join(str(msg.get(h, "") or "") for h in ("To", "Cc") if msg.get(h))
         subject = str(msg.get("Subject", "") or "")
         mid = str(msg.get("Message-ID", "") or "").strip()
         date_hdr = msg.get("Date")
     except Exception:
-        frm = subject = mid = ""
+        frm = subject = mid = to = ""
         date_hdr = None
     name, email = (getaddresses([frm]) or [("", "")])[0]
     dt = None
@@ -200,4 +222,4 @@ def _meta_from_headers(folder: str, uid: int, raw: bytes, internal) -> MessageMe
     if dt is None and internal is not None:
         dt = internal
     return MessageMeta(folder=folder, uid=uid, message_id=mid, from_name=name or email,
-                       from_email=email.lower(), subject=subject, date=dt)
+                       from_email=email.lower(), subject=subject, date=dt, to=to)
