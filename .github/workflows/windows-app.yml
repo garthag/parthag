@@ -79,7 +79,35 @@ jobs:
             dist/MailAttachmentAgent-Portable-*.zip
           if-no-files-found: error
 
-      - name: Publish release (only for v* tags)
+      - name: Stable file names for the download link
+        shell: pwsh
+        run: |
+          Copy-Item "dist\MailAttachmentAgent-Setup-${{ steps.ver.outputs.version }}.exe" "dist\MailAttachmentAgent-Setup.exe"
+          Copy-Item "dist\MailAttachmentAgent-Portable-${{ steps.ver.outputs.version }}.zip" "dist\MailAttachmentAgent-Portable.zip"
+
+      - name: Publish "latest" download (Releases page)
+        if: github.event_name != 'pull_request'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: mail-agent-latest
+          target_commitish: ${{ github.sha }}
+          name: Mail Attachment Agent for Windows (latest)
+          make_latest: true
+          overwrite_files: true
+          body: |
+            **Download `MailAttachmentAgent-Setup.exe` below and double-click it.**
+            No administrator rights needed. If Windows SmartScreen says "Windows protected your PC",
+            click **More info -> Run anyway** (the app is not code-signed).
+
+            Prefer no installer? Download `MailAttachmentAgent-Portable.zip`, unzip, run `MailAgent.exe`.
+
+            Build ${{ steps.ver.outputs.version }} from commit ${{ github.sha }}. Tested on Windows during the build
+            (unit tests + packaged-app self-test: window, OCR, Excel export, saved login).
+          files: |
+            dist/MailAttachmentAgent-Setup.exe
+            dist/MailAttachmentAgent-Portable.zip
+
+      - name: Publish versioned release (only for v* tags)
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
