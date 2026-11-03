@@ -50,7 +50,13 @@ jobs:
         run: |
           $out = Join-Path $PWD "selftest.txt"
           $p = Start-Process -FilePath "dist\MailAgent\MailAgent.exe" -ArgumentList "desktop", "--selftest", "`"$out`"" -Wait -PassThru
-          if (Test-Path $out) { Get-Content $out }
+          if (Test-Path $out) {
+            Get-Content $out
+            "### Packaged app self-test" >> $env:GITHUB_STEP_SUMMARY
+            '```' >> $env:GITHUB_STEP_SUMMARY
+            Get-Content $out >> $env:GITHUB_STEP_SUMMARY
+            '```' >> $env:GITHUB_STEP_SUMMARY
+          }
           if ($p.ExitCode -ne 0) { throw "Self-test failed with exit code $($p.ExitCode)" }
 
       - name: Build installer
@@ -58,7 +64,7 @@ jobs:
         run: |
           $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
           if (-not (Test-Path $iscc)) { choco install innosetup -y --no-progress | Out-Null }
-          & $iscc "/DMyAppVersion=${{ steps.ver.outputs.version }}" windows/installer.iss
+          & $iscc /Q "/DMyAppVersion=${{ steps.ver.outputs.version }}" windows/installer.iss
           if ($LASTEXITCODE -ne 0) { throw "Inno Setup failed" }
 
       - name: Portable ZIP

@@ -179,6 +179,9 @@ def selftest(out: str | None = None) -> int:
             t, src = textract.extract_text(scanned_pdf(["TAX INVOICE", "Grand Total 1,234.00"]), "s.pdf",
                                            "application/pdf")
             lines.append(f"OCR test ({src}): {t.strip()[:60]!r}")
+            ok &= src == "ocr" and "INVOICE" in t.upper()
+        elif sys.platform == "win32":
+            ok = False                         # the Windows app must ship working OCR
         st, data = get("/api/export", {"ids": [json.loads(get("/api/search", {"senders": "mck kutty"})[1])
                                                 ["results"][0]["id"]], "format": "xlsx"})
         lines.append(f"excel export -> {st} ({len(data)} bytes)")
