@@ -119,6 +119,35 @@ const { start } = require('./devserver');
   await page.waitForSelector('#tbl tbody .risky');
   console.log('risky label: shown');
 
+  // ---- people: scan mailbox, list every address once, suggestions while typing
+  await page.click('#tabs [data-view=people]');
+  await page.click('#peopleScan');
+  await page.waitForFunction(() => /unique email addresses/.test(document.querySelector('#peopleStats').textContent), null, { timeout: 30000 });
+  const emails = await page.$$eval('#peopleTbl tbody tr', (trs) => trs.map((t) => t.dataset.e));
+  assert.equal(emails.length, new Set(emails).size, 'no duplicate addresses');
+  assert.ok(emails.includes('accounts@mckkutty.com') && !emails.includes('ACCOUNTS@MCKKUTTY.COM'));
+  console.log('people:', (await page.textContent('#peopleStats')).replace(/\s+/g, ' '));
+  await page.fill('#peopleFilter', 'mckkutty.com');
+  const dom = await page.$$eval('#peopleTbl tbody tr', (trs) => trs.map((t) => t.dataset.e));
+  assert.ok(dom.length >= 6 && dom.every((e) => e.endsWith('@mckkutty.com')), JSON.stringify(dom));
+  console.log('filter mckkutty.com ->', dom.join(', '));
+  await shot('gas-people.png');
+  await page.click('#tabs [data-view=search]');
+  await page.fill('[name=senders]', '');
+  await page.type('[name=senders]', 'mckkutty.com');
+  await page.waitForSelector('#suggest:not(.hidden) .sg');
+  const sg = await page.$$eval('#suggest .sg', (els) => els.map((e) => e.textContent.trim()));
+  assert.match(sg[0], /All \d+ addresses @mckkutty\.com/);
+  assert.ok(sg.slice(1).every((t) => t.includes('@mckkutty.com')));
+  console.log('suggest "mckkutty.com":', sg.length - 1, 'addresses + "' + sg[0] + '"');
+  await shot('gas-suggest.png');
+  await page.fill('[name=senders]', '');
+  await page.type('[name=senders]', 'parthag');
+  await page.waitForFunction(() => /parthag@mckkutty\.com/.test(document.querySelector('#suggest .sg')?.textContent || ''));
+  await page.keyboard.press('Enter');
+  assert.equal(await page.inputValue('[name=senders]'), 'parthag@mckkutty.com, ');
+  console.log('suggest "parthag" + Enter ->', JSON.stringify(await page.inputValue('[name=senders]')));
+
   // ---- data view
   await page.click('#tabs [data-view=data]');
   await page.waitForFunction(() => /documents read/.test(document.querySelector('#kpis').textContent));

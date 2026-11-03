@@ -216,3 +216,39 @@ test('doGet: uses the Index file, or the built-in screen when there is none (2-f
     assert.throws(() => none.ctx.doGet(), /name it exactly Index/);
   }
 });
+
+test('address parser: names with commas, quotes, plain addresses, duplicates', () => {
+  const { ctx } = makeEnv();
+  const r = JSON.parse(JSON.stringify(ctx.parseAddressList('"Kutty, MCK" <Accounts@MCKKUTTY.in>, ravi@gmail.com, Parthag <parthag@mckkutty.com>, accounts@mckkutty.in, <x@y.org>')));
+  assert.deepEqual(r, [
+    { email: 'accounts@mckkutty.in', name: 'Kutty, MCK' }, { email: 'ravi@gmail.com', name: '' },
+    { email: 'parthag@mckkutty.com', name: 'Parthag' }, { email: 'x@y.org', name: '' }]);
+  assert.deepEqual(JSON.parse(JSON.stringify(ctx.parseAddressList('undisclosed-recipients:;'))), []);
+});
+
+test('people scan: every address once, counts, newest name; incremental update; saved to sheet', () => {
+  const msgs = [
+    makeMessage('a1', { from: 'MCK Kutty <accounts@mckkutty.com>', to: 'Parthag <parthag@mckkutty.com>', cc: 'sales@mckkutty.com, ravi@gmail.com', subject: 'x', date: '2025-01-01T00:00:00Z', threadId: 'T1' }),
+    makeMessage('a2', { from: 'Parthag <parthag@mckkutty.com>', to: 'accounts@mckkutty.com', subject: 're: x', date: '2025-01-02T00:00:00Z', threadId: 'T1' }),
+    makeMessage('a3', { from: 'Accounts Team <ACCOUNTS@mckkutty.com>', to: 'parthag@mckkutty.com', subject: 'y', date: '2025-02-01T00:00:00Z' }),
+  ];
+  const { ctx } = makeEnv({ messages: msgs });
+  const list = ctx.contactsListThreads(0, null);
+  assert.equal(list.ids.length, 2);                                   // 2 conversations
+  const res = ctx.contactsFromThreads(list.ids, 0);
+  const by = Object.fromEntries(res.contacts.map((c) => [c[0], c]));
+  assert.deepEqual(Object.keys(by).sort(), ['accounts@mckkutty.com', 'parthag@mckkutty.com', 'ravi@gmail.com', 'sales@mckkutty.com']);
+  assert.equal(by['accounts@mckkutty.com'][2], 3);
+  assert.equal(by['accounts@mckkutty.com'][1], 'Accounts Team');      // newest display name
+  assert.equal(res.messages, 3);
+  ctx.saveContacts(res.contacts, res.newest);
+  const saved = ctx.getContacts();
+  assert.equal(saved.rows.length, 4);
+  assert.equal(saved.syncedTo, Date.parse('2025-02-01T00:00:00Z'));
+  // incremental: nothing newer -> nothing counted twice
+  const again = ctx.contactsFromThreads(list.ids, saved.syncedTo);
+  assert.equal(again.messages, 0);
+  assert.equal(again.contacts.length, 0);
+  const ex = ctx.exportContacts(saved.rows);
+  assert.match(ex.url, /spreadsheets/);
+});

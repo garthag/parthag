@@ -580,9 +580,12 @@ function showView(v) {
   $("#viewSearch").classList.toggle("hidden", v !== "search");
   $("#viewTable").classList.toggle("hidden", v !== "table");
   $("#viewData").classList.toggle("hidden", v !== "data");
+  $("#viewPeople").classList.toggle("hidden", v !== "people");
+  hideSuggest();
   if (v !== "search") closePreview(true);
   if (v === "table") renderSheet();
   if (v === "data") refreshData();
+  if (v === "people") { renderPeople(); setTimeout(() => $("#peopleFilter").focus(), 0); }
 }
 $("#tabs").addEventListener("click", (e) => { const v = e.target.closest("button")?.dataset.view; if (v) showView(v); });
 async function refreshData() {
@@ -590,7 +593,7 @@ async function refreshData() {
     const u = await run("getUser");
     $("#account").textContent = u.email;
     const s = u.store, k = (v, l) => `<div class="kpi"><b>${v}</b><span>${l}</span></div>`;
-    $("#kpis").innerHTML = k(s.rows || 0, "documents read / corrected") + k(rows.length, "in current results") + k(esc(u.timeZone), "time zone");
+    $("#kpis").innerHTML = k(s.rows || 0, "documents read / corrected") + k(contacts.rows.length.toLocaleString(), "email addresses found") + k(rows.length, "in current results") + k(esc(u.timeZone), "time zone");
     const a = $("#openStore"); if (s.url) { a.href = s.url; a.classList.remove("hidden"); } else a.classList.add("hidden");
   } catch (er) { toast(er.message); }
 }
@@ -599,6 +602,196 @@ $("#eraseBtn").addEventListener("click", async () => {
   try { const r = await run("eraseData"); try { localStorage.clear(); } catch { /* ignore */ } toast(r.note, 6000); refreshData(); } catch (er) { toast(er.message); }
 });
 
+/* ============================================================ people (all addresses) */
+// contacts.rows: [[email, name, count, lastMs], ...] - one row per address, no duplicates
+let contacts = { rows: [], syncedTo: 0, updatedAt: 0, me: "" };
+let peopleSort = "count", peopleDir = -1, domainFilter = "";
+function contactsFromCache() { const c = store("contacts"); if (c && Array.isArray(c.rows)) contacts = c; }
+function contactsToCache() { try { localStorage.setItem("contacts", JSON.stringify(contacts)); } catch { /* too big for browser storage - fine, the sheet has it */ } }
+const domainOf = (e) => e.split("@")[1] || "";
+
+/** Rank addresses for what was typed: exact > whole domain > starts with > word starts with > contains. */
+function matchContacts(q) {
+  q = q.trim().toLowerCase();
+  if (q.length < 2) return [];
+  const bare = q.replace(/^@/, "");
+  const out = [];
+  for (const r of contacts.rows) {
+    const e = r[0], n = (r[1] || "").toLowerCase(), local = e.split("@")[0];
+    let s = -1;
+    if (e === bare) s = 0;
+    else if (domainOf(e) === bare || domainOf(e).endsWith("." + bare)) s = 1;
+    else if (e.startsWith(bare) || local.startsWith(bare)) s = 2;
+    else if (n.split(/[\s.,'-]+/).some((w) => w.startsWith(bare)) || n.startsWith(bare)) s = 3;
+    else if (e.includes(bare) || n.includes(bare)) s = 4;
+    if (s >= 0) out.push([s, r]);
+  }
+  out.sort((a, b) => a[0] - b[0] || b[1][2] - a[1][2] || a[1][0].localeCompare(b[1][0]));
+  return out.map((x) => x[1]);
+}
+function hl(text, q) {
+  const t = esc(text), b = q.trim().replace(/^@/, "");
+  if (!b) return t;
+  return t.replace(new RegExp("(" + b.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + ")", "ig"), "<mark>$1</mark>");
+}
+
+// ---- suggestions while typing (From, To/Cc, Share "To")
+let sgInput = null, sgItems = [], sgOn = -1;
+const sgBox = $("#suggest");
+function currentToken(inp) { const v = inp.value, i = v.lastIndexOf(","); return v.slice(i + 1); }
+function showSuggest(inp) {
+  const q = currentToken(inp).trim();
+  const list = matchContacts(q);
+  if (!list.length) { hideSuggest(); return; }
+  sgInput = inp; sgOn = 0;
+  const bare = q.toLowerCase().replace(/^@/, "");
+  const sameDomain = list.filter((r) => domainOf(r[0]) === bare);
+  sgItems = [];
+  if (sameDomain.length > 1) sgItems.push({ all: true, value: bare, label: `All ${sameDomain.length} addresses @${bare}` });
+  list.slice(0, 60).forEach((r) => sgItems.push({ value: r[0], r }));
+  sgBox.innerHTML = `<div class="head">${list.length} address${list.length > 1 ? "es" : ""} match “${esc(q)}”</div>` + sgItems.map((it, i) => it.all
+    ? `<div class="sg all ${i === sgOn ? "on" : ""}" data-i="${i}" role="option">★ ${esc(it.label)}</div>`
+    : `<div class="sg ${i === sgOn ? "on" : ""}" data-i="${i}" role="option"><span class="nm">${hl(it.r[1] || "", q) || "—"}</span><span class="em">${hl(it.r[0], q)}${it.r[0] === contacts.me ? '<span class="me">(you)</span>' : ""}</span><span class="ct">${it.r[2]} · ${it.r[3] ? fmtDate(new Date(it.r[3]).toISOString()) : ""}</span></div>`).join("");
+  const rc = inp.getBoundingClientRect();
+  Object.assign(sgBox.style, { left: rc.left + "px", top: rc.bottom + 4 + "px", width: Math.max(rc.width, 460) + "px" });
+  if (rc.left + Math.max(rc.width, 460) > window.innerWidth - 8) sgBox.style.left = Math.max(8, window.innerWidth - Math.max(rc.width, 460) - 8) + "px";
+  sgBox.classList.remove("hidden");
+}
+function hideSuggest() { sgBox.classList.add("hidden"); sgInput = null; sgItems = []; sgOn = -1; }
+function pickSuggest(i) {
+  const it = sgItems[i], inp = sgInput; if (!it || !inp) return;
+  const v = inp.value, cut = v.lastIndexOf(",");
+  const before = cut >= 0 ? v.slice(0, cut + 1) + " " : "";
+  const parts = (before + it.value).split(",").map((x) => x.trim()).filter(Boolean);
+  inp.value = [...new Set(parts.map((x) => x.toLowerCase()))].map((l) => parts.find((x) => x.toLowerCase() === l)).join(", ") + ", ";
+  hideSuggest(); inp.focus();
+}
+$$("[data-suggest]").forEach((inp) => {
+  inp.addEventListener("input", () => showSuggest(inp));
+  inp.addEventListener("focus", () => { if (currentToken(inp).trim().length >= 2) showSuggest(inp); });
+  inp.addEventListener("blur", () => setTimeout(() => { if (sgInput === inp) hideSuggest(); inp.value = inp.value.replace(/[,\s]+$/, ""); }, 180));
+  inp.addEventListener("keydown", (e) => {
+    if (sgBox.classList.contains("hidden") || sgInput !== inp) return;
+    if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+      e.preventDefault(); sgOn = (sgOn + (e.key === "ArrowDown" ? 1 : -1) + sgItems.length) % sgItems.length;
+      $$(".sg", sgBox).forEach((el, i) => el.classList.toggle("on", i === sgOn));
+      $$(".sg", sgBox)[sgOn]?.scrollIntoView({ block: "nearest" });
+    } else if (e.key === "Enter" || e.key === "Tab") { if (sgOn >= 0) { e.preventDefault(); pickSuggest(sgOn); } }
+    else if (e.key === "Escape") hideSuggest();
+  });
+});
+sgBox.addEventListener("mousedown", (e) => { const el = e.target.closest(".sg"); if (el) { e.preventDefault(); pickSuggest(+el.dataset.i); } });
+window.addEventListener("resize", hideSuggest);
+$(".side").addEventListener("scroll", hideSuggest);
+
+// ---- scanning the mailbox
+let scanning = false;
+async function scanPeople(full) {
+  if (scanning) return;
+  scanning = true; stopFlag = false;
+  const since = full ? 0 : (contacts.syncedTo || 0);
+  try {
+    const ids = [];
+    let tok = null;
+    do {
+      const r = await run("contactsListThreads", since, tok);
+      ids.push(...r.ids); tok = r.next;
+      progress(`Finding conversations… ${ids.length.toLocaleString()}`);
+    } while (tok && !stopFlag);
+    if (stopFlag) { toast("Stopped – nothing was changed"); return; }
+    const map = new Map(full ? [] : contacts.rows.map((r) => [r[0], r.slice()]));
+    let newest = since, msgs = 0;
+    const errors = await pool(chunk(ids, 50), 8, async (c) => {
+      const r = await run("contactsFromThreads", c, since);
+      msgs += r.messages; newest = Math.max(newest, r.newest);
+      for (const [email, name, count, last] of r.contacts) {
+        const cur = map.get(email);
+        if (!cur) { map.set(email, [email, name, count, last]); continue; }
+        cur[2] += count;
+        if (last >= cur[3]) { cur[3] = last; if (name) cur[1] = name; } else if (!cur[1] && name) cur[1] = name;
+      }
+    }, (d, n) => progress(`Reading addresses · ${d}/${n} batches · ${map.size.toLocaleString()} unique addresses`, d, n));
+    if (stopFlag) { toast("Stopped – nothing was changed (run it again to finish)"); return; }
+    if (errors.length) toast(`${errors.length} batch(es) failed – run “Scan my mail” again to fill the gaps`, 6000);
+    const rows = [...map.values()].sort((a, b) => b[2] - a[2]);
+    progress("Saving the list…");
+    await run("saveContacts", rows, errors.length ? since : (newest || since));
+    contacts = { rows, syncedTo: errors.length ? since : (newest || since), updatedAt: Date.now(), me: contacts.me };
+    contactsToCache(); renderPeople(); updatePeopleHint();
+    toast(`${rows.length.toLocaleString()} unique addresses${msgs ? ` · ${msgs.toLocaleString()} new emails read` : " · nothing new"}`);
+  } catch (er) { toast(er.message, 6000); }
+  finally { scanning = false; progress(null); }
+}
+$("#peopleScan").addEventListener("click", () => scanPeople(false));
+$("#peopleFull").addEventListener("click", () => scanPeople(true));
+$("#peopleHintBtn").addEventListener("click", (e) => { e.preventDefault(); showView("people"); scanPeople(false); });
+function updatePeopleHint() { $("#peopleHint").classList.toggle("hidden", contacts.rows.length > 0); }
+
+// ---- People view
+function peopleList() {
+  const q = $("#peopleFilter").value.trim();
+  let list = q.length >= 1 ? (q.length >= 2 ? matchContacts(q) : contacts.rows.filter((r) => r[0].startsWith(q.toLowerCase()))) : contacts.rows.slice();
+  if (domainFilter) list = list.filter((r) => domainOf(r[0]) === domainFilter);
+  if (!q || peopleSort !== "count" || peopleDir !== -1) {
+    const k = { email: 0, name: 1, count: 2, last: 3 }[peopleSort];
+    list = list.slice().sort((a, b) => { const x = k === 1 ? (a[1] || "~").toLowerCase() : a[k], y = k === 1 ? (b[1] || "~").toLowerCase() : b[k]; return (x < y ? -1 : x > y ? 1 : 0) * peopleDir; });
+  }
+  return list;
+}
+function renderPeople() {
+  const all = contacts.rows, q = $("#peopleFilter").value.trim();
+  $("#peopleStats").innerHTML = all.length
+    ? `<b>${all.length.toLocaleString()}</b> unique email addresses · <b>${new Set(all.map((r) => domainOf(r[0]))).size.toLocaleString()}</b> domains · updated ${contacts.updatedAt ? fmtDate(new Date(contacts.updatedAt).toISOString()) : "—"}`
+    : "Every email address in your mailbox (From, To, Cc), each listed once. Press <b>Scan my mail</b> – the first scan takes a few minutes, later ones only read new mail.";
+  $("#peopleScan").textContent = all.length ? "Update" : "Scan my mail";
+  const doms = new Map(); all.forEach((r) => doms.set(domainOf(r[0]), (doms.get(domainOf(r[0])) || 0) + 1));
+  $("#domainChips").innerHTML = all.length ? [...doms.entries()].sort((a, b) => b[1] - a[1]).slice(0, 14).map(([d, n]) =>
+    `<button type="button" data-dom="${esc(d)}" class="${d === domainFilter ? "on" : ""}">${esc(d)} · ${n}</button>`).join("") + (domainFilter ? `<button type="button" data-dom="">✕ all domains</button>` : "") : "";
+  const list = peopleList();
+  $("#peopleTbl tbody").innerHTML = list.slice(0, 1500).map((r) => `<tr data-e="${esc(r[0])}">
+      <td>${hl(r[1] || "", q) || '<span class="muted">—</span>'}</td>
+      <td>${hl(r[0], q)}${r[0] === contacts.me ? '<span class="me">(you)</span>' : ""}</td>
+      <td class="r amt">${r[2].toLocaleString()}</td>
+      <td class="nw">${r[3] ? fmtDate(new Date(r[3]).toISOString()) : ""}</td>
+      <td><button class="btn ghost" data-find="${esc(r[0])}" title="Find attachments from this address">Attachments →</button></td></tr>`).join("");
+  $("#peopleEmpty").classList.toggle("hidden", !!list.length || !all.length);
+  $("#peopleEmpty").textContent = `No address matches “${q}”.`;
+  $("#peopleCount").textContent = all.length ? `${list.length.toLocaleString()} shown${list.length > 1500 ? " (first 1,500 in the table – Copy / CSV / Sheet include all)" : ""}` : "";
+  $$("#peopleTbl th[data-psort]").forEach((th) => { th.textContent = th.textContent.replace(/ [▴▾]$/, "") + (th.dataset.psort === peopleSort ? (peopleDir < 0 ? " ▾" : " ▴") : ""); });
+}
+$("#peopleFilter").addEventListener("input", renderPeople);
+$("#domainChips").addEventListener("click", (e) => { const d = e.target.dataset?.dom; if (d === undefined) return; domainFilter = d === domainFilter ? "" : d; renderPeople(); });
+$("#peopleTbl thead").addEventListener("click", (e) => { const th = e.target.closest("th[data-psort]"); if (!th) return; peopleDir = th.dataset.psort === peopleSort ? -peopleDir : (["count", "last"].includes(th.dataset.psort) ? -1 : 1); peopleSort = th.dataset.psort; renderPeople(); });
+$("#peopleTbl tbody").addEventListener("click", (e) => {
+  const em = e.target.dataset?.find; if (!em) return;
+  fillForm({ ...readForm(), senders: em, keywords: "" }); showView("search"); $("#searchForm").requestSubmit();
+});
+$("#peopleCopy").addEventListener("click", async () => {
+  const text = peopleList().map((r) => r[0]).join(", ");
+  try { await navigator.clipboard.writeText(text); toast(`${peopleList().length} addresses copied`); } catch { toast("Copy not allowed here – use CSV"); }
+});
+$("#peopleCsv").addEventListener("click", () => {
+  const q = (v) => (/[",\n]/.test(v) ? `"${String(v).replace(/"/g, '""')}"` : v);
+  const csv = "﻿Name,Email,Domain,Emails,Last email\n" + peopleList().map((r) => [r[1] || "", r[0], domainOf(r[0]), r[2], r[3] ? new Date(r[3]).toISOString().slice(0, 10) : ""].map(q).join(",")).join("\n");
+  downloadBlob(new Blob([csv], { type: "text/csv" }), "email-addresses.csv");
+});
+$("#peopleSheet").addEventListener("click", async () => {
+  busy(true, "Creating Google Sheet…");
+  try { const r = await run("exportContacts", peopleList()); window.open(r.url, "_blank", "noopener"); toast("Google Sheet created"); }
+  catch (er) { toast(er.message); } finally { busy(false); }
+});
+async function loadContacts() {
+  contactsFromCache(); updatePeopleHint();
+  try {
+    const c = await run("getContacts");
+    if (c.rows.length || !contacts.rows.length) { contacts = c; contactsToCache(); }
+    contacts.me = c.me;
+    updatePeopleHint(); if (!$("#viewPeople").classList.contains("hidden")) renderPeople();
+    // keep the list fresh: quietly read new mail if the last update is older than 6 hours
+    if (contacts.syncedTo && Date.now() - (contacts.updatedAt || 0) > 6 * 3600e3) scanPeople(false);
+  } catch { /* offline / first run - suggestions just stay empty */ }
+}
+
 /* ============================================================ start */
 (function init() {
   pvMode = store("pvMode") || "doc";
@@ -606,6 +799,7 @@ $("#eraseBtn").addEventListener("click", async () => {
   if (store("layout")) $("#layout").value = store("layout");
   if (store("naming")) $("#naming").value = store("naming");
   renderHistory();
+  loadContacts();
   run("getUser").then((u) => { $("#account").textContent = u.email; }).catch((e) => { $("#account").textContent = ""; toast(e.message, 8000); });
 })();
 </script>

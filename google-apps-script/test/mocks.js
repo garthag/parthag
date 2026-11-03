@@ -19,7 +19,7 @@ class Blob {
 }
 
 /** A message in Gmail API shape. attachments: [{name, mime, data:Buffer, inline}] */
-function makeMessage(id, { from, to = 'parthag@mckkutty.com', subject, date, body = '', attachments = [], messageId }) {
+function makeMessage(id, { from, to = 'parthag@mckkutty.com', cc, subject, date, body = '', attachments = [], messageId, threadId }) {
   const parts = [
     { partId: '0', mimeType: 'multipart/alternative', filename: '', headers: [], body: { size: 0 },
       parts: [
@@ -37,11 +37,11 @@ function makeMessage(id, { from, to = 'parthag@mckkutty.com', subject, date, bod
     });
   });
   return {
-    id, threadId: 'T' + id, internalDate: String(new Date(date).getTime()), labelIds: ['INBOX'],
+    id, threadId: threadId || 'T' + id, internalDate: String(new Date(date).getTime()), labelIds: ['INBOX'],
     snippet: body.slice(0, 100),
     payload: { partId: '', mimeType: 'multipart/mixed', filename: '',
-               headers: [{ name: 'From', value: from }, { name: 'To', value: to }, { name: 'Subject', value: subject },
-                         { name: 'Date', value: new Date(date).toUTCString() }, { name: 'Message-ID', value: messageId || `<${id}@x>` }],
+               headers: [{ name: 'From', value: from }, { name: 'To', value: to }].concat(cc ? [{ name: 'Cc', value: cc }] : []).concat([{ name: 'Subject', value: subject },
+                         { name: 'Date', value: new Date(date).toUTCString() }, { name: 'Message-ID', value: messageId || `<${id}@x>` }]),
                body: { size: 0 }, parts },
     _att: Object.fromEntries(attachments.map((a, i) => [`ATT-${id}-${i + 1}`, a.data])),
     _texts: attachments.filter((a) => a.text).map((a) => [a.name, a.text]),
@@ -57,6 +57,7 @@ function matches(msg, query) {
   const tokens = query.match(/\{[^}]*\}|-?"[^"]*"|\S+/g) || [];
   const one = (tok) => {
     tok = tok.replace(/"/g, '');
+    if (tok === 'ALL') return true;
     if (tok === 'has:attachment') return names.length > 0;
     if (tok.startsWith('from:')) { const v = tok.slice(5).toLowerCase(); return h.from.toLowerCase().includes(v) || h.from.toLowerCase().replace(/[^0-9a-z@.]/g, '').includes(v); }
     if (tok.startsWith('to:') || tok.startsWith('cc:')) return (h.to || '').toLowerCase().includes(tok.slice(3).toLowerCase());
@@ -80,6 +81,7 @@ class Range {
   setValues(v) { v.forEach((row, i) => { const R = (this.sheet.rows[this.r - 1 + i] ||= []); row.forEach((x, j) => { R[this.c - 1 + j] = x; }); }); return this; }
   setValue(x) { return this.setValues([[x]]); }
   setFormula(f) { return this.setValue(f); }
+  clearContent() { for (let i = 0; i < this.nr; i++) { const R = this.sheet.rows[this.r - 1 + i]; if (R) for (let j = 0; j < this.nc; j++) R[this.c - 1 + j] = ''; } this.sheet.rows = this.sheet.rows.filter((r) => r.some((x) => x !== '' && x != null)); return this; }
   getRow() { return this.r; }
   createTextFinder(t) {
     const self = this; let exact = false;
@@ -91,7 +93,8 @@ class Range {
 ['setFontWeight', 'setBackground', 'setFontColor', 'setNumberFormat'].forEach((m) => { Range.prototype[m] = function () { return this; }; });
 
 class Sheet {
-  constructor(name) { this.name = name; this.rows = []; }
+  constructor(name, parent) { this.name = name; this.rows = []; this.parent = parent; }
+  getParent() { return this.parent; }
   getName() { return this.name; } setName(n) { this.name = n; return this; }
   getLastRow() { return this.rows.length; }
   getRange(r, c, nr, nc) { return new Range(this, r, c, nr, nc); }
@@ -111,6 +114,15 @@ function makeEnv({ messages = [], docTexts = {}, sheetsFromXlsx = {}, htmlFiles 
       list: (_u, opt) => { const ids = messages.filter((m) => matches(m, opt.q)).map((m) => ({ id: m.id })); const start = opt.pageToken ? Number(opt.pageToken) : 0; const page = ids.slice(start, start + opt.maxResults); return { messages: page, nextPageToken: start + opt.maxResults < ids.length ? String(start + opt.maxResults) : undefined }; },
       get: (_u, id) => { if (!byId[id]) throw new Error('Not Found'); return JSON.parse(JSON.stringify({ ...byId[id], _att: undefined })); },
       Attachments: { get: (_u, id, attId) => ({ data: b64url(byId[id]._att[attId]) }) },
+    },
+    Threads: {
+      list: (_u, opt) => {
+        const tids = [...new Set(messages.filter((m) => matches(m, opt.q.replace('-in:chats', '').trim() || 'ALL')).map((m) => m.threadId))].map((id) => ({ id }));
+        const start = opt.pageToken ? Number(opt.pageToken) : 0;
+        return { threads: tids.slice(start, start + opt.maxResults), nextPageToken: start + opt.maxResults < tids.length ? String(start + opt.maxResults) : undefined };
+      },
+      get: (_u, tid, opt) => ({ id: tid, messages: messages.filter((m) => m.threadId === tid).map((m) => ({ id: m.id, internalDate: m.internalDate,
+        payload: { headers: m.payload.headers.filter((h) => !opt.metadataHeaders || opt.metadataHeaders.includes(h.name)) } })) }),
     } } },
     Utilities: {
       base64DecodeWebSafe: (s) => toBytes(Buffer.from(s.replace(/-/g, '+').replace(/_/g, '/'), 'base64')),
@@ -126,7 +138,7 @@ function makeEnv({ messages = [], docTexts = {}, sheetsFromXlsx = {}, htmlFiles 
     PropertiesService: { getUserProperties: () => ({ getProperty: (k) => store.props[k] || null, setProperty: (k, v) => { store.props[k] = v; }, deleteProperty: (k) => { delete store.props[k]; } }) },
     LockService: { getUserLock: () => ({ waitLock() {}, releaseLock() {} }) },
     SpreadsheetApp: {
-      create: (name) => { const id = newId('SS'); const sheets = [new Sheet('Sheet1')]; const ss = { id, name, sheets, getId: () => id, getName: () => name, getUrl: () => `https://docs.google.com/spreadsheets/d/${id}`, getSheets: () => sheets, getSheetByName: (n) => sheets.find((s) => s.name === n) || null, insertSheet: (n) => { const s = new Sheet(n || `Sheet${sheets.length + 1}`); sheets.push(s); return s; } }; store.spreadsheets[id] = ss; return ss; },
+      create: (name) => { const id = newId('SS'); const sheets = []; const ss = { id, name, sheets, getId: () => id, getName: () => name, getUrl: () => `https://docs.google.com/spreadsheets/d/${id}`, getSheets: () => sheets, getSheetByName: (n) => sheets.find((s) => s.name === n) || null, insertSheet: (n) => { const s = new Sheet(n || `Sheet${sheets.length + 1}`, ss); sheets.push(s); return s; } }; sheets.push(new Sheet('Sheet1', ss)); store.spreadsheets[id] = ss; return ss; },
       openById: (id) => { if (store.spreadsheets[id] && !store.spreadsheets[id].trashed) return store.spreadsheets[id]; throw new Error('not found'); },
     },
     DocumentApp: { openById: (id) => ({ getBody: () => ({ getText: () => store.files[id].text }) }) },

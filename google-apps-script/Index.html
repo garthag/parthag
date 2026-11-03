@@ -13,6 +13,7 @@
   <nav id="tabs" class="tabs">
     <button data-view="search" class="on">Search</button>
     <button data-view="table">Table</button>
+    <button data-view="people">People</button>
     <button data-view="data">Data</button>
   </nav>
   <div class="account"><span id="account">…</span></div>
@@ -21,8 +22,9 @@
 <main id="app" class="layout">
   <form id="searchForm" class="card side" autocomplete="off">
     <p class="muted small">Searches your Gmail directly – fast, and it also looks inside PDFs.</p>
-    <label>From <span class="muted">(name or email)</span>
-      <input name="senders" placeholder="mck kutty, billing@acme.in"></label>
+    <label>From <span class="muted">(name, email or domain)</span>
+      <input name="senders" placeholder="type: parthag, mckkutty.com …" autocomplete="off" data-suggest="1"></label>
+    <p id="peopleHint" class="muted small hidden"><a href="#" id="peopleHintBtn">Scan my mail once</a> to get address suggestions while typing.</p>
     <label>Keywords <span class="muted">(subject, body, file name, inside files)</span>
       <span class="inrow"><input name="keywords" placeholder="invoice, bill">
       <select name="match_mode" title="How keywords combine"><option value="any">any</option><option value="all">all</option><option value="phrase">exact phrase</option></select></span></label>
@@ -61,7 +63,7 @@
     </fieldset>
     <details id="moreFilters">
       <summary>More filters</summary>
-      <label>To / Cc<input name="recipients" placeholder="accounts@mckkutty.com"></label>
+      <label>To / Cc<input name="recipients" placeholder="accounts@mckkutty.com" autocomplete="off" data-suggest="1"></label>
       <label>Exclude words<input name="exclude" placeholder="reminder, cancelled"></label>
       <label>File name pattern<input name="filename_pattern" placeholder="INV*2025*.pdf  or  part of name"></label>
       <div class="row">
@@ -163,6 +165,30 @@
     <p class="muted small pad">Click a Number, Date, Amount, Currency or GSTIN cell to correct it – corrections are saved and never overwritten.</p>
   </section>
 
+  <!-- ======== PEOPLE VIEW ======== -->
+  <section class="card results view hidden" id="viewPeople">
+    <div class="stats" id="peopleStats">Every email address in your mailbox (From, To, Cc), each listed once.</div>
+    <div class="toolbar">
+      <input id="peopleFilter" type="search" placeholder="Type a name, address or domain – e.g. parthag or mckkutty.com" autocomplete="off">
+      <button class="btn primary" id="peopleScan">Scan my mail</button>
+      <button class="btn ghost" id="peopleFull" title="Read the whole mailbox again">Full rescan</button>
+    </div>
+    <div class="chips pad0" id="domainChips"></div>
+    <div class="tablewrap">
+      <table class="grid" id="peopleTbl">
+        <thead><tr><th data-psort="name">Name</th><th data-psort="email">Email</th><th data-psort="count" class="r">Emails</th><th data-psort="last">Last email</th><th></th></tr></thead>
+        <tbody></tbody>
+      </table>
+      <div id="peopleEmpty" class="empty hidden"></div>
+    </div>
+    <div class="dlbar">
+      <span class="muted" id="peopleCount"></span><span class="spacer"></span>
+      <button class="btn" id="peopleCopy">Copy addresses</button>
+      <button class="btn" id="peopleCsv">CSV</button>
+      <button class="btn" id="peopleSheet">Google Sheet</button>
+    </div>
+  </section>
+
   <!-- ======== DATA VIEW ======== -->
   <section class="card results view hidden" id="viewData">
     <div class="pad">
@@ -212,7 +238,7 @@
   <form method="dialog" id="shareForm">
     <button value="noop" disabled hidden aria-hidden="true"></button>
     <h3>Share <span id="shareCount"></span></h3>
-    <label>To <span class="muted">(comma separated)</span><input name="to" placeholder="accountant@firm.in"></label>
+    <label>To <span class="muted">(comma separated)</span><input name="to" placeholder="accountant@firm.in" autocomplete="off" data-suggest="1"></label>
     <label>Subject<input name="subject"></label>
     <label>Message<textarea name="message" rows="4"></textarea></label>
     <p class="muted small" id="shareNote"></p>
@@ -231,6 +257,7 @@
   <div class="bar"><i id="progBar"></i></div>
   <div class="row"><span id="progText" class="muted small"></span><span class="spacer"></span><button class="btn ghost" id="progCancel">Stop</button></div>
 </div>
+<div id="suggest" class="suggest hidden" role="listbox"></div>
 <div id="busy" class="busy hidden"><div class="spinner"></div><span id="busyMsg">Working…</span></div>
 <div id="toast" class="toast hidden"></div>
 <?!= include('App'); ?>

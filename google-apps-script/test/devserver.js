@@ -51,6 +51,14 @@ function demoMailbox() {
     attachments: [{ name: 'amazon_invoice.pdf', mime: 'application/pdf', data: PDF(['Amazon invoice', 'Total INR 1,299.00']) }] }));
   msgs.push(makeMessage('exe', { from: 'Unknown <x@spam.example>', subject: 'Invoice overdue', date: '2025-05-02T06:00:00Z', body: 'open the invoice',
     attachments: [{ name: 'invoice.pdf.exe', mime: 'application/octet-stream', data: Buffer.from('MZ') }] }));
+  // everyday conversations (no attachments) - for the People list
+  const team = [['Parthag', 'parthag@mckkutty.com'], ['Accounts', 'accounts@mckkutty.com'], ['Sales Desk', 'sales@mckkutty.com'],
+                ['Anil Kumar', 'anil.kumar@mckkutty.com'], ['Office', 'office@mckkutty.com'], ['Ravi Kumar', 'ravi@gmail.com'],
+                ['CA Firm', 'audit@cafirm.in']];
+  team.forEach(([name, email], i) => {
+    msgs.push(makeMessage(`c${i}`, { from: `${name} <${email}>`, to: 'Parthag <parthag@mckkutty.com>', cc: 'ACCOUNTS@MCKKUTTY.COM, "Kutty, MCK" <md@mckkutty.com>',
+      subject: `Re: weekly update ${i}`, date: new Date(Date.UTC(2025, 6, 1 + i, 6)), body: 'noted, thanks', threadId: `TC${i % 3}` }));
+  });
   return msgs;
 }
 

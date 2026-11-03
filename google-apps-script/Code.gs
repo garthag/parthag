@@ -669,6 +669,130 @@ function shareDrive(items, to, message) {
   return { link: folder.webViewLink, files: rep.saved.length, failed: rep.failed, sharedWith: rcpt };
 }
 
+// ------------------------------------------------------------------ people
+/*
+ * Every email address in your mailbox (From / To / Cc), without duplicates.
+ * The browser lists conversations page by page, reads their headers in parallel batches,
+ * merges everything, and saves the list in the "People" tab of the data sheet.
+ * Later updates only read mail newer than the last scan.
+ */
+var CONTACT_COLS = ['email', 'name', 'emails', 'last', 'domain'];
+var CONTACTS_SYNC_PROP = 'MAA_CONTACTS_SYNC';
+
+/** One page of conversation ids (up to 2000). sinceMs: only conversations with mail after that time. */
+function contactsListThreads(sinceMs, pageToken) {
+  var q = '-in:chats' + (sinceMs ? ' after:' + Math.floor(sinceMs / 1000 - 86400) : '');
+  var ids = [], token = pageToken || null, t0 = Date.now();
+  do {
+    var opt = { q: q, maxResults: 500 };
+    if (token) opt.pageToken = token;
+    var res = Gmail.Users.Threads.list('me', opt);
+    (res.threads || []).forEach(function (t) { ids.push(t.id); });
+    token = res.nextPageToken || null;
+  } while (token && ids.length < 2000 && Date.now() - t0 < 20000);
+  return { ids: ids, next: token };
+}
+
+/** Addresses found in a batch of conversations: [[email, name, count, lastMs], ...] */
+function contactsFromThreads(threadIds, sinceMs) {
+  var map = {}, newest = 0, messages = 0;
+  (threadIds || []).forEach(function (tid) {
+    var t;
+    try {
+      t = Gmail.Users.Threads.get('me', tid, { format: 'metadata', metadataHeaders: ['From', 'To', 'Cc', 'Bcc'] });
+    } catch (e) { return; }
+    (t.messages || []).forEach(function (m) {
+      var when = Number(m.internalDate) || 0;
+      if (sinceMs && when <= sinceMs) return;              // already counted in the last scan
+      messages++;
+      if (when > newest) newest = when;
+      ((m.payload && m.payload.headers) || []).forEach(function (h) {
+        if (!/^(from|to|cc|bcc)$/i.test(h.name)) return;
+        parseAddressList(h.value).forEach(function (a) {
+          var c = map[a.email] || (map[a.email] = [a.email, '', 0, 0]);
+          c[2]++;
+          if (when >= c[3]) { c[3] = when; if (a.name) c[1] = a.name; }   // newest name wins
+          else if (!c[1] && a.name) c[1] = a.name;
+        });
+      });
+    });
+  });
+  return { contacts: Object.keys(map).map(function (k) { return map[k]; }), newest: newest, messages: messages };
+}
+
+/** '"Kutty, MCK" <a@b.in>, c@d.com, Name <e@f.org>' -> [{name, email}] (lower-case, de-duplicated) */
+function parseAddressList(value) {
+  var out = [], seen = {}, s = String(value || ''), m;
+  var rx = /(?:"((?:[^"\\]|\\.)*)"|([^,<>"]*?))\s*<\s*([^<>\s]+@[^<>\s]+)\s*>|([A-Za-z0-9._%+'\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,})/g;
+  while ((m = rx.exec(s))) {
+    var email = (m[3] || m[4] || '').trim().toLowerCase().replace(/^mailto:/, '').replace(/[.,;]+$/, '');
+    if (!/^[^@\s]+@[^@\s]+\.[a-z]{2,}$/.test(email) || seen[email]) continue;
+    seen[email] = 1;
+    var name = (m[1] != null ? m[1] : (m[2] || '')).replace(/\\"/g, '"').replace(/^[\s,'"]+|[\s,'"]+$/g, '');
+    if (name.toLowerCase() === email) name = '';
+    out.push({ email: email, name: name });
+  }
+  return out;
+}
+
+function contactsSheet_() {
+  var ss = openStore_().getParent();
+  var sh = ss.getSheetByName('People');
+  if (!sh) {
+    sh = ss.insertSheet('People');
+    sh.getRange(1, 1, 1, CONTACT_COLS.length).setValues([CONTACT_COLS]).setFontWeight('bold');
+    sh.setFrozenRows(1);
+  }
+  return sh;
+}
+
+/** Save the merged list (replaces the People tab). rows: [[email, name, count, lastMs], ...] */
+function saveContacts(rows, newestMs) {
+  var sh = contactsSheet_();
+  var n = sh.getLastRow() - 1;
+  if (n > 0) sh.getRange(2, 1, n, CONTACT_COLS.length).clearContent();
+  var vals = (rows || []).map(function (r) {
+    return [r[0], r[1] || '', Number(r[2]) || 0, r[3] ? new Date(Number(r[3])) : '', String(r[0]).split('@')[1] || ''];
+  });
+  if (vals.length) sh.getRange(2, 1, vals.length, CONTACT_COLS.length).setValues(vals);
+  var props = PropertiesService.getUserProperties();
+  if (newestMs) props.setProperty(CONTACTS_SYNC_PROP, String(newestMs));
+  props.setProperty(CONTACTS_SYNC_PROP + '_AT', String(Date.now()));
+  return { saved: vals.length };
+}
+
+/** The saved list, for suggestions and the People tab. */
+function getContacts() {
+  var props = PropertiesService.getUserProperties();
+  if (!props.getProperty(STORE_PROP)) return { rows: [], syncedTo: 0, updatedAt: 0, me: Session.getActiveUser().getEmail() };
+  var sh = openStore_().getParent().getSheetByName('People');
+  var rows = [];
+  if (sh && sh.getLastRow() > 1) {
+    rows = sh.getRange(2, 1, sh.getLastRow() - 1, 4).getValues().map(function (r) {
+      var d = r[3] instanceof Date ? r[3].getTime() : (r[3] ? Date.parse(r[3]) || 0 : 0);
+      return [String(r[0]), String(r[1] || ''), Number(r[2]) || 0, d];
+    });
+  }
+  return { rows: rows, syncedTo: Number(props.getProperty(CONTACTS_SYNC_PROP) || 0),
+           updatedAt: Number(props.getProperty(CONTACTS_SYNC_PROP + '_AT') || 0),
+           me: Session.getActiveUser().getEmail() };
+}
+
+/** People list -> a new Google Sheet (for sharing / printing). */
+function exportContacts(rows, title) {
+  var ss = SpreadsheetApp.create(title || ('Email addresses ' + Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd')));
+  var sh = ss.getSheets()[0];
+  sh.setName('People');
+  var vals = [['Name', 'Email', 'Domain', 'Emails', 'Last email']].concat((rows || []).map(function (r) {
+    return [r[1] || '', r[0], String(r[0]).split('@')[1] || '', Number(r[2]) || 0, r[3] ? new Date(Number(r[3])) : ''];
+  }));
+  sh.getRange(1, 1, vals.length, 5).setValues(vals);
+  sh.getRange(1, 1, 1, 5).setFontWeight('bold');
+  sh.setFrozenRows(1);
+  sh.autoResizeColumns(1, 5);
+  return { url: ss.getUrl() };
+}
+
 // ------------------------------------------------------------------ privacy
 /** Delete everything this app created for you: the data sheet (moved to Bin) and its settings. */
 function eraseData() {
@@ -676,6 +800,8 @@ function eraseData() {
   var id = props.getProperty(STORE_PROP);
   if (id) { try { Drive.Files.update({ trashed: true }, id); } catch (e) { /* already gone */ } }
   props.deleteProperty(STORE_PROP);
+  props.deleteProperty(CONTACTS_SYNC_PROP);
+  props.deleteProperty(CONTACTS_SYNC_PROP + '_AT');
   return { ok: true, note: 'The data sheet was moved to the Drive Bin. Saved attachments in "Mail Attachments" were kept.' };
 }
 
