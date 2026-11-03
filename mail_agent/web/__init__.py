@@ -68,6 +68,47 @@ def parse_request(j: dict) -> SearchRequest:
     )
 
 
+APP_PASSWORD_HOSTS = ("imap.gmail.com", "imap.mail.yahoo.com", "imap.mail.me.com")
+
+
+def clean_login(host: str, user: str, pw: str) -> tuple[str, str]:
+    """Fix the most common copy/paste mistakes before logging in."""
+    user = (user or "").strip().strip("<>").strip()
+    pw = (pw or "").strip()
+    if host in APP_PASSWORD_HOSTS:
+        # Google/Yahoo/Apple app passwords are shown as "abcd efgh ijkl mnop" but contain no spaces
+        pw = "".join(pw.split())
+    return user, pw
+
+
+def login_help(host: str, user: str, ex: Exception) -> str:
+    raw = ex.args[0] if getattr(ex, "args", None) else ex
+    msg = raw.decode("utf-8", "replace") if isinstance(raw, bytes) else str(raw)
+    low = msg.lower()
+    if "authenticationfailed" in low or "invalid credentials" in low or "login failed" in low:
+        if host == "imap.gmail.com":
+            tips = ["Use a 16-letter App Password, NOT your normal Gmail password.",
+                    "Create one at myaccount.google.com/apppasswords (2-Step Verification must be ON first; "
+                    "if that page says 'not available', turn on 2-Step Verification and try again).",
+                    f"Check the email is exactly right: {user}",
+                    "Work/school Google accounts: your admin may block App Passwords or IMAP."]
+        elif host == "outlook.office365.com":
+            tips = ["Use an App Password from account.microsoft.com/security (2-step verification must be ON).",
+                    "Work/school Microsoft 365 accounts often have IMAP basic login disabled by the admin."]
+        elif host == "imap.mail.yahoo.com":
+            tips = ["Use an App Password: Yahoo Account security -> Generate app password."]
+        else:
+            tips = ["Check email and password. Many providers need an app-specific password for IMAP."]
+        return "Login refused by the mail server.\n• " + "\n• ".join(tips)
+    if "imap" in low and ("disabled" in low or "not enabled" in low):
+        return "IMAP is turned off for this mailbox. Gmail: Settings -> See all settings -> Forwarding and POP/IMAP -> Enable IMAP."
+    if "web browser" in low or "webloginrequired" in low:
+        return "Google wants you to confirm this sign-in: open Gmail in your browser, approve the security alert, then try again."
+    if any(k in low for k in ("getaddrinfo", "timed out", "connection refused", "network", "unreachable")):
+        return f"Cannot reach {host}. Check your internet connection / firewall and try again. ({msg})"
+    return f"Login failed: {msg}"
+
+
 class Jobs:
     """Tiny background job runner (sync, analyze) with progress polling and cancel."""
 
@@ -192,15 +233,13 @@ def create_app(settings: dict, engine: SearchEngine | None = None, demo: bool = 
             prov = j.get("provider") or "custom"
             host, port = PROVIDERS.get(prov, (j.get("host", ""), int(j.get("port") or 993)))
             user, pw = j.get("user", ""), j.get("password", "")
+        user, pw = clean_login(host, user, pw)
         if not (host and user and pw):
             return jsonify(error="Host, email and password are required"), 400
         try:
             src = IMAPSource(host, user, pw, port=port, pool_size=settings["workers"])
         except Exception as ex:
-            msg = str(ex)
-            if "AUTHENTICATIONFAILED" in msg.upper() or "Invalid credentials" in msg:
-                msg += " - for Gmail/Yahoo/Outlook use an App Password, not your normal password."
-            return jsonify(error=f"Login failed: {msg}"), 400
+            return jsonify(error=login_help(host, user, ex)), 400
         idx_dir = config.app_dir() / "index"
         idx_dir.mkdir(exist_ok=True)
         with lock:

@@ -218,3 +218,11 @@ def test_web_index_jobs_export_share(client, tmp_path):
     assert sent["demo"] is True                                          # demo never really sends
     assert client.post("/api/share/email", json={"ids": ids[:1], "to": "nope"}).status_code == 400
     assert "Total:" in client.post("/api/share/text", json={"ids": ids}).json["text"]
+
+
+def test_login_cleanup_and_help():
+    from mail_agent.web import clean_login, login_help
+    assert clean_login("imap.gmail.com", " me@gmail.com ", " abcd efgh ijkl mnop ") == ("me@gmail.com", "abcdefghijklmnop")
+    assert clean_login("imap.example.com", "u", " pass word ") == ("u", "pass word")      # others: only trim
+    msg = login_help("imap.gmail.com", "me@gmail.com", Exception(b"[AUTHENTICATIONFAILED] Invalid credentials (Failure)"))
+    assert "App Password" in msg and "apppasswords" in msg and "me@gmail.com" in msg and "b'" not in msg
