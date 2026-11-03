@@ -17,7 +17,11 @@
 <section id="login" class="card login hidden">
   <h2>Connect your mailbox</h2>
   <p class="muted">Works with any IMAP mailbox. Read-only: nothing is deleted, moved or marked as read.
-     Your password stays in this computer's memory only.</p>
+     Your password never leaves this computer.</p>
+  <div id="savedBox" class="saved hidden">
+    <button id="useSaved" class="btn primary"></button>
+    <button id="forget" class="btn ghost" title="Remove the saved login from this computer">Forget</button>
+  </div>
   <button id="useEnv" class="btn ghost hidden">Use account from .env</button>
   <form id="loginForm">
     <label>Provider
@@ -38,6 +42,8 @@
     <label>Email<input name="user" type="email" autocomplete="username" required></label>
     <label>App password<input name="password" type="password" autocomplete="current-password" required></label>
     <p class="hint" id="pwHint">Gmail: turn on 2-step verification → <b>myaccount.google.com/apppasswords</b> → create one → paste it here. Your normal password won't work.</p>
+    <label class="check hidden" id="rememberRow"><input type="checkbox" name="remember" value="1" checked>
+      Remember me on this computer <span class="muted">(password kept in Windows Credential Manager)</span></label>
     <button class="btn primary" type="submit">Connect</button>
     <p id="loginErr" class="err"></p>
   </form>
@@ -115,7 +121,7 @@
       <div id="empty" class="empty hidden">No attachments matched. Try fewer keywords, a wider date range or turn on “search inside PDF text”.</div>
     </div>
     <div class="dlbar">
-      <label>Save into folder<input id="dest" placeholder="~/MailAttachments"></label>
+      <label>Save into folder<span class="destrow"><input id="dest" placeholder="~/MailAttachments"><button type="button" class="btn desk-only hidden" id="browse">Browse…</button></span></label>
       <label>Sub-folders<select id="ftpl">
         {% for k, v in folder_templates.items() %}<option value="{{k}}">{{k}}</option>{% endfor %}
       </select></label>

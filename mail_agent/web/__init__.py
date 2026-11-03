@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import threading
 from datetime import date, datetime
+from pathlib import Path
 
 from flask import Flask, Response, abort, jsonify, render_template, request
 
+from .. import config
 from ..downloader import FOLDER_TEMPLATES, NAME_TEMPLATES, build_zip, save_all
 from ..engine import SearchEngine, pdf_text
 from ..models import SearchRequest
@@ -73,10 +75,17 @@ def create_app(settings: dict, engine: SearchEngine | None = None, demo: bool = 
     @app.get("/api/status")
     def status():
         e = state["engine"]
+        saved = config.saved_account()
         return jsonify(connected=e is not None, account=state["account"], demo=state["demo"],
                        gmail=bool(e and getattr(e.source, "is_gmail", False)),
                        download_dir=settings["download_dir"],
-                       env_login=bool(settings.get("host") and settings.get("user") and settings.get("password")))
+                       env_login=bool(settings.get("host") and settings.get("user") and settings.get("password")),
+                       saved_account=saved["user"] if saved else "", can_remember=config.can_remember())
+
+    @app.post("/api/forget")
+    def forget():
+        config.forget_account()
+        return status()
 
     @app.post("/api/connect")
     def connect():
@@ -84,6 +93,12 @@ def create_app(settings: dict, engine: SearchEngine | None = None, demo: bool = 
         j = request.get_json()
         if j.get("use_env"):
             host, port, user, pw = settings["host"], settings["port"], settings["user"], settings["password"]
+        elif j.get("use_saved"):
+            acc = config.saved_account() or {}
+            host, port, user = acc.get("host", ""), int(acc.get("port") or 993), acc.get("user", "")
+            pw = config.saved_password(user) if user else None
+            if not pw:
+                return jsonify(error="Saved login not found - please sign in again"), 400
         else:
             prov = j.get("provider") or "custom"
             host, port = PROVIDERS.get(prov, (j.get("host", ""), int(j.get("port") or 993)))
@@ -102,6 +117,8 @@ def create_app(settings: dict, engine: SearchEngine | None = None, demo: bool = 
                 state["engine"].close()
             state["engine"] = SearchEngine(src, workers=settings["workers"])
             state["account"], state["demo"] = user, False
+        if j.get("remember") and not j.get("use_saved"):
+            config.save_account(host, port, user, pw)
         return status()
 
     @app.post("/api/disconnect")
@@ -180,7 +197,17 @@ def create_app(settings: dict, engine: SearchEngine | None = None, demo: bool = 
             return jsonify(error="Nothing selected"), 400
         data, rep = build_zip(eng(), ids, j.get("folder_template", "sender/year-month"),
                               j.get("name_template", "original"))
-        name = f"mail-attachments-{datetime.now():%Y%m%d-%H%M}.zip"
+        if j.get("save_to"):              # desktop app: path chosen in a native Save dialog
+            target = Path(str(j["save_to"])).expanduser()
+            if target.suffix.lower() != ".zip":
+                target = target.with_suffix(".zip")
+            try:
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_bytes(data)
+            except OSError as ex:
+                return jsonify(error=f"Cannot write ZIP: {ex}"), 400
+            return jsonify(path=str(target), **rep)
+        name =f"mail-attachments-{datetime.now():%Y%m%d-%H%M}.zip"
         return Response(data, mimetype="application/zip",
                         headers={"Content-Disposition": f'attachment; filename="{name}"',
                                  "X-Zip-Report": f"{rep['added']} added, {rep['skipped']} duplicate, "

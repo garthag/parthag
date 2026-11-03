@@ -47,6 +47,9 @@ async function boot() {
   if (!s.connected) {
     $("#login").classList.remove("hidden"); $("#app").classList.add("hidden");
     $("#useEnv").classList.toggle("hidden", !s.env_login);
+    $("#savedBox").classList.toggle("hidden", !s.saved_account);
+    $("#useSaved").textContent = `Continue as ${s.saved_account}`;
+    $("#rememberRow").classList.toggle("hidden", !s.can_remember);
     $("#account").innerHTML = "";
     return;
   }
@@ -80,12 +83,29 @@ $("#loginForm").addEventListener("submit", async (e) => {
   catch (er) { $("#loginErr").textContent = er.message; }
   finally { busy(false); }
 });
-$("#useEnv").addEventListener("click", async () => {
-  busy(true, "Connecting…");
-  try { await api("/api/connect", { use_env: true }); await boot(); }
+async function quickConnect(body) {
+  busy(true, "Connecting…"); $("#loginErr").textContent = "";
+  try { await api("/api/connect", body); await boot(); }
   catch (er) { $("#loginErr").textContent = er.message; }
   finally { busy(false); }
+}
+$("#useEnv").addEventListener("click", () => quickConnect({ use_env: true }));
+$("#useSaved").addEventListener("click", () => quickConnect({ use_saved: true }));
+$("#forget").addEventListener("click", async () => { await api("/api/forget", {}); boot(); });
+
+/* ---------- desktop-app extras (native dialogs via pywebview) ---------- */
+const desk = () => (window.pywebview && window.pywebview.api) || null;
+function onDesktopReady() { $$(".desk-only").forEach((el) => el.classList.remove("hidden")); }
+window.addEventListener("pywebviewready", onDesktopReady);
+if (desk()) onDesktopReady();
+$("#browse").addEventListener("click", async () => {
+  const p = await desk()?.pick_folder($("#dest").value);
+  if (p) { $("#dest").value = p; store("dest", p); }
 });
+function openBtn(path) {
+  return desk() ? `<button class="btn" data-open="${esc(path)}">Open folder</button>` : "";
+}
+$("#dlReport").addEventListener("click", (e) => { const p = e.target.dataset.open; if (p) desk()?.open_folder(p); });
 
 /* ---------- search form ---------- */
 function iso(d) { return d.toISOString().slice(0, 10); }
@@ -278,7 +298,7 @@ $("#saveBtn").addEventListener("click", async () => {
   const rep = $("#dlReport");
   try {
     const r = await api("/api/download", dlOpts());
-    rep.innerHTML = `<div class="ok">✔ Saved ${r.saved.length} file(s) to <b>${esc(r.folder)}</b></div>` +
+    rep.innerHTML = `<div class="ok">✔ Saved ${r.saved.length} file(s) to <b>${esc(r.folder)}</b>${openBtn(r.folder)}</div>` +
       (r.skipped.length ? `<div class="warn">↷ ${r.skipped.length} skipped – identical file already in the folder</div>` : "") +
       r.failed.map((f) => `<div class="bad">✖ ${esc(f.filename)}: ${esc(f.error)}</div>`).join("") +
       `<div class="muted small">A manifest.csv with sender, subject, date and SHA-256 of every saved file is kept in that folder.</div>`;
@@ -286,6 +306,19 @@ $("#saveBtn").addEventListener("click", async () => {
   finally { rep.classList.remove("hidden"); busy(false); }
 });
 $("#zipBtn").addEventListener("click", async () => {
+  if (desk()) {                                  // desktop app: native "Save as" dialog
+    const stamp = new Date().toISOString().slice(0, 16).replace(/[-:]/g, "").replace("T", "-");
+    const path = await desk().save_zip_path(`mail-attachments-${stamp}.zip`, $("#dest").value);
+    if (!path) return;
+    busy(true, `Packing ${selected.size} files…`);
+    try {
+      const r = await api("/api/zip", { ...dlOpts(), save_to: path });
+      $("#dlReport").innerHTML = `<div class="ok">✔ ZIP saved: <b>${esc(r.path)}</b> – ${r.added} files` +
+        `${r.skipped ? `, ${r.skipped} duplicate skipped` : ""}${r.failed ? `, ${r.failed} failed` : ""}${openBtn(r.path)}</div>`;
+    } catch (er) { $("#dlReport").innerHTML = `<div class="bad">✖ ${esc(er.message)}</div>`; }
+    finally { $("#dlReport").classList.remove("hidden"); busy(false); }
+    return;
+  }
   busy(true, `Packing ${selected.size} files…`);
   try {
     const r = await api("/api/zip", dlOpts());

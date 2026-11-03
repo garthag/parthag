@@ -71,6 +71,9 @@ td.nw { white-space: nowrap; }
 .dlbar { display: flex; gap: 10px; align-items: flex-end; padding: 10px 14px; border-top: 1px solid var(--line); flex-wrap: wrap; }
 .dlbar label { margin: 0; } .dlbar label:first-child { flex: 1; min-width: 200px; }
 .dlbtns { display: flex; gap: 6px; }
+.destrow { display: flex; gap: 6px; margin-top: 4px; } .destrow input { margin: 0; flex: 1; min-width: 0; }
+.saved { display: flex; gap: 6px; margin: 10px 0 14px; } .saved .btn.primary { flex: 1; }
+.report .btn { margin-left: 8px; padding: 2px 9px; font-size: 12px; }
 .report { padding: 8px 14px 12px; font-size: 13px; border-top: 1px solid var(--line); max-height: 140px; overflow: auto; }
 .report .ok { color: var(--ok); } .report .warn { color: var(--warn); } .report .bad { color: var(--err); }
 

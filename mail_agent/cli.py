@@ -113,6 +113,11 @@ def main(argv=None) -> int:
     p = argparse.ArgumentParser(prog="mail_agent", description="Find, preview & download email attachments fast.")
     sub = p.add_subparsers(dest="cmd", required=True)
 
+    dk = sub.add_parser("desktop", help="open as a desktop app window")
+    dk.add_argument("--demo", action="store_true", help="use the built-in demo mailbox")
+    dk.add_argument("--selftest", metavar="OUTFILE", nargs="?", const="", default=None,
+                    help="start, check the UI and a demo search, then exit (used by the Windows build)")
+
     w = sub.add_parser("web", help="open the browser UI")
     w.add_argument("--port", type=int, default=8765)
     w.add_argument("--demo", action="store_true", help="use the built-in demo mailbox")
@@ -138,4 +143,9 @@ def main(argv=None) -> int:
     s.add_argument("--demo", action="store_true")
 
     args = p.parse_args(argv)
+    if args.cmd == "desktop":
+        from . import desktop
+        if args.selftest is not None:
+            return desktop.selftest(args.selftest or None)
+        return desktop.run(demo=args.demo)
     return cmd_web(args, cfg) if args.cmd == "web" else cmd_search(args, cfg)

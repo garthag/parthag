@@ -12,7 +12,28 @@ Finds email attachments fast, lets you **preview** them, **select several**, and
 Works with **Gmail, Outlook/Hotmail/Microsoft 365, Yahoo, Zoho, iCloud, Rediffmail** or any
 IMAP mailbox. It is **read-only**: nothing is deleted, moved or marked as read.
 
-### Quick start
+### Windows app (recommended)
+
+1. On GitHub open **Actions → "Windows app"**, click the latest green run, and download
+   **MailAttachmentAgent-Windows-…** from *Artifacts* at the bottom of the page (unzip it).
+   For a tagged version (`v1.0.0` …) the files are also on the **Releases** page.
+2. Run **`MailAttachmentAgent-Setup-….exe`**. No administrator rights are needed. If Windows SmartScreen
+   says "Windows protected your PC", click **More info → Run anyway** (the app isn't code-signed).
+3. Start **Mail Attachment Agent** from the Start menu or desktop. It opens in its own window.
+   The **"(demo mailbox)"** shortcut lets you practise without logging in.
+
+The desktop app adds a **Browse…** button for the download folder, a native **Save as** dialog for
+ZIPs, an **Open folder** button after saving, and **Remember me**, which keeps your password in the
+*Windows Credential Manager*, not in a file. Uninstall it from *Settings → Apps*.
+
+Prefer no installer? Use **`MailAttachmentAgent-Portable-….zip`**: unzip it anywhere and run `MailAgent.exe`.
+If you have Python, you can also run from source by double-clicking `windows\Start-MailAgent.bat`,
+or build the exe yourself with `windows\build.ps1`.
+
+Needs Windows 10 or 11 (64-bit) with the Microsoft Edge WebView2 runtime, which is built into Windows 11
+and recent Windows 10.
+
+### Quick start (any OS, runs in your browser)
 
 ```bash
 pip install -r requirements.txt
