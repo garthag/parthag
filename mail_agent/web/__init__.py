@@ -11,6 +11,7 @@ from pathlib import Path
 from flask import Flask, Response, abort, jsonify, render_template, request
 
 from .. import config, exporter, share, textract
+from ..autodetect import detect
 from ..downloader import FOLDER_TEMPLATES, NAME_TEMPLATES, build_zip, save_all
 from ..engine import Cancelled, SearchEngine
 from ..index import Index, db_name
@@ -69,6 +70,7 @@ def parse_request(j: dict) -> SearchRequest:
 
 
 APP_PASSWORD_HOSTS = ("imap.gmail.com", "imap.mail.yahoo.com", "imap.mail.me.com")
+OWN_PASSWORD_HOSTS = ("imap.titan.email", "imap.secureserver.net", "imap.hostinger.com")
 
 
 def clean_login(host: str, user: str, pw: str) -> tuple[str, str]:
@@ -87,16 +89,24 @@ def login_help(host: str, user: str, ex: Exception) -> str:
     low = msg.lower()
     if "authenticationfailed" in low or "invalid credentials" in low or "login failed" in low:
         if host == "imap.gmail.com":
-            tips = ["Use a 16-letter App Password, NOT your normal Gmail password.",
+            tips = ["Use a 16-letter App Password, NOT your normal password.",
                     "Create one at myaccount.google.com/apppasswords (2-Step Verification must be ON first; "
                     "if that page says 'not available', turn on 2-Step Verification and try again).",
                     f"Check the email is exactly right: {user}",
-                    "Work/school Google accounts: your admin may block App Passwords or IMAP."]
+                    "Company (Google Workspace) accounts: the admin must allow IMAP and App Passwords "
+                    "(Google Admin -> Apps -> Gmail -> End User Access, and Security -> 2-Step Verification)."]
         elif host == "outlook.office365.com":
             tips = ["Use an App Password from account.microsoft.com/security (2-step verification must be ON).",
                     "Work/school Microsoft 365 accounts often have IMAP basic login disabled by the admin."]
         elif host == "imap.mail.yahoo.com":
             tips = ["Use an App Password: Yahoo Account security -> Generate app password."]
+        elif host in OWN_PASSWORD_HOSTS or host.startswith(("mail.", "imap.")) and "zoho" not in host:
+            tips = ["Use the same password you use for webmail for this address.",
+                    f"Check the email is exactly right: {user}",
+                    "If you changed the password recently, sign in to webmail once, then try again."]
+        elif "zoho" in host:
+            tips = ["Enable IMAP: Zoho Mail -> Settings -> Mail Accounts -> IMAP Access.",
+                    "If you use 2-factor login, create an App-specific password (accounts.zoho.in -> Security)."]
         else:
             tips = ["Check email and password. Many providers need an app-specific password for IMAP."]
         return "Login refused by the mail server.\n• " + "\n• ".join(tips)
@@ -230,8 +240,14 @@ def create_app(settings: dict, engine: SearchEngine | None = None, demo: bool = 
             if not pw:
                 return jsonify(error="Saved login not found - please sign in again"), 400
         else:
-            prov = j.get("provider") or "custom"
-            host, port = PROVIDERS.get(prov, (j.get("host", ""), int(j.get("port") or 993)))
+            prov = j.get("provider") or "auto"
+            if prov == "auto":
+                d = detect(j.get("user", ""))
+                if not d["found"]:
+                    return jsonify(error=d["reason"] + "\nChoose 'Other (IMAP server)' and type the server name."), 400
+                host, port = d["host"], d["port"]
+            else:
+                host, port = PROVIDERS.get(prov, (j.get("host", "").strip(), int(j.get("port") or 993)))
             user, pw = j.get("user", ""), j.get("password", "")
         user, pw = clean_login(host, user, pw)
         if not (host and user and pw):
@@ -259,6 +275,10 @@ def create_app(settings: dict, engine: SearchEngine | None = None, demo: bool = 
                 state["engine"].close()
             state["engine"], state["account"] = None, ""
         return status()
+
+    @app.get("/api/detect")
+    def detect_provider():
+        return jsonify(detect(request.args.get("email", "")))
 
     @app.get("/api/folders")
     def folders():

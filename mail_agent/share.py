@@ -16,6 +16,10 @@ SMTP = {
     "imap.zoho.in": ("smtp.zoho.in", 465, "ssl"),
     "imap.mail.me.com": ("smtp.mail.me.com", 587, "starttls"),
     "imap.rediffmail.com": ("smtp.rediffmail.com", 465, "ssl"),
+    "imap.zoho.eu": ("smtp.zoho.eu", 465, "ssl"),
+    "imap.titan.email": ("smtp.titan.email", 465, "ssl"),
+    "imap.secureserver.net": ("smtpout.secureserver.net", 465, "ssl"),
+    "imap.hostinger.com": ("smtp.hostinger.com", 465, "ssl"),
 }
 MAX_TOTAL = 24 * 1024 * 1024   # Gmail/Outlook limit is 25 MB including encoding overhead
 
@@ -23,6 +27,8 @@ MAX_TOTAL = 24 * 1024 * 1024   # Gmail/Outlook limit is 25 MB including encoding
 def smtp_for(imap_host: str) -> tuple[str, int, str]:
     if imap_host in SMTP:
         return SMTP[imap_host]
+    if imap_host.startswith("mail."):          # cPanel / Plesk hosting: same server for IMAP and SMTP
+        return imap_host, 465, "ssl"
     h = imap_host[5:] if imap_host.startswith("imap.") else imap_host
     return f"smtp.{h}", 465, "ssl"
 

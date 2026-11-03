@@ -31,6 +31,7 @@
   <form id="loginForm">
     <label>Provider
       <select name="provider" id="provider">
+        <option value="auto" selected>Automatic – detect from my email address</option>
         <option value="gmail">Gmail / Google Workspace</option>
         <option value="outlook">Outlook / Hotmail / Microsoft 365</option>
         <option value="yahoo">Yahoo</option>
@@ -38,15 +39,19 @@
         <option value="zoho.in">Zoho (.in)</option>
         <option value="icloud">iCloud</option>
         <option value="rediff">Rediffmail</option>
+        <option value="titan">Titan Mail</option>
+        <option value="godaddy">GoDaddy Email</option>
+        <option value="hostinger">Hostinger Email</option>
         <option value="custom">Other (IMAP server)</option>
       </select></label>
     <div id="customHost" class="row hidden">
       <label>IMAP server<input name="host" placeholder="imap.example.com"></label>
       <label class="narrow">Port<input name="port" value="993"></label>
     </div>
-    <label>Email<input name="user" type="email" autocomplete="username" required></label>
-    <label>App password <span class="muted">(16 letters – spaces are fine)</span><input name="password" type="password" autocomplete="current-password" placeholder="abcd efgh ijkl mnop" required></label>
-    <p class="hint" id="pwHint">Gmail: turn on 2-step verification → <b>myaccount.google.com/apppasswords</b> → create one → paste it here. Your normal password won't work.</p>
+    <label>Email<input name="user" type="email" autocomplete="username" required placeholder="you@yourcompany.com"></label>
+    <p id="detectInfo" class="detect hidden"></p>
+    <label><span id="pwLabel">Password</span><input name="password" type="password" autocomplete="current-password" required></label>
+    <p class="hint" id="pwHint">Type your email address – the mail server is found automatically.</p>
     <label class="check hidden" id="rememberRow"><input type="checkbox" name="remember" value="1" checked>
       Remember me on this computer <span class="muted">(password kept in Windows Credential Manager)</span></label>
     <button class="btn primary" type="submit">Connect</button>

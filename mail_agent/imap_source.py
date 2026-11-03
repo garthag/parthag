@@ -32,6 +32,9 @@ PROVIDERS = {
     "zoho.in": ("imap.zoho.in", 993),
     "icloud": ("imap.mail.me.com", 993),
     "rediff": ("imap.rediffmail.com", 993),
+    "titan": ("imap.titan.email", 993),
+    "godaddy": ("imap.secureserver.net", 993),
+    "hostinger": ("imap.hostinger.com", 993),
 }
 
 HEADER_KEY = "BODY.PEEK[HEADER.FIELDS (FROM TO CC SUBJECT DATE MESSAGE-ID)]"

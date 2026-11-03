@@ -226,3 +226,28 @@ def test_login_cleanup_and_help():
     assert clean_login("imap.example.com", "u", " pass word ") == ("u", "pass word")      # others: only trim
     msg = login_help("imap.gmail.com", "me@gmail.com", Exception(b"[AUTHENTICATIONFAILED] Invalid credentials (Failure)"))
     assert "App Password" in msg and "apppasswords" in msg and "me@gmail.com" in msg and "b'" not in msg
+
+
+@pytest.mark.parametrize("mx,host,provider", [
+    (["aspmx.l.google.com", "alt1.aspmx.l.google.com"], "imap.gmail.com", "google"),
+    (["mckkutty-com.mail.protection.outlook.com"], "outlook.office365.com", "microsoft"),
+    (["mx.zoho.in", "mx2.zoho.in"], "imap.zoho.in", "zoho.in"),
+    (["mx1.titan.email"], "imap.titan.email", "titan"),
+    (["mailstore1.secureserver.net"], "imap.secureserver.net", "godaddy"),
+    (["mx1.hostinger.com"], "imap.hostinger.com", "hostinger"),
+])
+def test_autodetect_company_domains(mx, host, provider):
+    from mail_agent.autodetect import detect
+    d = detect("parthag@mckkutty.com", resolver=lambda dom: mx, probe=lambda h: False)
+    assert d["found"] and d["host"] == host and d["provider"] == provider and d["domain"] == "mckkutty.com"
+
+
+def test_autodetect_cpanel_and_unknown():
+    from mail_agent.autodetect import detect
+    d = detect("a@shop.in", resolver=lambda dom: ["shop.in"], probe=lambda h: h == "mail.shop.in")
+    assert d["found"] and d["host"] == "mail.shop.in" and d["provider"] == "cpanel"
+    d = detect("a@nowhere.in", resolver=lambda dom: [], probe=lambda h: False)
+    assert not d["found"] and "Other" in d["reason"]
+    assert detect("x@gmail.com", resolver=lambda dom: 1 / 0)["host"] == "imap.gmail.com"   # no DNS needed
+    from mail_agent.share import smtp_for
+    assert smtp_for("mail.shop.in") == ("mail.shop.in", 465, "ssl")

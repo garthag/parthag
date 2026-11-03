@@ -107,17 +107,45 @@ async function boot() {
   else if (n && !status.demo && $("#autoSync").checked) startSync(false, true);
   else if (!n && !status.demo) { showView("index"); toast("Tip: build the local index once for instant searches."); }
 }
+const HINTS = {
+  gmail: ["App password (16 letters – spaces are fine)", "Gmail / Google Workspace: turn on 2-Step Verification, then create an App Password at <b>myaccount.google.com/apppasswords</b> and paste it here. Your normal password won't work."],
+  outlook: ["App password", "Microsoft: create an App Password at <b>account.microsoft.com/security</b>. Company accounts: IT must allow IMAP."],
+  yahoo: ["App password", "Yahoo: Account security → <b>Generate app password</b>."],
+  zoho: ["Password (or app-specific password)", "Zoho: enable IMAP in Mail → Settings → Mail Accounts → IMAP. With 2-factor login, use an app-specific password."],
+  icloud: ["App-specific password", "iCloud: create an app-specific password at <b>appleid.apple.com</b>."],
+  own: ["Email password", "Use the same password you use for webmail."],
+};
+HINTS["zoho.in"] = HINTS.zoho; HINTS.rediff = HINTS.titan = HINTS.godaddy = HINTS.hostinger = HINTS.custom = HINTS.own;
+const PROV_HINT = { google: "gmail", microsoft: "outlook", yahoo: "yahoo", zoho: "zoho", "zoho.in": "zoho", "zoho.eu": "zoho", icloud: "icloud" };
+function setHint(key, extra) {
+  const [label, text] = HINTS[key] || HINTS.own;
+  $("#pwLabel").textContent = label; $("#pwHint").innerHTML = text + (extra ? "<br>" + extra : "");
+}
+let detectT, lastDetected = null;
+async function runDetect() {
+  const email = $("#loginForm").user.value.trim(), info = $("#detectInfo");
+  if ($("#provider").value !== "auto" || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { info.classList.add("hidden"); return; }
+  info.className = "detect"; info.textContent = "Finding the mail server for " + email.split("@")[1] + "…";
+  try {
+    const d = await api("/api/detect?email=" + encodeURIComponent(email));
+    if ($("#loginForm").user.value.trim() !== email) return;
+    lastDetected = d;
+    if (d.found) {
+      info.innerHTML = `✔ <b>${esc(d.label)}</b> <span class="muted">· ${esc(d.host)}</span>`;
+      setHint(PROV_HINT[d.provider] || "own");
+    } else {
+      info.className = "detect bad"; info.textContent = d.reason;
+      $("#provider").value = "custom"; $("#customHost").classList.remove("hidden"); setHint("custom");
+    }
+  } catch (er) { info.className = "detect bad"; info.textContent = er.message; }
+}
+$("#loginForm").user.addEventListener("input", () => { clearTimeout(detectT); detectT = setTimeout(runDetect, 600); });
+$("#loginForm").user.addEventListener("change", runDetect);
 $("#provider").addEventListener("change", (e) => {
-  $("#customHost").classList.toggle("hidden", e.target.value !== "custom");
-  const hints = {
-    gmail: "Gmail: turn on 2-step verification → <b>myaccount.google.com/apppasswords</b> → create one → paste it here.",
-    outlook: "Outlook: use an app password from <b>account.microsoft.com/security</b> (IMAP must be enabled).",
-    yahoo: "Yahoo: Account security → <b>Generate app password</b>.",
-    zoho: "Zoho: enable IMAP in Mail settings, then create an app-specific password.",
-    "zoho.in": "Zoho: enable IMAP in Mail settings, then create an app-specific password.",
-    icloud: "iCloud: create an app-specific password at <b>appleid.apple.com</b>.",
-  };
-  $("#pwHint").innerHTML = hints[e.target.value] || "Use your IMAP password or an app password.";
+  const v = e.target.value;
+  $("#customHost").classList.toggle("hidden", v !== "custom");
+  if (v === "auto") { setHint("own"); $("#pwHint").innerHTML = "Type your email address – the mail server is found automatically."; runDetect(); }
+  else { $("#detectInfo").classList.add("hidden"); setHint(v); }
 });
 $("#loginForm").addEventListener("submit", async (e) => {
   e.preventDefault(); $("#loginErr").textContent = "";
