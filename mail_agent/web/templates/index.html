@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mail Attachment Agent</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}">
+</head>
+<body>
+<header class="top">
+  <div class="brand"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M12 2l8.66 5v10L12 22l-8.66-5V7z" fill="none" stroke="currentColor" stroke-width="2"/><path d="M7 9l5 3.5L17 9" fill="none" stroke="currentColor" stroke-width="2"/></svg>
+    Mail Attachment Agent</div>
+  <div id="account" class="account"></div>
+</header>
+
+<!-- ============ LOGIN ============ -->
+<section id="login" class="card login hidden">
+  <h2>Connect your mailbox</h2>
+  <p class="muted">Works with any IMAP mailbox. Read-only: nothing is deleted, moved or marked as read.
+     Your password stays in this computer's memory only.</p>
+  <button id="useEnv" class="btn ghost hidden">Use account from .env</button>
+  <form id="loginForm">
+    <label>Provider
+      <select name="provider" id="provider">
+        <option value="gmail">Gmail / Google Workspace</option>
+        <option value="outlook">Outlook / Hotmail / Microsoft 365</option>
+        <option value="yahoo">Yahoo</option>
+        <option value="zoho">Zoho (.com)</option>
+        <option value="zoho.in">Zoho (.in)</option>
+        <option value="icloud">iCloud</option>
+        <option value="rediff">Rediffmail</option>
+        <option value="custom">Other (IMAP server)</option>
+      </select></label>
+    <div id="customHost" class="row hidden">
+      <label>IMAP server<input name="host" placeholder="imap.example.com"></label>
+      <label class="narrow">Port<input name="port" value="993"></label>
+    </div>
+    <label>Email<input name="user" type="email" autocomplete="username" required></label>
+    <label>App password<input name="password" type="password" autocomplete="current-password" required></label>
+    <p class="hint" id="pwHint">Gmail: turn on 2-step verification → <b>myaccount.google.com/apppasswords</b> → create one → paste it here. Your normal password won't work.</p>
+    <button class="btn primary" type="submit">Connect</button>
+    <p id="loginErr" class="err"></p>
+  </form>
+</section>
+
+<!-- ============ APP ============ -->
+<main id="app" class="layout hidden">
+  <form id="searchForm" class="card side">
+    <h3>Find attachments</h3>
+    <label>From (sender name or email)
+      <input name="senders" placeholder="mck kutty, billing@acme.in"></label>
+    <label>Keywords (subject, body or file name)
+      <input name="keywords" placeholder="invoice, bill"></label>
+    <div class="row">
+      <label>From date<input type="date" name="date_from"></label>
+      <label>To date<input type="date" name="date_to"></label>
+    </div>
+    <div class="chips" id="quickDates">
+      <button type="button" data-q="fy">This FY</button>
+      <button type="button" data-q="lfy">Last FY</button>
+      <button type="button" data-q="y">This year</button>
+      <button type="button" data-q="ly">Last year</button>
+      <button type="button" data-q="90">90 days</button>
+      <button type="button" data-q="clr">Any time</button>
+    </div>
+    <fieldset class="types">
+      <legend>File types</legend>
+      <label><input type="checkbox" name="t" value="pdf" checked> PDF</label>
+      <label><input type="checkbox" name="t" value="image"> Images</label>
+      <label><input type="checkbox" name="t" value="excel"> Excel/CSV</label>
+      <label><input type="checkbox" name="t" value="word"> Word</label>
+      <label><input type="checkbox" name="t" value="archive"> ZIP</label>
+      <input name="custom_types" placeholder="other: xml, txt">
+    </fieldset>
+    <details>
+      <summary>More options</summary>
+      <label>Exclude words<input name="exclude" placeholder="reminder, cancelled"></label>
+      <label>Folders <span class="muted">(empty = default)</span>
+        <select name="folders" id="folders" multiple size="5"></select></label>
+      <label class="check"><input type="checkbox" name="match_pdf_text"> Also search <b>inside PDF text</b> (slower)</label>
+      <label class="check"><input type="checkbox" name="hide_duplicates" checked> Hide duplicate files</label>
+      <label class="check"><input type="checkbox" name="include_inline"> Include inline images / logos</label>
+      <label>Minimum match score <output id="msOut">0%</output>
+        <input type="range" name="min_score" min="0" max="1" step="0.05" value="0"></label>
+      <label>Date-matrix window
+        <select name="window_months"><option value="1">1 month</option><option value="3" selected>3 months</option><option value="6">6 months</option><option value="12">12 months</option></select></label>
+    </details>
+    <button class="btn primary wide" type="submit" id="goBtn">Search</button>
+    <p id="searchErr" class="err"></p>
+    <div id="history" class="history"></div>
+  </form>
+
+  <section class="card results">
+    <div id="stats" class="stats muted">Fill in the search on the left. Example: From <b>mck kutty</b>, keyword <b>invoice</b>, 2024-01-01 → 2025-12-25, PDF.</div>
+    <div class="toolbar">
+      <input id="filter" placeholder="Filter results…" type="search">
+      <button class="btn ghost" id="selAll">Select all</button>
+      <button class="btn ghost" id="selNone">None</button>
+      <button class="btn ghost" id="selInv">Invert</button>
+      <span id="selInfo" class="muted">0 selected</span>
+    </div>
+    <div class="tablewrap">
+      <table id="tbl">
+        <thead><tr>
+          <th class="c"><input type="checkbox" id="chkAll" aria-label="select all"></th>
+          <th data-sort="score" title="Hexagon match">Match</th>
+          <th data-sort="filename">File</th>
+          <th data-sort="from_name" class="cf">From</th>
+          <th data-sort="date">Date ▾</th>
+          <th data-sort="size" class="r">Size</th>
+          <th></th>
+        </tr></thead>
+        <tbody></tbody>
+      </table>
+      <div id="empty" class="empty hidden">No attachments matched. Try fewer keywords, a wider date range or turn on “search inside PDF text”.</div>
+    </div>
+    <div class="dlbar">
+      <label>Save into folder<input id="dest" placeholder="~/MailAttachments"></label>
+      <label>Sub-folders<select id="ftpl">
+        {% for k, v in folder_templates.items() %}<option value="{{k}}">{{k}}</option>{% endfor %}
+      </select></label>
+      <label>File names<select id="ntpl">
+        {% for k, v in name_templates.items() %}<option value="{{k}}">{{k.replace('_',' + ')}}</option>{% endfor %}
+      </select></label>
+      <div class="dlbtns">
+        <button class="btn primary" id="saveBtn" disabled>Save to folder</button>
+        <button class="btn" id="zipBtn" disabled>Download ZIP</button>
+      </div>
+    </div>
+    <div id="dlReport" class="report hidden"></div>
+  </section>
+
+  <aside id="preview" class="card preview hidden">
+    <div class="pvhead">
+      <div><b id="pvName"></b><div class="muted small" id="pvMeta"></div></div>
+      <div class="pvtools">
+        <button class="btn ghost" id="pvPrev" title="Previous (←)">‹</button>
+        <button class="btn ghost" id="pvNext" title="Next (→)">›</button>
+        <button class="btn ghost" id="pvSel" title="Select (space)">Select</button>
+        <button class="btn ghost" id="pvClose" title="Close (Esc)">✕</button>
+      </div>
+    </div>
+    <div id="pvHex" class="pvhex"></div>
+    <div class="pvtabs" id="pvTabs"><button data-m="doc" class="on">Document</button><button data-m="text">Text</button></div>
+    <div id="pvBody" class="pvbody"></div>
+  </aside>
+</main>
+
+<div id="busy" class="busy hidden"><div class="spinner"></div><span id="busyMsg">Searching…</span></div>
+<script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>

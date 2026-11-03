@@ -83,3 +83,9 @@ lint/generated/
 lint/outputs/
 lint/tmp/
 # lint/reports/
+
+# mail agent
+.env
+MailAttachments/
+__pycache__/
+.pytest_cache/
