@@ -122,7 +122,13 @@ class Attachment:
             "duplicates": self.duplicates,
             "fields": {k: self.fields.get(k) for k in FIELD_NAMES},
             "text_source": self.text_source,
+            "risky": self.ext in _risky(),
         }
+
+
+def _risky():
+    from .downloader import RISKY_EXTS
+    return RISKY_EXTS
 
 
 def make_attachment_id(folder: str, uid: int, part: str) -> str:

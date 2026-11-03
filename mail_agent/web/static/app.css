@@ -185,3 +185,4 @@ textarea { display: block; width: 100%; margin-top: 4px; padding: 7px 9px; borde
 .detect { font-size: 13px; padding: 8px 10px; border-radius: 7px; background: var(--sel); margin: 4px 0 8px; }
 .detect.bad { background: #fde8e8; color: var(--err); }
 @media (prefers-color-scheme: dark) { .detect.bad { background: #3b1a1a; } }
+.risky { font-size: 10px; font-weight: 700; color: #fff; background: var(--err); border-radius: 4px; padding: 1px 5px; white-space: nowrap; }

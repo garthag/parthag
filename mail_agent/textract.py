@@ -19,6 +19,8 @@ import threading
 import zipfile
 
 MAX_TEXT = 200_000
+MAX_INPUT = 60 * 1024 * 1024          # don't parse attachments bigger than 60 MB
+MAX_UNZIPPED = 80 * 1024 * 1024       # zip-bomb guard for .docx/.xlsx
 OCR_LOCK = threading.Semaphore(max(1, (os.cpu_count() or 2) // 2))   # OCR is CPU heavy
 IMAGE_EXT = {"png", "jpg", "jpeg", "gif", "bmp", "tif", "tiff", "webp"}
 
@@ -141,6 +143,16 @@ def pdf_text(data: bytes, max_pages: int = 20, layout: bool = False) -> str:
         return ""
 
 
+def _zip_is_sane(data: bytes) -> bool:
+    """Reject zip bombs: total uncompressed size and compression ratio must be reasonable."""
+    try:
+        with zipfile.ZipFile(io.BytesIO(data)) as z:
+            total = sum(i.file_size for i in z.infolist())
+            return total <= MAX_UNZIPPED and total <= max(len(data), 1) * 200
+    except Exception:
+        return False
+
+
 def _docx_text(data: bytes) -> str:
     try:
         with zipfile.ZipFile(io.BytesIO(data)) as z:
@@ -184,6 +196,10 @@ def extract_text(data: bytes, filename: str, mime: str, ocr: bool = True) -> tup
     """Return (text, source) where source is pdf | ocr | office | plain | none."""
     ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
     mime = (mime or "").lower()
+    if len(data) > MAX_INPUT:
+        return "", "none"
+    if ext in ("docx", "docm", "xlsx", "xlsm") and not _zip_is_sane(data):
+        return "", "none"
     if ext == "pdf" or mime == "application/pdf":
         t = pdf_text(data)
         if len(re.sub(r"\s", "", t)) >= 25:

@@ -68,10 +68,15 @@ class Index:
     def __init__(self, path: str = ":memory:"):
         self.path = path
         self.db = sqlite3.connect(path, check_same_thread=False, isolation_level=None)
+        self.db.execute("PRAGMA secure_delete=ON")      # deleted rows are overwritten, not left in the file
         self.db.row_factory = sqlite3.Row
         self.lock = threading.RLock()
         with self.lock:
             self.db.executescript(SCHEMA)
+        if path != ":memory:":
+            from .config import restrict
+            for suffix in ("", "-wal", "-shm"):
+                restrict(path + suffix)
 
     # ------------------------------------------------------------- writing
     def _row(self, m: MessageMeta, p) -> tuple:
@@ -110,7 +115,8 @@ class Index:
                  f["gstin"], att_id))
 
     def _user_fields(self, att_id: str) -> dict:
-        r = self.db.execute("SELECT user_fields FROM atts WHERE id=?", (att_id,)).fetchone()
+        with self.lock:
+            r = self.db.execute("SELECT user_fields FROM atts WHERE id=?", (att_id,)).fetchone()
         try:
             return json.loads(r[0]) if r and r[0] else {}
         except ValueError:
@@ -147,7 +153,9 @@ class Index:
         return len(gone)
 
     def folder_state(self, folder: str):
-        r = self.db.execute("SELECT uidvalidity, last_uid, synced_at FROM folders WHERE name=?", (folder,)).fetchone()
+        with self.lock:
+            r = self.db.execute("SELECT uidvalidity, last_uid, synced_at FROM folders WHERE name=?",
+                                (folder,)).fetchone()
         return dict(r) if r else None
 
     def set_folder_state(self, folder: str, uidvalidity: int, last_uid: int):
@@ -158,6 +166,13 @@ class Index:
     def clear(self):
         with self.lock:
             self.db.executescript("DELETE FROM atts; DELETE FROM folders; DELETE FROM meta;")
+
+    def wipe(self):
+        """Delete everything AND compact the file so deleted text can't be recovered from it."""
+        with self.lock:
+            self.db.executescript("DELETE FROM atts; DELETE FROM folders; DELETE FROM meta;")
+            self.db.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+            self.db.execute("VACUUM")
 
     # ------------------------------------------------------------- reading
     @staticmethod
@@ -176,14 +191,18 @@ class Index:
             fields={k: r[k] for k in FIELD_NAMES}, text=r["text"] or "", text_source=r["text_source"] or "")
 
     def get(self, att_id: str) -> Attachment | None:
-        r = self.db.execute("SELECT * FROM atts WHERE id=?", (att_id,)).fetchone()
+        with self.lock:
+            r = self.db.execute("SELECT * FROM atts WHERE id=?", (att_id,)).fetchone()
         return self.to_attachment(r) if r else None
 
     def get_many(self, ids: list[str]) -> dict[str, Attachment]:
         out = {}
         for i in range(0, len(ids), 500):
             chunk = ids[i:i + 500]
-            for r in self.db.execute(f"SELECT * FROM atts WHERE id IN ({','.join('?' * len(chunk))})", chunk):
+            with self.lock:
+                rows = self.db.execute(f"SELECT * FROM atts WHERE id IN ({','.join('?' * len(chunk))})",
+                                       chunk).fetchall()
+            for r in rows:
                 out[r["id"]] = self.to_attachment(r)
         return out
 
@@ -235,7 +254,8 @@ class Index:
     def ids_to_analyze(self, exts: list[str], limit: int = 100000) -> list[str]:
         q = (f"SELECT id FROM atts WHERE text_source='' AND inline=0 AND ext IN ({','.join('?' * len(exts))}) "
              "ORDER BY ts DESC LIMIT ?")
-        return [r[0] for r in self.db.execute(q, (*exts, limit))]
+        with self.lock:
+            return [r[0] for r in self.db.execute(q, (*exts, limit)).fetchall()]
 
     def stats(self) -> dict:
         with self.lock:

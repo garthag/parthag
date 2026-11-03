@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import hmac
+import logging
+import secrets
 import threading
 import time
 import uuid
@@ -21,6 +24,27 @@ from ..smartfields import DOC_LABELS
 SAFE_INLINE = {"application/pdf", "image/png", "image/jpeg", "image/gif", "image/webp", "image/bmp"}
 TEXTUAL = ("text/", "application/json", "application/xml", "message/rfc822")
 ALLOWED_HOSTS = {"127.0.0.1", "localhost", "[::1]"}
+# The app may only ever write these file types through "Save as" (never .exe/.bat/.lnk ...).
+SAVE_EXTS = {".zip", ".xlsx", ".csv", ".json", ".txt", ".eml"}
+CSP = ("default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; "
+       "frame-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; "
+       "frame-ancestors 'self'")
+
+
+def safe_target(save_to: str, default_name: str) -> Path:
+    """Validate a path chosen in the Save-as dialog: absolute, allowed file type, not a system folder."""
+    target = Path(str(save_to)).expanduser()
+    if not target.suffix and "." in default_name:
+        target = target.with_suffix("." + default_name.rsplit(".", 1)[-1])
+    if not target.is_absolute():
+        raise ValueError("Choose a full folder path")
+    if target.suffix.lower() not in SAVE_EXTS:
+        raise ValueError(f"For safety the app only saves {', '.join(sorted(SAVE_EXTS))} files here")
+    low = str(target.resolve()).lower().replace("\\", "/")
+    if any(part in low for part in ("/windows/", "/program files", "/programdata/", "\\startup",
+                                    "/start menu/programs/startup", "/system32")):
+        raise ValueError("For safety the app does not write into system or start-up folders")
+    return target
 EXPORTS = {
     "xlsx": ("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", ".xlsx"),
     "csv": ("text/csv", ".csv"),
@@ -162,6 +186,9 @@ class Jobs:
 
 def create_app(settings: dict, engine: SearchEngine | None = None, demo: bool = False) -> Flask:
     app = Flask(__name__)
+    token = secrets.token_urlsafe(32)          # per-run secret: only our own window/page can use the API
+    app.config["API_TOKEN"] = token
+    logging.getLogger("werkzeug").setLevel(logging.WARNING)   # no request URLs in logs
     state = {"engine": engine, "account": "Demo mailbox" if demo else "", "demo": demo, "host": ""}
     lock = threading.Lock()
     jobs = Jobs()
@@ -176,6 +203,23 @@ def create_app(settings: dict, engine: SearchEngine | None = None, demo: bool = 
             abort(403)
         if request.method == "POST" and not request.is_json:
             abort(415)
+        if request.path.startswith("/api/"):
+            sent = request.headers.get("X-App-Token") or request.args.get("t") or ""
+            if not hmac.compare_digest(sent, token):
+                abort(403)
+
+    @app.after_request
+    def _headers(resp):
+        resp.headers["X-Content-Type-Options"] = "nosniff"
+        resp.headers["X-Frame-Options"] = "SAMEORIGIN"
+        resp.headers["Referrer-Policy"] = "no-referrer"
+        resp.headers["Cross-Origin-Resource-Policy"] = "same-origin"
+        resp.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+        if request.path == "/":
+            resp.headers["Content-Security-Policy"] = CSP
+        if request.path.startswith("/api/"):
+            resp.headers.setdefault("Cache-Control", "no-store")
+        return resp
 
     def eng() -> SearchEngine:
         if state["engine"] is None:
@@ -190,9 +234,10 @@ def create_app(settings: dict, engine: SearchEngine | None = None, demo: bool = 
     def _file(data: bytes, mime: str, name: str, save_to: str | None = None):
         """Send a file to the browser, or (desktop app) write it where the user chose."""
         if save_to:
-            target = Path(str(save_to)).expanduser()
-            if not target.suffix and "." in name:
-                target = target.with_suffix("." + name.rsplit(".", 1)[-1])
+            try:
+                target = safe_target(save_to, name)
+            except ValueError as ex:
+                return jsonify(error=str(ex)), 400
             try:
                 target.parent.mkdir(parents=True, exist_ok=True)
                 target.write_bytes(data)
@@ -208,7 +253,7 @@ def create_app(settings: dict, engine: SearchEngine | None = None, demo: bool = 
     @app.get("/")
     def index():
         return render_template("index.html", folder_templates=FOLDER_TEMPLATES, name_templates=NAME_TEMPLATES,
-                               doc_labels=DOC_LABELS)
+                               doc_labels=DOC_LABELS, api_token=token)
 
     @app.get("/api/status")
     def status():
@@ -319,6 +364,18 @@ def create_app(settings: dict, engine: SearchEngine | None = None, demo: bool = 
         eng().index.clear()
         return jsonify(eng().index.stats())
 
+    @app.post("/api/erase")
+    def erase_everything():
+        """Privacy: remove everything this app stored on the PC (mail itself is untouched)."""
+        e = state["engine"]
+        if e is not None:
+            e.index.wipe()
+            e.cache.clear()
+            e.registry.clear()
+        config.forget_account()
+        removed = config.erase_local_data()
+        return jsonify(ok=True, removed=removed)
+
     @app.post("/api/analyze")
     def analyze():
         e, j = eng(), request.get_json()
@@ -358,7 +415,7 @@ def create_app(settings: dict, engine: SearchEngine | None = None, demo: bool = 
         mime = a.mime.lower()
         if mime == "application/octet-stream" and a.ext == "pdf":
             mime = "application/pdf"
-        headers = {"X-Content-Type-Options": "nosniff", "Cache-Control": "private, max-age=600"}
+        headers = {"X-Content-Type-Options": "nosniff", "Cache-Control": "no-store"}   # never cached on disk
         if mime in SAFE_INLINE:
             headers["Content-Disposition"] = "inline"
             return Response(data, mimetype=mime, headers=headers)
@@ -434,9 +491,12 @@ def create_app(settings: dict, engine: SearchEngine | None = None, demo: bool = 
         data, rep = build_zip(eng(), ids, j.get("folder_template", "sender/year-month"),
                               j.get("name_template", "original"))
         if j.get("save_to"):
-            target = Path(str(j["save_to"])).expanduser()
-            if target.suffix.lower() != ".zip":
-                target = target.with_suffix(".zip")
+            try:
+                target = safe_target(str(j["save_to"]), "x.zip")
+                if target.suffix.lower() != ".zip":
+                    target = target.with_suffix(".zip")
+            except ValueError as ex:
+                return jsonify(error=str(ex)), 400
             try:
                 target.parent.mkdir(parents=True, exist_ok=True)
                 target.write_bytes(data)

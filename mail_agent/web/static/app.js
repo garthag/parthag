@@ -12,8 +12,12 @@ let status = {}, pvMode = "doc", docCache = new Map();
 
 function store(k, v) { try { if (v === undefined) return JSON.parse(localStorage.getItem(k)); localStorage.setItem(k, JSON.stringify(v)); } catch { return null; } }
 
+const TOKEN = document.querySelector('meta[name="app-token"]').content;
+const withToken = (url) => url + (url.includes("?") ? "&" : "?") + "t=" + encodeURIComponent(TOKEN);
 async function api(path, body) {
-  const opt = body === undefined ? {} : { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) };
+  const headers = { "X-App-Token": TOKEN };
+  if (body !== undefined) headers["Content-Type"] = "application/json";
+  const opt = body === undefined ? { headers } : { method: "POST", headers, body: JSON.stringify(body) };
   const r = await fetch(path, opt);
   if ((r.headers.get("content-type") || "").includes("application/json")) {
     const j = await r.json();
@@ -278,7 +282,7 @@ function render() {
     return `<tr data-i="${i}" class="${selected.has(r.id) ? "sel" : ""} ${r.id === activeId ? "active" : ""}">
       <td class="c"><input type="checkbox" ${selected.has(r.id) ? "checked" : ""} aria-label="select"></td>
       <td><div class="hexcell">${hexSVG(r.facets)}<span>${Math.round(r.score * 100)}%</span></div></td>
-      <td><div class="fn"><span class="ext x-${esc(r.ext)}">${esc(r.ext || "file")}</span>${esc(r.filename)}${r.duplicates ? `<span class="badge" title="identical copies hidden">+${r.duplicates} dup</span>` : ""}${r.text_source === "ocr" ? ` <span class="src s-ocr">OCR</span>` : ""}</div>
+      <td><div class="fn"><span class="ext x-${esc(r.ext)}">${esc(r.ext || "file")}</span>${esc(r.filename)}${r.duplicates ? `<span class="badge" title="identical copies hidden">+${r.duplicates} dup</span>` : ""}${r.text_source === "ocr" ? ` <span class="src s-ocr">OCR</span>` : ""}${r.risky ? ` <span class="risky" title="This file type can run programs or macros. Only open it if you trust the sender.">⚠ risky file</span>` : ""}</div>
           <div class="sub">${d}${esc(r.subject)}</div></td>
       <td class="cf"><div>${esc(r.from_name)}</div><div class="sub hide-sm">${esc(r.from_email)}</div></td>
       <td class="r cf amt">${money(r.fields.amount, r.fields.currency)}</td>
@@ -357,7 +361,7 @@ async function openPreview(id) {
   } catch (er) { body.innerHTML = `<div class='none'>${esc(er.message)}</div>`; }
 }
 function showDocument(r) {
-  const url = `/api/preview/${encodeURIComponent(r.id)}`, body = $("#pvBody");
+  const url = withToken(`/api/preview/${encodeURIComponent(r.id)}`), body = $("#pvBody");
   const ext = r.ext || (r.mime === "application/pdf" ? "pdf" : "");
   if (ext === "pdf") body.innerHTML = `<iframe src="${url}#view=FitH" title="preview"></iframe>`;
   else if (r.mime.startsWith("image/") && r.mime !== "image/svg+xml") body.innerHTML = `<img src="${url}" alt="">`;
@@ -466,6 +470,7 @@ $("#saveBtn").addEventListener("click", async () => {
     report(`<div class="ok">✔ Saved ${r.saved.length} file(s) to <b>${esc(r.folder)}</b>${openBtns(r.folder)}</div>` +
       (r.skipped.length ? `<div class="warn">↷ ${r.skipped.length} skipped – identical file already in the folder</div>` : "") +
       r.failed.map((f) => `<div class="bad">✖ ${esc(f.filename)}: ${esc(f.error)}</div>`).join("") +
+      (r.saved.some((f) => f.risky) ? `<div class="warn">⚠ ${r.saved.filter((f) => f.risky).length} saved file(s) can run programs/macros – they are marked as "downloaded from the internet", so Windows will warn before opening them.</div>` : "") +
       `<div class="muted small">manifest.csv in that folder lists sender, subject, date and SHA-256 of every saved file.</div>`);
   } catch (er) { report(`<div class="bad">✖ ${esc(er.message)}</div>`); }
   finally { busy(false); }
@@ -568,6 +573,11 @@ async function startSync(full, quiet) {
 $("#syncBtn").addEventListener("click", () => startSync(false));
 $("#rebuildBtn").addEventListener("click", () => { if (confirm("Re-read every email from the server? (documents already read will need reading again)")) startSync(true); });
 $("#clearBtn").addEventListener("click", async () => { if (!confirm("Delete the local index? Your mail is not touched.")) return; renderIndex(await api("/api/index/clear", {})); refreshIndex(); });
+$("#eraseBtn").addEventListener("click", async () => {
+  if (!confirm("Erase everything this app stored on this PC?\n\n• local index (attachment list + text read from documents)\n• saved login (Windows Credential Manager)\n• app settings and window data\n\nYour email and files you saved yourself are NOT touched.")) return;
+  try { await api("/api/erase", {}); try { localStorage.clear(); } catch { /* ignore */ } toast("All app data erased"); await api("/api/disconnect", {}); boot(); }
+  catch (er) { toast(er.message); }
+});
 $("#readAllBtn").addEventListener("click", () => analyze(null, { all: true, ocr: $("#readOcr").checked }));
 $("#autoSync").addEventListener("change", (e) => store("autoSync", e.target.checked));
 

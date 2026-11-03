@@ -3,6 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="app-token" content="{{ api_token }}">
+<meta name="referrer" content="no-referrer">
 <title>Mail Attachment Agent</title>
 <link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}">
 </head>
@@ -230,6 +232,7 @@
         <span class="spacer"></span>
         <button class="btn ghost" id="rebuildBtn">Full rebuild</button>
         <button class="btn ghost danger" id="clearBtn">Clear index</button>
+        <button class="btn ghost danger" id="eraseBtn" title="Delete index, saved login and all app data from this PC">Erase all my data</button>
       </div>
       <div id="jobBox" class="jobbox hidden">
         <div class="bar"><i id="jobBar"></i></div>

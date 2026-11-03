@@ -24,6 +24,7 @@ from . import textract
 from .config import app_dir, settings
 
 TITLE = "Mail Attachment Agent"
+OPENABLE = {".xlsx", ".csv", ".json", ".txt", ".eml", ".zip"}
 
 
 def _start_server(app):
@@ -78,7 +79,8 @@ class DesktopApi:
     def open_path(self, path: str):
         """Open a file with its default app (e.g. .eml draft -> Outlook, .xlsx -> Excel)."""
         p = Path(os.path.expanduser(path or ""))
-        if not p.is_file():
+        # only open the kinds of files this app itself creates - never programs or scripts
+        if not p.is_file() or p.suffix.lower() not in OPENABLE:
             return False
         if sys.platform == "win32":
             os.startfile(str(p))  # noqa: S606 - a file this app just wrote where the user chose
@@ -158,8 +160,11 @@ def selftest(out: str | None = None) -> int:
         srv, url = _start_server(app)
 
         def get(path, body=None):
+            hdr = {"X-App-Token": app.config["API_TOKEN"]}
+            if body:
+                hdr["Content-Type"] = "application/json"
             req = urllib.request.Request(url + path.lstrip("/"), data=json.dumps(body).encode() if body else None,
-                                         headers={"Content-Type": "application/json"} if body else {})
+                                         headers=hdr)
             with urllib.request.urlopen(req, timeout=20) as r:
                 return r.status, r.read()
 

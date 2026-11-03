@@ -31,6 +31,34 @@ NAME_TEMPLATES = {
     "date_sender_original": "{date}_{sender}_{filename}",
 }
 
+# File types that can run code when opened - shown with a warning, saved with Mark-of-the-Web.
+RISKY_EXTS = {"exe", "com", "scr", "pif", "bat", "cmd", "ps1", "psm1", "vbs", "vbe", "js", "jse", "wsf", "wsh",
+              "hta", "msi", "msp", "jar", "lnk", "url", "reg", "dll", "cpl", "iso", "img", "vhd", "vhdx", "xll",
+              "docm", "xlsm", "xlsb", "pptm", "dotm", "xltm", "chm", "appx", "msix", "application", "one", "svg"}
+
+
+def is_risky(filename: str) -> bool:
+    name = filename.lower().strip()
+    ext = name.rsplit(".", 1)[-1] if "." in name else ""
+    # also catch "invoice.pdf.exe" style double extensions
+    return ext in RISKY_EXTS
+
+
+def mark_of_the_web(path: Path) -> None:
+    """Tag a saved attachment as 'downloaded from the internet' (Windows Zone.Identifier).
+
+    Windows SmartScreen, Defender and Office Protected View then treat it as untrusted,
+    exactly like a file saved from a web browser.
+    """
+    if os.name != "nt":
+        return
+    try:
+        with open(f"{path}:Zone.Identifier", "w", encoding="utf-8") as fh:
+            fh.write("[ZoneTransfer]\r\nZoneId=3\r\nReferrerUrl=email attachment\r\n")
+    except OSError:
+        pass        # non-NTFS drive (USB stick / network share) - nothing to mark
+
+
 _bad = re.compile(r'[<>:"/\\|?*\x00-\x1f]+')
 _lock = threading.Lock()
 
@@ -113,12 +141,13 @@ def save_all(engine, ids: list[str], dest: str, folder_tpl: str = "sender/year-m
             path = _unique(target_path(root, a, folder_tpl, name_tpl))
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_bytes(data)
+            mark_of_the_web(path)
             if a.date:
                 ts = a.date.timestamp()
                 os.utime(path, (ts, ts))     # file date = email date
             rel = path.relative_to(root).as_posix()
             index[digest] = rel
-            report["saved"].append({"filename": a.filename, "path": rel, "size": len(data)})
+            report["saved"].append({"filename": a.filename, "path": rel, "size": len(data), "risky": is_risky(a.filename)})
             rows.append([datetime.now().isoformat(timespec="seconds"), rel, digest, len(data),
                          a.from_name, a.from_email, a.subject,
                          a.date.isoformat() if a.date else "", a.message_id])

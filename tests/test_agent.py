@@ -179,7 +179,9 @@ def client(tmp_path):
     from mail_agent.web import create_app
     app = create_app({"download_dir": str(tmp_path), "workers": 2, "host": "", "user": "", "password": ""},
                      engine=SearchEngine(DemoSource(), workers=2), demo=True)
-    return app.test_client()
+    c = app.test_client()
+    c.environ_base["HTTP_X_APP_TOKEN"] = app.config["API_TOKEN"]
+    return c
 
 
 def test_web_flow(client, tmp_path):

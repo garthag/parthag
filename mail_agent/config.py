@@ -11,13 +11,45 @@ APP_NAME = "MailAttachmentAgent"
 
 
 def app_dir() -> Path:
-    """Per-user data folder: %APPDATA%\\MailAttachmentAgent on Windows, ~/.mail_agent elsewhere."""
+    """Per-user data folder: %APPDATA%\\MailAttachmentAgent on Windows, ~/.mail_agent elsewhere.
+
+    %APPDATA% is private to your Windows user account (other users on the PC can't read it).
+    """
     if sys.platform == "win32" and os.environ.get("APPDATA"):
         p = Path(os.environ["APPDATA"]) / APP_NAME
     else:
         p = Path.home() / ".mail_agent"
     p.mkdir(parents=True, exist_ok=True)
+    restrict(p, directory=True)
     return p
+
+
+def restrict(path, directory: bool = False) -> None:
+    """Owner-only permissions (Linux/macOS). On Windows the per-user profile ACL already does this."""
+    if sys.platform == "win32":
+        return
+    try:
+        if os.path.exists(path):
+            os.chmod(path, 0o700 if directory else 0o600)
+    except OSError:
+        pass
+
+
+def erase_local_data() -> list[str]:
+    """Delete every file this app created in its data folder (index, settings, logs, window data)."""
+    import shutil
+    base = app_dir()
+    removed = []
+    for child in base.iterdir():
+        try:
+            if child.is_dir():
+                shutil.rmtree(child, ignore_errors=True)
+            else:
+                child.unlink()
+            removed.append(child.name)
+        except OSError:
+            pass                   # e.g. index file still open - it was already wiped + vacuumed
+    return removed
 
 
 def default_download_dir() -> str:
@@ -78,7 +110,9 @@ def save_account(host: str, port: int, user: str, password: str) -> bool:
     if kr is None:
         return False
     kr.set_password(APP_NAME, user, password)
-    (app_dir() / "account.json").write_text(json.dumps({"host": host, "port": port, "user": user}), "utf-8")
+    f = app_dir() / "account.json"
+    f.write_text(json.dumps({"host": host, "port": port, "user": user}), "utf-8")
+    restrict(f)
     return True
 
 

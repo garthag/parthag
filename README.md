@@ -88,14 +88,51 @@ python -m mail_agent search --from "mck kutty" -k invoice --since 2024-01-01 --u
 * **Hexagon scoring** with typo and initials tolerance (`M.C.K Kuty` matches `mck kutty`), plus keyword
   matching inside the text read from documents.
 
-### Privacy & safety
+### Security & privacy
 
-* The UI listens on `127.0.0.1` only and rejects other host names and non-JSON POSTs.
-* Passwords stay on your PC, in memory or in the Windows Credential Manager. Account details and the index live in
-  `%APPDATA%\MailAttachmentAgent` (`~/.mail_agent` on other systems).
-* Attachments are previewed safely: HTML is shown as plain text and never runs scripts.
-* Saved file names are sanitised, so nothing is ever written outside the folder you chose.
-* "Send email" goes through your own provider's SMTP server. The demo mailbox never sends anything.
+**Your mail**
+* **Read-only:** folders are opened read-only and messages are fetched with `BODY.PEEK`, so nothing is ever deleted,
+  moved, changed or marked as read.
+* All connections to the mail server are **encrypted (TLS)** with certificate checking, and plain-text login is
+  never used. "Send email" uses your own provider's encrypted SMTP server. The demo mailbox never sends anything.
+
+**Your password**
+* It never leaves your PC. "Remember me" stores it in the **Windows Credential Manager** (encrypted by Windows
+  for your user account), never in a file. Without "Remember me" it is only kept in memory.
+
+**The app on your PC**
+* The window talks to a small built-in server on `127.0.0.1` (your PC only, not the network). Every request needs a
+  **secret key that changes every time the app starts**, so other programs and websites can't use it.
+  Other host names are refused (stops DNS-rebinding attacks), and cross-site form posts are refused.
+* Strict browser security headers: Content-Security-Policy (no outside scripts), no framing by other sites,
+  no referrer, and previews are **never cached on disk**.
+* Data (index, settings) lives in `%APPDATA%\MailAttachmentAgent`, which only your Windows user can read.
+  The index stores attachment details and the text read from documents, **never the files themselves**.
+  Deleted rows are overwritten (`secure_delete`).
+* **Index → "Erase all my data"** deletes the index, the saved login and all app data from the PC. Your email
+  and files you saved yourself are not touched.
+
+**Attachments (they can be dangerous)**
+* Saved attachments get Windows' **Mark-of-the-Web**, like a browser download, so SmartScreen, Defender and
+  Office Protected View check them before they open.
+* Files that can run code (`.exe .js .bat .ps1 .lnk .hta .msi`, macro Office files like `.xlsm/.docm`, …) are
+  shown with a red **⚠ risky file** label.
+* The app **never runs or opens attachments itself**. Its "Open" button only opens files the app created
+  (`.xlsx .csv .json .txt .eml .zip`). "Save as" can only write those types, and never into Windows, Program Files
+  or Start-up folders.
+* Attachment HTML is shown as plain text and can't run scripts. Saved file names are sanitised, so nothing is
+  written outside the folder you chose.
+* Reading is protected against booby-trapped files: size limits, a zip-bomb check, safe XML parsing
+  (`defusedxml`), Pillow's image-bomb guard, and page limits for PDFs.
+
+**The download**
+* The installer is built and tested on GitHub's Windows servers from this repository's source code. The release
+  page lists its **SHA-256 checksum**, so you can check your download wasn't altered:
+  `Get-FileHash $HOME\Downloads\MailAttachmentAgent-Setup.exe`.
+* It installs for your user only (no administrator rights) and uninstalls cleanly from *Settings → Apps*.
+* **Why SmartScreen warns:** the app isn't code-signed yet. Signing needs a paid code-signing certificate
+  (from about US$200–400 per year, or Azure Trusted Signing at about US$10 per month). Once signed, the warning goes away.
+  The build is ready for it: add the certificate as a GitHub secret and a signing step.
 
 ### Tests
 

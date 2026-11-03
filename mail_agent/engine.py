@@ -40,6 +40,11 @@ class ByteCache:
                 self.data.move_to_end(k)
             return v
 
+    def clear(self):
+        with self.lock:
+            self.data.clear()
+            self.size = 0
+
     def put(self, k, v: bytes):
         if len(v) > self.max // 4:
             return
