@@ -1,0 +1,4 @@
+test/**
+package.json
+README.md
+.claspignore

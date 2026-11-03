@@ -1,0 +1,10 @@
+{
+  "name": "mail-attachment-agent-apps-script",
+  "private": true,
+  "description": "Tests and local preview for the Google Apps Script edition",
+  "scripts": {
+    "test": "node --test test/server.test.js",
+    "test:ui": "node test/ui.test.js",
+    "preview": "node test/devserver.js 8790"
+  }
+}

@@ -1,0 +1,24 @@
+name: Apps Script edition
+
+on:
+  push:
+    paths: ["google-apps-script/**", ".github/workflows/apps-script.yml"]
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: google-apps-script
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Server tests (Code.gs against fake Gmail / Drive / Sheets)
+        run: node --test test/server.test.js
+      - name: Syntax check of the browser script
+        run: |
+          sed -n '/<script>/,/<\/script>/p' App.html | sed '1d;$d' > /tmp/app.js
+          node --check /tmp/app.js
