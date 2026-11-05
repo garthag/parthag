@@ -61,18 +61,13 @@ public static class Screenshots
         // Lay the page out at a fixed 1440×860 regardless of the runner's screen size.
         var root = (FrameworkElement)window.Content;
         var size = new Size(1440, 860);
+        if (root is System.Windows.Controls.Panel panel) panel.Background = window.Background; // page colour, not transparent
+        // Measure/Arrange run synchronously; render straight away, before the window lays it out again.
         root.Measure(size);
         root.Arrange(new Rect(size));
-        root.UpdateLayout();
         var dpi = VisualTreeHelper.GetDpi(window);
-        var bmp = new RenderTargetBitmap((int)(root.ActualWidth * dpi.DpiScaleX), (int)(root.ActualHeight * dpi.DpiScaleY), dpi.PixelsPerInchX, dpi.PixelsPerInchY, PixelFormats.Pbgra32);
-        var visual = new DrawingVisual();
-        using (var dc = visual.RenderOpen())
-        {
-            dc.DrawRectangle(window.Background, null, new Rect(0, 0, root.ActualWidth, root.ActualHeight));
-            dc.DrawRectangle(new VisualBrush(root), null, new Rect(0, 0, root.ActualWidth, root.ActualHeight));
-        }
-        bmp.Render(visual);
+        var bmp = new RenderTargetBitmap((int)(size.Width * dpi.DpiScaleX), (int)(size.Height * dpi.DpiScaleY), dpi.PixelsPerInchX, dpi.PixelsPerInchY, PixelFormats.Pbgra32);
+        bmp.Render(root);
         var enc = new PngBitmapEncoder();
         enc.Frames.Add(BitmapFrame.Create(bmp));
         using var fs = File.Create(path);
