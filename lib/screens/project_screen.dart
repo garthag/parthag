@@ -7,6 +7,7 @@ import '../widgets/common.dart';
 import 'media_gallery.dart';
 import 'project_form_screen.dart';
 import 'report_screen.dart';
+import 'steel_takeoff_screen.dart';
 
 class ProjectScreen extends StatelessWidget {
   const ProjectScreen({super.key, required this.projectId});
@@ -20,7 +21,7 @@ class ProjectScreen extends StatelessWidget {
     if (project == null) return const Scaffold(body: SizedBox());
 
     return DefaultTabController(
-      length: 3,
+      length: 4,
       child: Scaffold(
         appBar: AppBar(
           title: Text(project.name, overflow: TextOverflow.ellipsis),
@@ -49,12 +50,14 @@ class ProjectScreen extends StatelessWidget {
             Tab(icon: Icon(Icons.description_outlined), text: 'DPRs'),
             Tab(icon: Icon(Icons.insights_outlined), text: 'Dashboard'),
             Tab(icon: Icon(Icons.photo_library_outlined), text: 'Media'),
+            Tab(icon: Icon(Icons.view_column_outlined), text: 'Steel'),
           ]),
         ),
         body: TabBarView(children: [
           _ReportList(project: project),
           _Dashboard(project: project),
           ProjectMediaLibrary(projectId: project.id),
+          ProjectSteelTab(projectId: project.id),
         ]),
         floatingActionButton: FloatingActionButton.extended(
           onPressed: () => newReport(context, project.id),

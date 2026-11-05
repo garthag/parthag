@@ -48,6 +48,19 @@ enum SteelShape {
   rhs,
 }
 
+/// Top level of the steel hierarchy: Category → Family → Size.
+enum SteelCategory {
+  platesFlats('Plates & flats'),
+  barsRebar('Bars & rebar'),
+  angles('Angles'),
+  channels('Channels'),
+  beamsColumns('Beams & columns'),
+  pipesHollow('Pipes & hollow sections');
+
+  const SteelCategory(this.label);
+  final String label;
+}
+
 /// A size the user types in for a calculated family.
 class SteelDim {
   const SteelDim(this.key, this.label);
@@ -58,6 +71,7 @@ class SteelDim {
 class SteelFamily {
   const SteelFamily({
     required this.code,
+    required this.category,
     required this.name,
     required this.standard,
     this.shape = SteelShape.table,
@@ -65,6 +79,7 @@ class SteelFamily {
   });
 
   final String code;
+  final SteelCategory category;
   final String name;
   final String standard;
   final SteelShape shape;
@@ -157,6 +172,7 @@ abstract final class SteelTables {
   // ---------------------------------------------------------------- beams
   static const ismb = SteelFamily(
     code: 'ISMB',
+    category: SteelCategory.beamsColumns,
     name: 'Medium weight beam',
     standard: 'IS 808 / SP 6(1)',
     sections: [
@@ -179,6 +195,7 @@ abstract final class SteelTables {
 
   static const islb = SteelFamily(
     code: 'ISLB',
+    category: SteelCategory.beamsColumns,
     name: 'Light weight beam',
     standard: 'IS 808 / SP 6(1)',
     sections: [
@@ -204,6 +221,7 @@ abstract final class SteelTables {
 
   static const isjb = SteelFamily(
     code: 'ISJB',
+    category: SteelCategory.beamsColumns,
     name: 'Junior beam',
     standard: 'IS 808 / SP 6(1)',
     sections: [
@@ -216,6 +234,7 @@ abstract final class SteelTables {
 
   static const iswb = SteelFamily(
     code: 'ISWB',
+    category: SteelCategory.beamsColumns,
     name: 'Wide flange beam',
     standard: 'IS 808 / SP 6(1)',
     sections: [
@@ -237,6 +256,7 @@ abstract final class SteelTables {
 
   static const ishb = SteelFamily(
     code: 'ISHB',
+    category: SteelCategory.beamsColumns,
     name: 'Column / heavy beam',
     standard: 'IS 808 / SP 6(1)',
     sections: [
@@ -263,6 +283,7 @@ abstract final class SteelTables {
   // ------------------------------------------------------------- channels
   static const ismc = SteelFamily(
     code: 'ISMC',
+    category: SteelCategory.channels,
     name: 'Medium weight channel',
     standard: 'IS 808 / SP 6(1)',
     sections: [
@@ -282,6 +303,7 @@ abstract final class SteelTables {
 
   static const islc = SteelFamily(
     code: 'ISLC',
+    category: SteelCategory.channels,
     name: 'Light weight channel',
     standard: 'IS 808 / SP 6(1)',
     sections: [
@@ -301,6 +323,7 @@ abstract final class SteelTables {
 
   static const isjc = SteelFamily(
     code: 'ISJC',
+    category: SteelCategory.channels,
     name: 'Junior channel',
     standard: 'IS 808 / SP 6(1)',
     sections: [
@@ -315,6 +338,7 @@ abstract final class SteelTables {
   // --------------------------------------------------------------- angles
   static const isaEqual = SteelFamily(
     code: 'ISA',
+    category: SteelCategory.angles,
     name: 'Equal angle',
     standard: 'IS 808 / SP 6(1)',
     sections: [
@@ -395,6 +419,7 @@ abstract final class SteelTables {
 
   static const isaUnequal = SteelFamily(
     code: 'ISA (U)',
+    category: SteelCategory.angles,
     name: 'Unequal angle',
     standard: 'IS 808 / SP 6(1)',
     sections: [
@@ -449,6 +474,7 @@ abstract final class SteelTables {
   // ---------------------------------------------------- UB / UC (BS 4-1)
   static final ub = SteelFamily(
     code: 'UB',
+    category: SteelCategory.beamsColumns,
     name: 'Universal beam',
     standard: 'BS 4-1 (mass in the designation)',
     sections: _universal('UB', const [
@@ -467,6 +493,7 @@ abstract final class SteelTables {
 
   static final uc = SteelFamily(
     code: 'UC',
+    category: SteelCategory.beamsColumns,
     name: 'Universal column',
     standard: 'BS 4-1 (mass in the designation)',
     sections: _universal('UC', const [
@@ -484,6 +511,7 @@ abstract final class SteelTables {
   // ------------------------------------------------ plates, flats, bars
   static final plate = SteelFamily(
     code: 'Plate',
+    category: SteelCategory.platesFlats,
     name: 'Steel plate (width × thickness)',
     standard: 'IS 2062 / IS 1730',
     shape: SteelShape.flat,
@@ -496,6 +524,7 @@ abstract final class SteelTables {
 
   static final flat = SteelFamily(
     code: 'Flat',
+    category: SteelCategory.platesFlats,
     name: 'Flat bar',
     standard: 'IS 2062 / IS 1731',
     shape: SteelShape.flat,
@@ -510,6 +539,7 @@ abstract final class SteelTables {
 
   static final roundBar = SteelFamily(
     code: 'Round',
+    category: SteelCategory.barsRebar,
     name: 'Round bar (MS)',
     standard: 'IS 2062 / IS 1732',
     shape: SteelShape.round,
@@ -518,6 +548,7 @@ abstract final class SteelTables {
 
   static final squareBar = SteelFamily(
     code: 'Square',
+    category: SteelCategory.barsRebar,
     name: 'Square bar',
     standard: 'IS 2062 / IS 1732',
     shape: SteelShape.square,
@@ -527,6 +558,7 @@ abstract final class SteelTables {
   /// Nominal mass of reinforcement bars, IS 1786 Table 1.
   static const tmt = SteelFamily(
     code: 'TMT',
+    category: SteelCategory.barsRebar,
     name: 'TMT / HYSD rebar',
     standard: 'IS 1786 (nominal mass)',
     shape: SteelShape.round,
@@ -548,6 +580,7 @@ abstract final class SteelTables {
   // ------------------------------------------------- pipes and hollows
   static final pipeLight = SteelFamily(
     code: 'Pipe L',
+    category: SteelCategory.pipesHollow,
     name: 'MS pipe – Light (A)',
     standard: 'IS 1239 (Pt 1)',
     shape: SteelShape.chs,
@@ -560,6 +593,7 @@ abstract final class SteelTables {
 
   static final pipeMedium = SteelFamily(
     code: 'Pipe M',
+    category: SteelCategory.pipesHollow,
     name: 'MS pipe – Medium (B)',
     standard: 'IS 1239 (Pt 1)',
     shape: SteelShape.chs,
@@ -572,6 +606,7 @@ abstract final class SteelTables {
 
   static final pipeHeavy = SteelFamily(
     code: 'Pipe H',
+    category: SteelCategory.pipesHollow,
     name: 'MS pipe – Heavy (C)',
     standard: 'IS 1239 (Pt 1)',
     shape: SteelShape.chs,
@@ -584,6 +619,7 @@ abstract final class SteelTables {
 
   static final shs = SteelFamily(
     code: 'SHS',
+    category: SteelCategory.pipesHollow,
     name: 'Square hollow section',
     standard: 'IS 4923',
     shape: SteelShape.rhs,
@@ -598,6 +634,7 @@ abstract final class SteelTables {
 
   static final rhsFamily = SteelFamily(
     code: 'RHS',
+    category: SteelCategory.pipesHollow,
     name: 'Rectangular hollow section',
     standard: 'IS 4923',
     shape: SteelShape.rhs,
@@ -623,5 +660,151 @@ abstract final class SteelTables {
       if (f.code == code) return f;
     }
     return null;
+  }
+}
+
+// ------------------------------------------------------------------------
+// Library: one size together with its family, plus search, filter, sort and
+// relations (neighbouring sizes and equivalent-weight alternatives).
+// ------------------------------------------------------------------------
+
+/// A size together with its family. This is what the library, search and
+/// take-offs work with; [key] links a take-off item back to the table.
+class SteelRef {
+  const SteelRef(this.family, this.section);
+
+  final SteelFamily family;
+  final SteelSection section;
+
+  String get key => steelKey(family.code, section.designation);
+  String get designation => section.designation;
+  double get kgPerM => section.kgPerM;
+  SteelCategory get category => family.category;
+
+  @override
+  bool operator ==(Object other) => other is SteelRef && other.key == key;
+
+  @override
+  int get hashCode => key.hashCode;
+
+  @override
+  String toString() => designation;
+}
+
+String steelKey(String familyCode, String designation) => '$familyCode|$designation';
+
+enum SteelSort {
+  size('Size (IS table order)'),
+  weightAsc('Weight: light → heavy'),
+  weightDesc('Weight: heavy → light'),
+  name('Designation A → Z');
+
+  const SteelSort(this.label);
+  final String label;
+}
+
+/// Numbers in a designation, used for natural sorting: "ISA 65×65×8" → [65, 65, 8].
+List<double> steelSizeKey(String s) =>
+    RegExp(r'\d+(?:\.\d+)?').allMatches(s).map((m) => double.parse(m.group(0)!)).toList();
+
+int _compareKeys(List<double> a, List<double> b) {
+  for (var i = 0; i < a.length && i < b.length; i++) {
+    final c = a[i].compareTo(b[i]);
+    if (c != 0) return c;
+  }
+  return a.length.compareTo(b.length);
+}
+
+/// Lower case, "x" / "*" / "×" all written as "x", single spaces.
+String normalizeSteelText(String s) =>
+    s.toLowerCase().replaceAll(RegExp(r'[×*]'), 'x').replaceAll(RegExp(r'\s+'), ' ').trim();
+
+abstract final class SteelLibrary {
+  /// Every size of every family, in IS table order (category → family → size).
+  static final List<SteelRef> all = [
+    for (final f in SteelTables.families)
+      for (final s in f.sections) SteelRef(f, s),
+  ];
+
+  static final Map<String, SteelRef> _byKey = {for (final r in all) r.key: r};
+
+  static final Map<SteelRef, String> _haystack = {
+    for (final r in all)
+      r: normalizeSteelText('${r.family.code} ${r.family.name} ${r.family.standard} '
+          '${r.category.label} ${r.designation} ${r.section.dims}'),
+  };
+
+  static SteelRef? find(String familyCode, String designation) => _byKey[steelKey(familyCode, designation)];
+
+  static List<SteelFamily> familiesIn(SteelCategory? c) =>
+      [for (final f in SteelTables.families) if (c == null || f.category == c) f];
+
+  /// Filters and sorts the library.
+  ///
+  /// [query] matches every word against code, name, standard and size, so
+  /// "ismb 300", "ismb300", "50x50" and "IS 1239" all work.
+  static List<SteelRef> search({
+    String query = '',
+    SteelCategory? category,
+    String? familyCode,
+    double? minKgPerM,
+    double? maxKgPerM,
+    SteelSort sort = SteelSort.size,
+  }) {
+    final words = normalizeSteelText(query).split(' ').where((w) => w.isNotEmpty).toList();
+    final out = all.where((r) {
+      if (category != null && r.category != category) return false;
+      if (familyCode != null && r.family.code != familyCode) return false;
+      if (minKgPerM != null && r.kgPerM < minKgPerM) return false;
+      if (maxKgPerM != null && r.kgPerM > maxKgPerM) return false;
+      if (words.isEmpty) return true;
+      final hay = _haystack[r]!;
+      final compact = hay.replaceAll(' ', '');
+      return words.every((w) => hay.contains(w) || compact.contains(w));
+    }).toList();
+    switch (sort) {
+      case SteelSort.size:
+        break; // `all` is already in table order
+      case SteelSort.weightAsc:
+        out.sort((a, b) => a.kgPerM.compareTo(b.kgPerM));
+      case SteelSort.weightDesc:
+        out.sort((a, b) => b.kgPerM.compareTo(a.kgPerM));
+      case SteelSort.name:
+        out.sort((a, b) {
+          final c = a.family.code.compareTo(b.family.code);
+          return c != 0 ? c : _compareKeys(steelSizeKey(a.designation), steelSizeKey(b.designation));
+        });
+    }
+    return out;
+  }
+
+  /// Groups a result list into the hierarchy, keeping its order.
+  static Map<SteelCategory, Map<SteelFamily, List<SteelRef>>> group(List<SteelRef> refs) {
+    final out = <SteelCategory, Map<SteelFamily, List<SteelRef>>>{};
+    for (final r in refs) {
+      out.putIfAbsent(r.category, () => {}).putIfAbsent(r.family, () => []).add(r);
+    }
+    return out;
+  }
+
+  /// The next smaller and next larger size in the same family.
+  static ({SteelRef? smaller, SteelRef? larger}) neighbours(SteelRef r) {
+    final list = r.family.sections;
+    final i = list.indexWhere((s) => s.designation == r.designation);
+    return (
+      smaller: i > 0 ? SteelRef(r.family, list[i - 1]) : null,
+      larger: i >= 0 && i < list.length - 1 ? SteelRef(r.family, list[i + 1]) : null,
+    );
+  }
+
+  /// Sizes of the same category whose weight is within ±[tolerance] of [r],
+  /// closest first. Used to suggest substitutes (e.g. ISMB 300 ↔ ISWB 250).
+  static List<SteelRef> alternatives(SteelRef r, {double tolerance = 0.10, int limit = 10}) {
+    final w = r.kgPerM;
+    final out = all
+        .where((x) => x.category == r.category && x != r && (x.kgPerM - w).abs() <= w * tolerance)
+        .toList()
+      ..sort((a, b) => (a.kgPerM - w).abs().compareTo((b.kgPerM - w).abs()));
+    return out.take(limit).toList();
   }
 }

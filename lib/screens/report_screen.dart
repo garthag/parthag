@@ -11,6 +11,7 @@ import '../services/report_text.dart';
 import '../state/app_state.dart';
 import '../widgets/common.dart';
 import '../widgets/report_sections.dart';
+import 'steel_takeoff_screen.dart';
 
 class ReportScreen extends StatefulWidget {
   const ReportScreen({super.key, required this.reportId});
@@ -84,6 +85,35 @@ class _ReportScreenState extends State<ReportScreen> {
         await Printing.sharePdf(bytes: bytes, filename: _fileName(p, r));
       case 'share_text':
         await SharePlus.instance.share(ShareParams(text: ReportText.summary(p, r), subject: 'DPR-${r.reportNo} ${p.name}'));
+      case 'steel':
+        final takeoffs = _state.takeoffsFor(p.id);
+        if (takeoffs.isEmpty) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('No steel take-offs in this project yet. Add one in the project\'s Steel tab.'),
+          ));
+          return;
+        }
+        final picked = await showDialog<String>(
+          context: context,
+          builder: (c) => SimpleDialog(
+            title: const Text('Add steel from take-off'),
+            children: [
+              for (final t in takeoffs)
+                SimpleDialogOption(
+                  onPressed: () => Navigator.pop(c, t.id),
+                  child: ListTile(
+                    title: Text(t.title.isEmpty ? 'Untitled take-off' : t.title),
+                    subtitle: Text('${fmtNum(t.netMt)} MT · ${t.status.label}'),
+                  ),
+                ),
+            ],
+          ),
+        );
+        final takeoff = picked == null ? null : _state.takeoff(picked);
+        if (takeoff != null && mounted) {
+          await postTakeoffDialog(context, takeoff, report: r);
+          if (mounted) setState(() {});
+        }
       case 'delete':
         if (await confirm(context, 'Delete DPR-${r.reportNo}?', 'All photos and videos in this report will be removed.')) {
           _debounce?.cancel();
@@ -125,6 +155,7 @@ class _ReportScreenState extends State<ReportScreen> {
                 PopupMenuItem(value: 'pdf', child: ListTile(leading: Icon(Icons.print_outlined), title: Text('Preview / Print PDF'))),
                 PopupMenuItem(value: 'share_pdf', child: ListTile(leading: Icon(Icons.share), title: Text('Share PDF'))),
                 PopupMenuItem(value: 'share_text', child: ListTile(leading: Icon(Icons.chat_outlined), title: Text('Share summary (WhatsApp)'))),
+                PopupMenuItem(value: 'steel', child: ListTile(leading: Icon(Icons.view_column_outlined), title: Text('Add steel from take-off'))),
                 PopupMenuItem(value: 'delete', child: ListTile(leading: Icon(Icons.delete_outline), title: Text('Delete DPR'))),
               ],
             ),
@@ -144,6 +175,32 @@ class _ReportScreenState extends State<ReportScreen> {
                 actions: [
                   TextButton(onPressed: () => _setStatus(r, ReportStatus.draft), child: const Text('Unlock')),
                 ],
+              ),
+            if (state.takeoffsPostedTo(r.id).isNotEmpty)
+              Material(
+                color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.link, size: 18),
+                      const SizedBox(width: 6),
+                      const Text('Steel take-offs:'),
+                      for (final t in state.takeoffsPostedTo(r.id))
+                        Padding(
+                          padding: const EdgeInsets.only(left: 6),
+                          child: ActionChip(
+                            label: Text(t.title.isEmpty ? 'Untitled' : t.title),
+                            onPressed: () => Navigator.push(
+                              context,
+                              MaterialPageRoute(builder: (_) => TakeoffScreen(takeoffId: t.id)),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
               ),
             Expanded(
               child: TabBarView(

@@ -1,4 +1,6 @@
 import '../models/models.dart';
+import '../models/steel_takeoff.dart';
+import 'steel_sections.dart';
 import '../state/app_state.dart';
 
 /// Creates a realistic sample project with three days of DPRs so new users
@@ -104,5 +106,31 @@ Future<Project> createSampleProject(AppState state) async {
     await state.saveReport(r);
     prev = r;
   }
+
+  // Steel take-off for the terrace structure, linked to the IS steel tables.
+  SteelTakeoffItem item(String family, String size, double len, int nos, String mark, String loc) {
+    final ref = SteelLibrary.find(family, size)!;
+    return SteelTakeoffItem.fromRef(ref, lengthM: len, nos: nos)
+      ..memberMark = mark
+      ..location = loc;
+  }
+
+  await state.saveTakeoff(SteelTakeoff(
+    projectId: p.id,
+    title: 'Terrace steel structure',
+    date: today.subtract(const Duration(days: 3)),
+    drawingNo: 'SR-TA-ST-104 R1',
+    status: TakeoffStatus.ordered,
+    wastagePercent: 2.5,
+    items: [
+      item('ISHB', 'ISHB 200 @ 37.3', 4.5, 8, 'C1', 'Terrace grid A-D/1-4'),
+      item('ISMB', 'ISMB 300', 6, 6, 'B1', 'Terrace grid A-D'),
+      item('ISMB', 'ISMB 200', 4, 10, 'B2', 'Terrace grid 1-4'),
+      item('ISMC', 'ISMC 150', 6, 12, 'P1', 'Purlins'),
+      item('ISA', 'ISA 65×65×6', 3.2, 24, 'BR1', 'Bracing'),
+      item('Plate', 'PL 1000×12', 0.3, 8, 'BP1', 'Base plates 300×300'),
+      item('Pipe M', '50 NB (60.3 × 3.6)', 1.1, 20, 'HR1', 'Handrail posts'),
+    ],
+  ));
   return p;
 }

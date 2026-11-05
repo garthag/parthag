@@ -8,6 +8,7 @@ import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 
 import '../models/models.dart';
+import '../models/steel_takeoff.dart';
 import '../state/app_state.dart';
 
 /// Optional Google cloud backup using Firebase (Auth + Firestore + Storage).
@@ -94,6 +95,7 @@ class CloudSync extends ChangeNotifier {
       final writes = [
         for (final pr in state.projects) (root.collection('projects').doc(pr.id), pr.toJson()),
         for (final r in state.reports) (root.collection('reports').doc(r.id), r.toJson()),
+        for (final t in state.takeoffs) (root.collection('steel_takeoffs').doc(t.id), t.toJson()),
       ];
       for (var i = 0; i < writes.length; i += 400) {
         final batch = db.batch();
@@ -107,9 +109,11 @@ class CloudSync extends ChangeNotifier {
       notifyListeners();
       final rp = await root.collection('projects').get();
       final rr = await root.collection('reports').get();
+      final rt = await root.collection('steel_takeoffs').get();
       await state.mergeRemote(
         rp.docs.map((d) => Project.fromJson(d.data())).toList(),
         rr.docs.map((d) => DailyReport.fromJson(d.data())).toList(),
+        rt.docs.map((d) => SteelTakeoff.fromJson(d.data())).toList(),
       );
       lastSync = DateTime.now();
     } catch (e) {
