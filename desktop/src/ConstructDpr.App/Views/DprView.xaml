@@ -30,7 +30,7 @@
               </Border>
               <StackPanel>
                 <TextBlock Text="{Binding Title}" FontWeight="SemiBold" FontSize="13"/>
-                <TextBlock Text="{Binding Sub}" Foreground="{StaticResource Muted}" FontSize="12"/>
+                <TextBlock Text="{Binding Sub}" Foreground="{StaticResource Muted}" FontSize="12" TextTrimming="CharacterEllipsis"/>
               </StackPanel>
             </DockPanel>
           </DataTemplate>
@@ -76,7 +76,7 @@
             <DataGrid x:Name="Lines" CellEditEnding="OnCellEdited">
               <DataGrid.Columns>
                 <DataGridTextColumn Header="Code" Binding="{Binding Activity.Code}" IsReadOnly="True" Width="64"/>
-                <DataGridTextColumn Header="Activity" Binding="{Binding Activity.Name}" IsReadOnly="True" Width="*"/>
+                <DataGridTextColumn Header="Activity" Binding="{Binding Activity.Name}" IsReadOnly="True" Width="210"/>
                 <DataGridTextColumn Header="Unit" Binding="{Binding Activity.Unit}" IsReadOnly="True" Width="48"/>
                 <DataGridTextColumn Header="BOQ" Binding="{Binding Activity.TotalQty, StringFormat=#\,##0.##}" IsReadOnly="True" Width="70" ElementStyle="{StaticResource Num}"/>
                 <DataGridTextColumn Header="Previous" Binding="{Binding PrevCum, StringFormat=#\,##0.##}" IsReadOnly="True" Width="74" ElementStyle="{StaticResource Num}"/>
@@ -99,7 +99,7 @@
             </DockPanel>
             <DataGrid x:Name="Crew" CellEditEnding="OnCellEdited">
               <DataGrid.Columns>
-                <DataGridTextColumn Header="Agency" Binding="{Binding Agency}" Width="*"/>
+                <DataGridTextColumn Header="Agency" Binding="{Binding Agency}" Width="220"/>
                 <DataGridTextColumn Header="Trade" Binding="{Binding Trade}" Width="120"/>
                 <DataGridTextColumn Header="Skilled" Binding="{Binding Skilled}" Width="70"/>
                 <DataGridTextColumn Header="Semi-skilled" Binding="{Binding SemiSkilled}" Width="90"/>
@@ -118,7 +118,7 @@
             <DataGrid x:Name="Equipment" CellEditEnding="OnCellEdited">
               <DataGrid.Columns>
                 <DataGridTextColumn Header="Code" Binding="{Binding Code}" Width="80"/>
-                <DataGridTextColumn Header="Type" Binding="{Binding Type}" Width="*"/>
+                <DataGridTextColumn Header="Type" Binding="{Binding Type}" Width="200"/>
                 <DataGridTextColumn Header="Working h" Binding="{Binding WorkingHours}" Width="80"/>
                 <DataGridTextColumn Header="Idle h" Binding="{Binding IdleHours}" Width="70"/>
                 <DataGridTextColumn Header="Breakdown h" Binding="{Binding BreakdownHours}" Width="90"/>
@@ -134,7 +134,7 @@
             <DataGrid x:Name="Materials" CellEditEnding="OnCellEdited">
               <DataGrid.Columns>
                 <DataGridTextColumn Header="Code" Binding="{Binding Code}" Width="100"/>
-                <DataGridTextColumn Header="Description" Binding="{Binding Description}" Width="*"/>
+                <DataGridTextColumn Header="Description" Binding="{Binding Description}" Width="200"/>
                 <DataGridTextColumn Header="Unit" Binding="{Binding Unit}" Width="60"/>
                 <DataGridTextColumn Header="Opening" Binding="{Binding Opening}" Width="80"/>
                 <DataGridTextColumn Header="Received" Binding="{Binding Received}" Width="80"/>
