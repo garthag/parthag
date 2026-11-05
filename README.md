@@ -34,6 +34,24 @@ It works fully **offline** on site. You can optionally turn on **Google sign-in 
 
 **Media library:** every photo and video in the project, with filters by type, category and tag. It has a full-screen viewer with pinch-zoom and video playback, and you can share or edit tags from it.
 
+**Steel weight calculator (IS codes)** – the calculator icon on the home screen
+- Unit weight (kg/m) of every common steel section, with a searchable IS steel table:
+
+| Section | Standard |
+|---|---|
+| ISMB, ISLB, ISJB, ISWB, ISHB beams and columns | IS 808 / SP 6(1) |
+| ISMC, ISLC, ISJC channels | IS 808 / SP 6(1) |
+| ISA equal and unequal angles | IS 808 / SP 6(1) |
+| UB and UC universal beams/columns | BS 4-1 |
+| Plates and flats | IS 2062, IS 1730, IS 1731 |
+| Round and square bars | IS 1732 |
+| TMT / HYSD rebar | IS 1786 nominal mass |
+| MS pipes, Light/Medium/Heavy | IS 1239 (Pt 1) |
+| SHS and RHS hollow sections | IS 4923 |
+
+- Pick a size from the table or type a custom size; for plates, flats, bars, pipes and hollow sections the weight is worked out at 7850 kg/m³.
+- Enter length and number of pieces to get kg and MT, build a take-off list and share it on WhatsApp.
+
 **Output**
 - **PDF** on A4 in CPWD/PWD style: header block, every section as a table, a photo grid with captions, tags, time and GPS, a video register, and signature blocks. You can preview, print or share it.
 - **WhatsApp summary:** a plain-text DPR formatted with WhatsApp bold markers that you can share in one tap.
@@ -115,6 +133,7 @@ lib/
   main.dart                  App entry, theme, providers
   models/models.dart         Project, DailyReport and all section models (JSON)
   data/standards.dart        IS-code catalogues: trades, materials, activities, tests, PPE, permits…
+  data/steel_sections.dart   IS 808 steel tables and unit-weight formulas
   data/local_store.dart      Offline JSON store
   data/sample_data.dart      Demo project
   state/app_state.dart       Projects/reports state, carry-forward, dashboard summary
@@ -122,7 +141,7 @@ lib/
   services/pdf_service.dart    PDF report
   services/report_text.dart    WhatsApp text summary
   services/cloud_sync.dart     Google sign-in + Firestore/Storage sync
-  screens/                   Home, project, DPR editor, media gallery/viewer, settings
+  screens/                   Home, project, DPR editor, media gallery/viewer, settings, steel weight
   widgets/                   Section editors, generic entry form, shared widgets
 test/                        Model, state, PDF and widget tests
 ```

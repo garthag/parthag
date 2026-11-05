@@ -9,6 +9,7 @@ import '../widgets/common.dart';
 import 'project_form_screen.dart';
 import 'project_screen.dart';
 import 'settings_screen.dart';
+import 'steel_weight_screen.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
@@ -31,6 +32,11 @@ class HomeScreen extends StatelessWidget {
                   ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
                   : const Icon(Icons.cloud_sync_outlined),
             ),
+          IconButton(
+            tooltip: 'Steel weight calculator (IS)',
+            icon: const Icon(Icons.calculate_outlined),
+            onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SteelWeightScreen())),
+          ),
           IconButton(
             tooltip: 'Settings',
             icon: const Icon(Icons.settings_outlined),
