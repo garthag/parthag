@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../models/models.dart';
+import '../models/steel_takeoff.dart';
 import '../services/pdf_service.dart';
 import '../services/report_text.dart';
 import '../state/app_state.dart';
