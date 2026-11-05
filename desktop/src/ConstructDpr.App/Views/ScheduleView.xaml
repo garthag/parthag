@@ -3,19 +3,17 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:c="clr-namespace:ConstructDpr.App.Controls">
   <DockPanel>
-    <DockPanel DockPanel.Dock="Top" Margin="0,0,0,12">
-      <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
-        <TextBlock Text="Zoom" VerticalAlignment="Center" Foreground="{StaticResource Muted}" Margin="0,0,8,0"/>
-        <Slider x:Name="Zoom" Minimum="4" Maximum="36" Value="14" Width="140" VerticalAlignment="Center" ValueChanged="OnZoom" Margin="0,0,16,0"/>
+    <StackPanel DockPanel.Dock="Top" Margin="0,0,0,12">
+      <TextBlock Text="Schedule — Gantt chart" Style="{StaticResource H1}"/>
+      <TextBlock x:Name="Summary" Foreground="{StaticResource Muted}" FontSize="12" Margin="0,0,0,10"/>
+      <WrapPanel>
         <Button Content="▶ Recalculate CPM" Style="{StaticResource Success}" Click="OnRun"/>
         <Button Content="Export PDF (A3)" Click="OnPdf"/>
-        <Button Content="Export Excel" Click="OnExcel" Margin="0"/>
-      </StackPanel>
-      <StackPanel>
-        <TextBlock Text="Schedule — Gantt chart" Style="{StaticResource H1}"/>
-        <TextBlock x:Name="Summary" Foreground="{StaticResource Muted}" FontSize="12"/>
-      </StackPanel>
-    </DockPanel>
+        <Button Content="Export Excel" Click="OnExcel"/>
+        <TextBlock Text="Zoom" VerticalAlignment="Center" Foreground="{StaticResource Muted}" Margin="16,0,8,0"/>
+        <Slider x:Name="Zoom" ToolTip="Day width (zoom)" Minimum="4" Maximum="36" Value="14" Width="140" VerticalAlignment="Center" ValueChanged="OnZoom" />
+      </WrapPanel>
+    </StackPanel>
     <WrapPanel DockPanel.Dock="Bottom" Margin="0,10,0,0">
       <Border Width="22" Height="10" Background="#1F6FA3" CornerRadius="2" Margin="0,0,6,0"/><TextBlock Text="Activity" Margin="0,0,18,0" FontSize="12"/>
       <Border Width="22" Height="10" Background="#D84B4B" CornerRadius="2" Margin="0,0,6,0"/><TextBlock Text="Critical path" Margin="0,0,18,0" FontSize="12"/>
@@ -25,7 +23,7 @@
       <TextBlock Text="┆ Today (data date)" Foreground="#B26B00" FontSize="12"/>
     </WrapPanel>
     <Border BorderBrush="{StaticResource Line}" BorderThickness="1" CornerRadius="6" Background="White">
-      <ScrollViewer x:Name="Scroll" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto">
+      <ScrollViewer x:Name="Scroll" ScrollChanged="OnScroll" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto">
         <c:GanttChart x:Name="Chart" HorizontalAlignment="Left" VerticalAlignment="Top"/>
       </ScrollViewer>
     </Border>

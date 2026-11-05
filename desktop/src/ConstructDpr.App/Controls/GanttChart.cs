@@ -39,6 +39,16 @@ public sealed class GanttChart : FrameworkElement
     public static readonly DependencyProperty ModelProperty = DependencyProperty.Register(nameof(Model), typeof(GanttModel), typeof(GanttChart),
         new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsMeasure | FrameworkPropertyMetadataOptions.AffectsRender));
 
+    /// <summary>Horizontal scroll offset of the hosting ScrollViewer; keeps the activity table in view.</summary>
+    public static readonly DependencyProperty TableOffsetProperty = DependencyProperty.Register(nameof(TableOffset), typeof(double), typeof(GanttChart),
+        new FrameworkPropertyMetadata(0.0, FrameworkPropertyMetadataOptions.AffectsRender));
+
+    public double TableOffset
+    {
+        get => (double)GetValue(TableOffsetProperty);
+        set => SetValue(TableOffsetProperty, value);
+    }
+
     public GanttModel? Model
     {
         get => (GanttModel?)GetValue(ModelProperty);
@@ -82,29 +92,6 @@ public sealed class GanttChart : FrameworkElement
             Draw(dc, t.Label, x + 3, t.Major ? 5 : HeaderHeight / 2 + 5, t.Major ? 12 : 11, t.Major ? HeaderFg : Muted, dip, t.Major ? FontWeights.SemiBold : FontWeights.Normal);
         }
         dc.DrawLine(MajorPen, new Point(TableWidth, HeaderHeight / 2), new Point(width, HeaderHeight / 2));
-
-        // Table header + rows
-        double cx = 0;
-        foreach (var (title, w) in Columns)
-        {
-            Draw(dc, title, cx + 6, 15, 12, HeaderFg, dip, FontWeights.SemiBold);
-            cx += w;
-        }
-        for (var i = 0; i < m.Rows.Count; i++)
-        {
-            var r = m.Rows[i];
-            var y = HeaderHeight + i * m.RowHeight + (m.RowHeight - 15) / 2;
-            var fg = r.Critical ? CriticalDone : Text;
-            string[] cells = [r.Code, r.Name, r.Start?.ToString("dd-MMM-yy") ?? "", r.Finish?.ToString("dd-MMM-yy") ?? "", r.TotalFloat?.ToString() ?? ""];
-            cx = 0;
-            for (var c = 0; c < cells.Length; c++)
-            {
-                Draw(dc, cells[c], cx + 6, y, 12, fg, dip, c == 0 ? FontWeights.SemiBold : FontWeights.Normal, Columns[c].Width - 10);
-                cx += Columns[c].Width;
-            }
-        }
-        dc.DrawLine(MajorPen, new Point(TableWidth - 0.5, 0), new Point(TableWidth - 0.5, height));
-        dc.DrawLine(MajorPen, new Point(0, HeaderHeight), new Point(width, HeaderHeight));
 
         // Bars
         foreach (var b in m.Bars)
@@ -171,6 +158,34 @@ public sealed class GanttChart : FrameworkElement
             dc.DrawLine(TodayPen, new Point(TableWidth + tx, HeaderHeight), new Point(TableWidth + tx, height));
             Draw(dc, "Today", TableWidth + tx + 3, HeaderHeight + 2, 10, TodayText, dip, FontWeights.SemiBold);
         }
+
+        // Frozen activity table, drawn last over the timeline at the current horizontal scroll offset
+        var o = Math.Max(0, Math.Min(TableOffset, m.TotalWidth));
+        dc.DrawRectangle(Brushes.White, null, new Rect(o, 0, TableWidth, height));
+        for (var i = 1; i < m.Rows.Count; i += 2) dc.DrawRectangle(Alt, null, new Rect(o, HeaderHeight + i * m.RowHeight, TableWidth, m.RowHeight));
+        dc.DrawRectangle(HeaderBg, null, new Rect(o, 0, TableWidth, HeaderHeight));
+        double cx = o;
+        foreach (var (title, w) in Columns)
+        {
+            Draw(dc, title, cx + 6, 15, 12, HeaderFg, dip, FontWeights.SemiBold);
+            cx += w;
+        }
+        for (var i = 0; i < m.Rows.Count; i++)
+        {
+            var r = m.Rows[i];
+            var y = HeaderHeight + i * m.RowHeight + (m.RowHeight - 15) / 2;
+            var fg = r.Critical ? CriticalDone : Text;
+            string[] cells = [r.Code, r.Name, r.Start?.ToString("dd-MMM-yy") ?? "", r.Finish?.ToString("dd-MMM-yy") ?? "", r.TotalFloat?.ToString() ?? ""];
+            cx = o;
+            for (var c = 0; c < cells.Length; c++)
+            {
+                Draw(dc, cells[c], cx + 6, y, 12, fg, dip, c == 0 ? FontWeights.SemiBold : FontWeights.Normal, Columns[c].Width - 10);
+                cx += Columns[c].Width;
+            }
+        }
+
+        dc.DrawLine(MajorPen, new Point(o + TableWidth - 0.5, 0), new Point(o + TableWidth - 0.5, height));
+        dc.DrawLine(MajorPen, new Point(0, HeaderHeight), new Point(width, HeaderHeight));
     }
 
     protected override void OnMouseMove(MouseEventArgs e)

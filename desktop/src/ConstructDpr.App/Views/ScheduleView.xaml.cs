@@ -17,8 +17,10 @@ public partial class ScheduleView : UserControl, IRefreshable
         var finish = acts.Max(a => a.EarlyFinish);
         Summary.Text = $"{acts.Count} activities · {acts.Count(a => a.Critical)} critical · forecast finish {finish:dd MMM yyyy} · " +
                        "relationships FS/SS/FF/SF with lag; hover a row for details";
-        if (model.TodayX is { } x) Dispatcher.BeginInvoke(() => Scroll.ScrollToHorizontalOffset(Math.Max(0, x - 300)), System.Windows.Threading.DispatcherPriority.Loaded);
+        if (model.TodayX is { } x) Dispatcher.BeginInvoke(() => Scroll.ScrollToHorizontalOffset(Math.Max(0, x - 250)), System.Windows.Threading.DispatcherPriority.Loaded);
     }
+
+    private void OnScroll(object sender, ScrollChangedEventArgs e) => Chart.TableOffset = e.HorizontalOffset;
 
     private void OnZoom(object sender, RoutedPropertyChangedEventArgs<double> e)
     {

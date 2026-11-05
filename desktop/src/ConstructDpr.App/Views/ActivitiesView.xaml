@@ -2,19 +2,17 @@
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
   <DockPanel>
-    <DockPanel DockPanel.Dock="Top" Margin="0,0,0,12">
-      <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+    <StackPanel DockPanel.Dock="Top" Margin="0,0,0,12">
+      <TextBlock Text="Activities &amp; BOQ" Style="{StaticResource H1}"/>
+      <TextBlock x:Name="Summary" Foreground="{StaticResource Muted}" FontSize="12" Margin="0,0,0,10"/>
+      <WrapPanel>
         <Button Content="＋ Add activity" Click="OnAdd"/>
         <Button Content="Delete" Style="{StaticResource Danger}" Click="OnDelete"/>
         <Button Content="Save changes" Style="{StaticResource Primary}" Click="OnSave"/>
         <Button Content="▶ Run CPM schedule" Style="{StaticResource Success}" Click="OnSchedule"/>
-        <Button Content="Freeze baseline…" Click="OnBaseline" Margin="0"/>
-      </StackPanel>
-      <StackPanel>
-        <TextBlock Text="Activities &amp; BOQ" Style="{StaticResource H1}"/>
-        <TextBlock x:Name="Summary" Foreground="{StaticResource Muted}" FontSize="12"/>
-      </StackPanel>
-    </DockPanel>
+        <Button Content="Freeze baseline…" Click="OnBaseline"/>
+      </WrapPanel>
+    </StackPanel>
     <Border DockPanel.Dock="Bottom" Style="{StaticResource CardBorder}" Margin="0,12,0,0" Height="210">
       <DockPanel>
         <DockPanel DockPanel.Dock="Top" Margin="0,0,0,8">

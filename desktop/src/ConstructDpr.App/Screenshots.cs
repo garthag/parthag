@@ -23,7 +23,7 @@ public static class Screenshots
         var steps = new List<(string File, Action Show)>
         {
             ("01-dashboard", () => window.Navigate("dashboard")),
-            ("02-activities", () => window.Navigate("activities")),
+            ("02-activities", () => ((ActivitiesView)window.Navigate("activities")).Select("A2010")),
             ("03-schedule-gantt", () => window.Navigate("schedule")),
             ("04-dpr-review", () =>
             {
@@ -58,7 +58,11 @@ public static class Screenshots
 
     private static void Save(Window window, string path)
     {
+        // Lay the page out at a fixed 1440×860 regardless of the runner's screen size.
         var root = (FrameworkElement)window.Content;
+        var size = new Size(1440, 860);
+        root.Measure(size);
+        root.Arrange(new Rect(size));
         root.UpdateLayout();
         var dpi = VisualTreeHelper.GetDpi(window);
         var bmp = new RenderTargetBitmap((int)(root.ActualWidth * dpi.DpiScaleX), (int)(root.ActualHeight * dpi.DpiScaleY), dpi.PixelsPerInchX, dpi.PixelsPerInchY, PixelFormats.Pbgra32);

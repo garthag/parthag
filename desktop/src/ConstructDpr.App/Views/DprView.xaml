@@ -21,7 +21,7 @@
           <Button Content="＋ Create today's DPR" Style="{StaticResource Primary}" Click="OnNew" Margin="0" HorizontalAlignment="Stretch"/>
         </StackPanel>
       </Border>
-      <ListBox x:Name="List" SelectionChanged="OnPick" BorderBrush="{StaticResource Line}" HorizontalContentAlignment="Stretch">
+      <ListBox x:Name="List" ScrollViewer.HorizontalScrollBarVisibility="Disabled" SelectionChanged="OnPick" BorderBrush="{StaticResource Line}" HorizontalContentAlignment="Stretch">
         <ListBox.ItemTemplate>
           <DataTemplate>
             <DockPanel Margin="4,6">

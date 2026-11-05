@@ -35,6 +35,13 @@ public partial class ActivitiesView : UserControl, IRefreshable
 
     private Activity? Selected => Grid.SelectedItem as Activity;
 
+    /// <summary>Selects an activity by code (used by the screenshot mode).</summary>
+    public void Select(string code)
+    {
+        var a = _acts.FirstOrDefault(x => x.Code == code);
+        if (a is not null) Grid.SelectedItem = a;
+    }
+
     private void OnSelect(object sender, SelectionChangedEventArgs e) => LoadLinks();
 
     private void LoadLinks()

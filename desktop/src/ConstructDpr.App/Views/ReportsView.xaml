@@ -13,10 +13,10 @@
             <TextBlock TextWrapping="Wrap" Foreground="{StaticResource Muted}" FontSize="12" Margin="0,0,0,10"
                        Text="A4 report: project details, activity progress (previous / today / cumulative / balance / %), manpower, equipment, materials, narrative, sign-off and the approval hash."/>
             <ComboBox x:Name="DprPick" DisplayMemberPath="Title" SelectedValuePath="Id" Margin="0,0,0,10"/>
-            <StackPanel Orientation="Horizontal">
-              <Button Content="Export PDF" Style="{StaticResource Primary}" Click="OnDprPdf"/>
+            <WrapPanel>
+              <Button Content="Export PDF" Style="{StaticResource Primary}" Click="OnDprPdf" Margin="0,0,8,6"/>
               <Button Content="Export Excel" Click="OnDprExcel"/>
-            </StackPanel>
+            </WrapPanel>
           </StackPanel>
         </Border>
         <Border Style="{StaticResource CardBorder}" Margin="6">
@@ -24,10 +24,10 @@
             <TextBlock Text="▤  Schedule report" Style="{StaticResource H2}"/>
             <TextBlock TextWrapping="Wrap" Foreground="{StaticResource Muted}" FontSize="12" Margin="0,0,0,10"
                        Text="A3 landscape PDF with the activity table and Gantt chart (critical path, baseline, progress). The Excel workbook has CPM dates, floats and a BOQ value sheet with live formulas."/>
-            <StackPanel Orientation="Horizontal">
+            <WrapPanel>
               <Button Content="Schedule PDF" Style="{StaticResource Primary}" Click="OnSchedulePdf"/>
               <Button Content="Schedule Excel" Click="OnScheduleExcel"/>
-            </StackPanel>
+            </WrapPanel>
           </StackPanel>
         </Border>
         <Border Style="{StaticResource CardBorder}" Margin="6">
@@ -35,10 +35,10 @@
             <TextBlock Text="⇪  Import activities from Excel" Style="{StaticResource H2}"/>
             <TextBlock TextWrapping="Wrap" Foreground="{StaticResource Muted}" FontSize="12" Margin="0,0,0,10"
                        Text="Fill the template (one row per activity). Existing codes are updated, new codes are added. The whole file is checked first — nothing is imported if any row has an error."/>
-            <StackPanel Orientation="Horizontal">
+            <WrapPanel>
               <Button Content="Download template" Click="OnTemplate"/>
               <Button Content="Import .xlsx…" Style="{StaticResource Primary}" Click="OnImport"/>
-            </StackPanel>
+            </WrapPanel>
           </StackPanel>
         </Border>
       </UniformGrid>
