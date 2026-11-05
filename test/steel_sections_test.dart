@@ -173,23 +173,25 @@ void main() {
     expect(SteelText.takeoff(t, p), contains('Net weight'));
   });
 
+  void tallScreen(WidgetTester tester) {
+    tester.view.physicalSize = const Size(900, 2400);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+  }
+
   testWidgets('calculator adds to the list', (tester) async {
+    tallScreen(tester);
     await tester.pumpWidget(const MaterialApp(home: SteelWeightScreen()));
     // Plate 1000 × 5 mm is the first size: 39.25 kg/m.
     expect(find.text('Unit weight: 39.25 kg/m'), findsOneWidget);
-    final add = find.text('Add to list');
-    await tester.ensureVisible(add);
-    await tester.tap(add);
+    await tester.tap(find.text('Add to list'));
     await tester.pumpAndSettle();
-    final scrollable = find
-        .descendant(of: find.byKey(const PageStorageKey('steel-calculator')), matching: find.byType(Scrollable))
-        .first;
-    final total = find.text('Total: 39.25 kg (0.039 MT)');
-    await tester.scrollUntilVisible(total, 200, scrollable: scrollable);
-    expect(total, findsOneWidget);
+    expect(find.text('Total: 39.25 kg (0.039 MT)'), findsOneWidget);
+    expect(find.text('Save to project take-off'), findsOneWidget);
   });
 
   testWidgets('library search → detail sheet → use in calculator', (tester) async {
+    tallScreen(tester);
     await tester.pumpWidget(const MaterialApp(home: SteelWeightScreen()));
     await tester.tap(find.text('IS steel library'));
     await tester.pumpAndSettle();
@@ -200,9 +202,7 @@ void main() {
     await tester.tap(find.text('ISMB 200'));
     await tester.pumpAndSettle();
     expect(find.textContaining('Next size in ISMB'), findsOneWidget);
-    final use = find.text('Use in calculator');
-    await tester.ensureVisible(use);
-    await tester.tap(use);
+    await tester.tap(find.text('Use in calculator'));
     await tester.pumpAndSettle();
     expect(find.text('Unit weight: 25.4 kg/m'), findsOneWidget);
   });
