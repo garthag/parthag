@@ -1,0 +1,61 @@
+<UserControl x:Class="ConstructDpr.App.Views.ReportsView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <ScrollViewer VerticalScrollBarVisibility="Auto">
+    <StackPanel>
+      <TextBlock Text="Reports &amp; Excel" Style="{StaticResource H1}"/>
+      <TextBlock Text="PDF reports are produced with QuestPDF, Excel workbooks with ClosedXML. Everything is generated on this PC — nothing is uploaded."
+                 Foreground="{StaticResource Muted}" FontSize="12" Margin="0,2,0,14"/>
+      <UniformGrid Columns="3" Margin="-6,0">
+        <Border Style="{StaticResource CardBorder}" Margin="6">
+          <StackPanel>
+            <TextBlock Text="⎙  Daily progress report (PDF)" Style="{StaticResource H2}"/>
+            <TextBlock TextWrapping="Wrap" Foreground="{StaticResource Muted}" FontSize="12" Margin="0,0,0,10"
+                       Text="A4 report: project details, activity progress (previous / today / cumulative / balance / %), manpower, equipment, materials, narrative, sign-off and the approval hash."/>
+            <ComboBox x:Name="DprPick" DisplayMemberPath="Title" SelectedValuePath="Id" Margin="0,0,0,10"/>
+            <StackPanel Orientation="Horizontal">
+              <Button Content="Export PDF" Style="{StaticResource Primary}" Click="OnDprPdf"/>
+              <Button Content="Export Excel" Click="OnDprExcel"/>
+            </StackPanel>
+          </StackPanel>
+        </Border>
+        <Border Style="{StaticResource CardBorder}" Margin="6">
+          <StackPanel>
+            <TextBlock Text="▤  Schedule report" Style="{StaticResource H2}"/>
+            <TextBlock TextWrapping="Wrap" Foreground="{StaticResource Muted}" FontSize="12" Margin="0,0,0,10"
+                       Text="A3 landscape PDF with the activity table and Gantt chart (critical path, baseline, progress). The Excel workbook has CPM dates, floats and a BOQ value sheet with live formulas."/>
+            <StackPanel Orientation="Horizontal">
+              <Button Content="Schedule PDF" Style="{StaticResource Primary}" Click="OnSchedulePdf"/>
+              <Button Content="Schedule Excel" Click="OnScheduleExcel"/>
+            </StackPanel>
+          </StackPanel>
+        </Border>
+        <Border Style="{StaticResource CardBorder}" Margin="6">
+          <StackPanel>
+            <TextBlock Text="⇪  Import activities from Excel" Style="{StaticResource H2}"/>
+            <TextBlock TextWrapping="Wrap" Foreground="{StaticResource Muted}" FontSize="12" Margin="0,0,0,10"
+                       Text="Fill the template (one row per activity). Existing codes are updated, new codes are added. The whole file is checked first — nothing is imported if any row has an error."/>
+            <StackPanel Orientation="Horizontal">
+              <Button Content="Download template" Click="OnTemplate"/>
+              <Button Content="Import .xlsx…" Style="{StaticResource Primary}" Click="OnImport"/>
+            </StackPanel>
+          </StackPanel>
+        </Border>
+      </UniformGrid>
+      <Border Style="{StaticResource CardBorder}" Margin="0,12,0,0">
+        <StackPanel>
+          <TextBlock Text="Audit trail (latest 40 actions)" Style="{StaticResource H2}"/>
+          <DataGrid x:Name="Audit" IsReadOnly="True" Height="300">
+            <DataGrid.Columns>
+              <DataGridTextColumn Header="When (UTC)" Binding="{Binding At, StringFormat=dd-MMM-yy HH:mm}" Width="130"/>
+              <DataGridTextColumn Header="User" Binding="{Binding User}" Width="160"/>
+              <DataGridTextColumn Header="Record" Binding="{Binding Entity}" Width="80"/>
+              <DataGridTextColumn Header="Action" Binding="{Binding Action}" Width="100"/>
+              <DataGridTextColumn Header="Details" Binding="{Binding Details}" Width="*"/>
+            </DataGrid.Columns>
+          </DataGrid>
+        </StackPanel>
+      </Border>
+    </StackPanel>
+  </ScrollViewer>
+</UserControl>

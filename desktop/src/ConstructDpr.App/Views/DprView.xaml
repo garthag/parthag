@@ -1,0 +1,178 @@
+<UserControl x:Class="ConstructDpr.App.Views.DprView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <Grid>
+    <Grid.ColumnDefinitions>
+      <ColumnDefinition Width="290"/>
+      <ColumnDefinition Width="16"/>
+      <ColumnDefinition Width="*"/>
+    </Grid.ColumnDefinitions>
+
+    <!-- Report list -->
+    <DockPanel>
+      <TextBlock DockPanel.Dock="Top" Text="Daily reports" Style="{StaticResource H1}" Margin="0,0,0,12"/>
+      <Border DockPanel.Dock="Top" Style="{StaticResource CardBorder}" Padding="12" Margin="0,0,0,12">
+        <StackPanel>
+          <TextBlock Text="New report" Style="{StaticResource Label}"/>
+          <DockPanel Margin="0,0,0,8">
+            <ComboBox x:Name="NewShift" DockPanel.Dock="Right" Width="92" Margin="8,0,0,0"/>
+            <DatePicker x:Name="NewDate"/>
+          </DockPanel>
+          <Button Content="＋ Create today's DPR" Style="{StaticResource Primary}" Click="OnNew" Margin="0" HorizontalAlignment="Stretch"/>
+        </StackPanel>
+      </Border>
+      <ListBox x:Name="List" SelectionChanged="OnPick" BorderBrush="{StaticResource Line}" HorizontalContentAlignment="Stretch">
+        <ListBox.ItemTemplate>
+          <DataTemplate>
+            <DockPanel Margin="4,6">
+              <Border DockPanel.Dock="Right" Background="{Binding Brush}" CornerRadius="9" Padding="8,2" VerticalAlignment="Center">
+                <TextBlock Text="{Binding Status}" Foreground="White" FontSize="11" FontWeight="SemiBold"/>
+              </Border>
+              <StackPanel>
+                <TextBlock Text="{Binding Title}" FontWeight="SemiBold" FontSize="13"/>
+                <TextBlock Text="{Binding Sub}" Foreground="{StaticResource Muted}" FontSize="12"/>
+              </StackPanel>
+            </DockPanel>
+          </DataTemplate>
+        </ListBox.ItemTemplate>
+      </ListBox>
+    </DockPanel>
+
+    <!-- Editor -->
+    <DockPanel Grid.Column="2" x:Name="Editor">
+      <Border DockPanel.Dock="Top" Style="{StaticResource CardBorder}" Margin="0,0,0,12">
+        <StackPanel>
+          <DockPanel>
+            <Border x:Name="Badge" DockPanel.Dock="Right" CornerRadius="10" Padding="12,4" VerticalAlignment="Top">
+              <TextBlock x:Name="BadgeText" Foreground="White" FontWeight="SemiBold"/>
+            </Border>
+            <StackPanel>
+              <TextBlock x:Name="Title" FontSize="20" FontWeight="SemiBold" Foreground="{StaticResource BrandDark}"/>
+              <TextBlock x:Name="Meta" Foreground="{StaticResource Muted}" FontSize="12" Margin="0,2,0,0"/>
+            </StackPanel>
+          </DockPanel>
+          <Border x:Name="Notice" CornerRadius="6" Padding="10,7" Margin="0,10,0,0" Visibility="Collapsed">
+            <TextBlock x:Name="NoticeText" TextWrapping="Wrap" FontSize="12"/>
+          </Border>
+          <WrapPanel Margin="0,12,0,0">
+            <Button x:Name="SaveBtn" Content="Save draft" Click="OnSave" Margin="0,0,8,6"/>
+            <Button x:Name="SubmitBtn" Content="Submit for review" Style="{StaticResource Primary}" Click="OnSubmit" Margin="0,0,8,6"/>
+            <Button x:Name="ApproveBtn" Content="✔ Approve" Style="{StaticResource Success}" Click="OnApprove" Margin="0,0,8,6"/>
+            <Button x:Name="RejectBtn" Content="✖ Reject…" Style="{StaticResource Danger}" Click="OnReject" Margin="0,0,8,6"/>
+            <Button x:Name="ReviseBtn" Content="Start revision…" Click="OnRevise" Margin="0,0,8,6"/>
+            <Button Content="PDF report" Click="OnPdf" Margin="0,0,8,6"/>
+            <Button Content="Excel" Click="OnExcel" Margin="0,0,8,6"/>
+          </WrapPanel>
+        </StackPanel>
+      </Border>
+
+      <TabControl x:Name="Tabs">
+        <TabItem Header="Activities">
+          <DockPanel Margin="8">
+            <DockPanel DockPanel.Dock="Top" Margin="0,0,0,8" x:Name="AddLineBar">
+              <Button DockPanel.Dock="Right" Content="＋ Add to report" Click="OnAddLine" Margin="8,0,0,0"/>
+              <ComboBox x:Name="ActivityPick" DisplayMemberPath="Display" SelectedValuePath="Id" IsEditable="True" IsTextSearchEnabled="True"/>
+            </DockPanel>
+            <DataGrid x:Name="Lines" CellEditEnding="OnCellEdited">
+              <DataGrid.Columns>
+                <DataGridTextColumn Header="Code" Binding="{Binding Activity.Code}" IsReadOnly="True" Width="64"/>
+                <DataGridTextColumn Header="Activity" Binding="{Binding Activity.Name}" IsReadOnly="True" Width="*"/>
+                <DataGridTextColumn Header="Unit" Binding="{Binding Activity.Unit}" IsReadOnly="True" Width="48"/>
+                <DataGridTextColumn Header="BOQ" Binding="{Binding Activity.TotalQty, StringFormat=#\,##0.##}" IsReadOnly="True" Width="70" ElementStyle="{StaticResource Num}"/>
+                <DataGridTextColumn Header="Previous" Binding="{Binding PrevCum, StringFormat=#\,##0.##}" IsReadOnly="True" Width="74" ElementStyle="{StaticResource Num}"/>
+                <DataGridTextColumn x:Name="TodayCol" Header="Today ✎" Binding="{Binding QtyToday}" Width="74" ElementStyle="{StaticResource Num}"/>
+                <DataGridTextColumn x:Name="AcceptedCol" Header="Accepted ✎" Binding="{Binding QtyAccepted, TargetNullValue=''}" Width="84" ElementStyle="{StaticResource Num}"/>
+                <DataGridTextColumn Header="Cumulative" Binding="{Binding CumQty, StringFormat=#\,##0.##}" IsReadOnly="True" Width="84" ElementStyle="{StaticResource Num}"/>
+                <DataGridTextColumn Header="Balance" Binding="{Binding Balance, StringFormat=#\,##0.##}" IsReadOnly="True" Width="74" ElementStyle="{StaticResource Num}"/>
+                <DataGridTextColumn Header="Actual %" Binding="{Binding ActualPct, StringFormat=0.0}" IsReadOnly="True" Width="64" ElementStyle="{StaticResource Num}"/>
+                <DataGridTextColumn Header="Plan %" Binding="{Binding PlannedPct, StringFormat=0.0}" IsReadOnly="True" Width="58" ElementStyle="{StaticResource Num}"/>
+                <DataGridTextColumn x:Name="DelayCol" Header="Delay reason ✎" Binding="{Binding DelayReason}" Width="130"/>
+              </DataGrid.Columns>
+            </DataGrid>
+          </DockPanel>
+        </TabItem>
+        <TabItem Header="Manpower">
+          <DockPanel Margin="8">
+            <DockPanel DockPanel.Dock="Top" Margin="0,0,0,8">
+              <Button DockPanel.Dock="Right" x:Name="AddCrewBtn" Content="＋ Add crew" Click="OnAddCrew" Margin="0"/>
+              <TextBlock x:Name="CrewTotal" VerticalAlignment="Center" Foreground="{StaticResource Muted}"/>
+            </DockPanel>
+            <DataGrid x:Name="Crew" CellEditEnding="OnCellEdited">
+              <DataGrid.Columns>
+                <DataGridTextColumn Header="Agency" Binding="{Binding Agency}" Width="*"/>
+                <DataGridTextColumn Header="Trade" Binding="{Binding Trade}" Width="120"/>
+                <DataGridTextColumn Header="Skilled" Binding="{Binding Skilled}" Width="70"/>
+                <DataGridTextColumn Header="Semi-skilled" Binding="{Binding SemiSkilled}" Width="90"/>
+                <DataGridTextColumn Header="Unskilled" Binding="{Binding Unskilled}" Width="80"/>
+                <DataGridTextColumn Header="Supervisors" Binding="{Binding Supervisors}" Width="86"/>
+                <DataGridTextColumn Header="Hours" Binding="{Binding Hours}" Width="60"/>
+                <DataGridTextColumn Header="Headcount" Binding="{Binding Headcount, Mode=OneWay}" IsReadOnly="True" Width="84"/>
+                <DataGridTextColumn Header="Man-hours" Binding="{Binding ManHours, Mode=OneWay}" IsReadOnly="True" Width="84"/>
+              </DataGrid.Columns>
+            </DataGrid>
+          </DockPanel>
+        </TabItem>
+        <TabItem Header="Equipment">
+          <DockPanel Margin="8">
+            <Button DockPanel.Dock="Top" x:Name="AddEqBtn" HorizontalAlignment="Right" Content="＋ Add equipment" Click="OnAddEquipment" Margin="0,0,0,8"/>
+            <DataGrid x:Name="Equipment" CellEditEnding="OnCellEdited">
+              <DataGrid.Columns>
+                <DataGridTextColumn Header="Code" Binding="{Binding Code}" Width="80"/>
+                <DataGridTextColumn Header="Type" Binding="{Binding Type}" Width="*"/>
+                <DataGridTextColumn Header="Working h" Binding="{Binding WorkingHours}" Width="80"/>
+                <DataGridTextColumn Header="Idle h" Binding="{Binding IdleHours}" Width="70"/>
+                <DataGridTextColumn Header="Breakdown h" Binding="{Binding BreakdownHours}" Width="90"/>
+                <DataGridTextColumn Header="Breakdown reason" Binding="{Binding BreakdownReason}" Width="200"/>
+                <DataGridTextColumn Header="Utilisation %" Binding="{Binding UtilisationPct, Mode=OneWay}" IsReadOnly="True" Width="96"/>
+              </DataGrid.Columns>
+            </DataGrid>
+          </DockPanel>
+        </TabItem>
+        <TabItem Header="Materials">
+          <DockPanel Margin="8">
+            <Button DockPanel.Dock="Top" x:Name="AddMatBtn" HorizontalAlignment="Right" Content="＋ Add material" Click="OnAddMaterial" Margin="0,0,0,8"/>
+            <DataGrid x:Name="Materials" CellEditEnding="OnCellEdited">
+              <DataGrid.Columns>
+                <DataGridTextColumn Header="Code" Binding="{Binding Code}" Width="100"/>
+                <DataGridTextColumn Header="Description" Binding="{Binding Description}" Width="*"/>
+                <DataGridTextColumn Header="Unit" Binding="{Binding Unit}" Width="60"/>
+                <DataGridTextColumn Header="Opening" Binding="{Binding Opening}" Width="80"/>
+                <DataGridTextColumn Header="Received" Binding="{Binding Received}" Width="80"/>
+                <DataGridTextColumn Header="Issued" Binding="{Binding Issued}" Width="80"/>
+                <DataGridTextColumn Header="Closing" Binding="{Binding Closing, Mode=OneWay}" IsReadOnly="True" Width="80"/>
+                <DataGridTextColumn Header="Challan no." Binding="{Binding ChallanNo}" Width="100"/>
+              </DataGrid.Columns>
+            </DataGrid>
+          </DockPanel>
+        </TabItem>
+        <TabItem Header="Site &amp; narrative">
+          <ScrollViewer VerticalScrollBarVisibility="Auto">
+            <Grid Margin="10" x:Name="Narrative">
+              <Grid.ColumnDefinitions>
+                <ColumnDefinition/>
+                <ColumnDefinition Width="16"/>
+                <ColumnDefinition/>
+              </Grid.ColumnDefinitions>
+              <StackPanel>
+                <TextBlock Text="Weather" Style="{StaticResource Label}"/>
+                <TextBox Text="{Binding Weather, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,10"/>
+                <TextBlock Text="Work completed today" Style="{StaticResource Label}"/>
+                <TextBox Text="{Binding WorkCompleted, UpdateSourceTrigger=PropertyChanged}" Height="90" TextWrapping="Wrap" AcceptsReturn="True" Margin="0,0,0,10"/>
+                <TextBlock Text="Delays and hindrances" Style="{StaticResource Label}"/>
+                <TextBox Text="{Binding DelayReasons, UpdateSourceTrigger=PropertyChanged}" Height="70" TextWrapping="Wrap" AcceptsReturn="True"/>
+              </StackPanel>
+              <StackPanel Grid.Column="2">
+                <TextBlock Text="Site conditions" Style="{StaticResource Label}"/>
+                <TextBox Text="{Binding SiteConditions, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,10"/>
+                <TextBlock Text="Plan for tomorrow" Style="{StaticResource Label}"/>
+                <TextBox Text="{Binding TomorrowPlan, UpdateSourceTrigger=PropertyChanged}" Height="90" TextWrapping="Wrap" AcceptsReturn="True" Margin="0,0,0,10"/>
+                <TextBlock Text="Safety (toolbox talks, permits, incidents)" Style="{StaticResource Label}"/>
+                <TextBox Text="{Binding SafetyNotes, UpdateSourceTrigger=PropertyChanged}" Height="70" TextWrapping="Wrap" AcceptsReturn="True"/>
+              </StackPanel>
+            </Grid>
+          </ScrollViewer>
+        </TabItem>
+      </TabControl>
+    </DockPanel>
+  </Grid>
+</UserControl>

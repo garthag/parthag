@@ -1,0 +1,86 @@
+name: Desktop edition (C# / WPF)
+
+# Builds and tests the C# desktop edition, takes screenshots of every screen,
+# produces sample PDF/Excel reports and publishes them with the Windows .exe
+# on the "CONSTRUCT DPR Desktop (C#)" release page.
+on:
+  push:
+    branches: [main, claude/construct-dpr-app-z3h0j8]
+    paths: ['desktop/**', '.github/workflows/desktop.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: desktop-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: pwsh
+        working-directory: desktop
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with: { dotnet-version: 8.0.x }
+
+      - name: Build everything (incl. WPF app)
+        run: dotnet build ConstructDpr.sln -c Release
+
+      - name: Unit tests (CPM, DPR workflow, PDF, Excel)
+        run: dotnet test tests/ConstructDpr.Tests -c Release --no-build --logger "console;verbosity=normal"
+
+      - name: Publish single-file Windows app
+        run: >
+          dotnet publish src/ConstructDpr.App/ConstructDpr.App.csproj -c Release -r win-x64 --self-contained true
+          -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true
+          -p:Version=1.0.${{ github.run_number }} -o publish
+
+      - name: Screenshots of every screen (app runs on a fresh demo database)
+        run: |
+          New-Item -ItemType Directory -Force -Path out | Out-Null
+          $p = Start-Process -FilePath "publish\ConstructDpr.exe" -ArgumentList "--screenshots", "$PWD\out" -PassThru
+          if (-not $p.WaitForExit(180000)) { $p.Kill(); throw "Screenshot run timed out" }
+          if (Test-Path out\error.txt) { Get-Content out\error.txt; Remove-Item out\error.txt }
+          if ($p.ExitCode -ne 0) { throw "Screenshot run failed with exit code $($p.ExitCode)" }
+          Get-ChildItem out
+          if ((Get-ChildItem out -Filter *.png).Count -lt 7) { throw "Expected 7 screenshots" }
+
+      - name: Sample reports (QuestPDF + ClosedXML)
+        run: dotnet run --project tools/ConstructDpr.Preview -c Release -- out
+
+      - name: Collect
+        run: |
+          Copy-Item publish\ConstructDpr.exe out\CONSTRUCT-DPR-Desktop.exe
+          Compress-Archive -Path out\*.png -DestinationPath out\screenshots.zip
+
+      - uses: actions/upload-artifact@v4
+        with: { name: desktop, path: desktop/out/* }
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with: { name: desktop, path: dist }
+      - name: Replace the desktop download page
+        run: |
+          gh release delete desktop-latest --cleanup-tag --yes || true
+          cat > notes.md <<NOTES
+          **CONSTRUCT DPR Desktop (C# / WPF) — version 1.0.${{ github.run_number }}**, built $(date -u '+%d %b %Y %H:%M UTC') from commit ${GITHUB_SHA::7}.
+
+          * **CONSTRUCT-DPR-Desktop.exe** — the Windows program (64-bit Windows 10/11). No installation: download, double-click. Data is stored in %LOCALAPPDATA%\\ConstructDpr. If "Windows protected your PC" appears: **More info → Run anyway** (not code-signed yet).
+          * **01–07 *.png** — screenshots of every screen, taken automatically from this build.
+          * **sample-*.pdf / *.xlsx** — reports generated from the demo project (QuestPDF + ClosedXML).
+
+          Stack: C# · WPF · .NET 8 · SQLite (EF Core) · custom Gantt control · CPM in C# · QuestPDF · ClosedXML. Guide: desktop/README.md
+          NOTES
+          gh release create desktop-latest dist/* --target "$GITHUB_SHA" --latest=false \
+            --title "CONSTRUCT DPR Desktop (C#) — v1.0.${{ github.run_number }}" --notes-file notes.md

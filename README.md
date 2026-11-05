@@ -16,11 +16,12 @@ Download the **Android APK** and the **Windows installer** from the repository's
 
 > **Admin portal is switched off for now** (project creation, members & roles, setup, integrations). Turn it back on with `VITE_ADMIN_PORTAL=true` — see [docs/ADMIN_PORTAL.md](docs/ADMIN_PORTAL.md).
 
-## Two editions — pick one
+## Editions — pick one
 
 | | |
 |---|---|
 | **Web edition** (this README) | Installable web app + PostgreSQL (Supabase). Strict database-enforced controls, scales to many projects. Start: [docs/START_HERE.md](docs/START_HERE.md) |
+| **Desktop edition (C# / WPF)** | Classic Windows program: C# + WPF, .NET 8, SQLite, custom Gantt chart, CPM in C#, QuestPDF + ClosedXML reports. Works offline on one PC. Start: [desktop/README.md](desktop/README.md) |
 | **Google Workspace edition** | Everything inside Google: Sheets + AppSheet + Apps Script + Drive + Looker Studio. No hosting; customise the app without code. Start: [docs/GOOGLE_WORKSPACE_EDITION.md](docs/GOOGLE_WORKSPACE_EDITION.md) |
 
 ## What you get
@@ -71,6 +72,7 @@ supabase/tests/run.sh           # 60 database acceptance checks (PostgreSQL 15+)
 cd clients/python && python -m unittest discover -s tests   # 9 Python client tests
 cd clients/java && ./build.sh test                          # 11 Java client tests
 cd google-workspace && npm ci && npm test                   # 12 Google-edition end-to-end tests
+cd desktop && dotnet test tests/ConstructDpr.Tests          # 25 C# desktop-edition tests
 ```
 Status against acceptance tests A–L: [docs/TESTING.md](docs/TESTING.md).
 
@@ -108,6 +110,7 @@ web/
 native/desktop/    Windows app (Electron shell around web/)
 web/android/       Android app (Capacitor project)
 google-workspace/  Google Workspace edition (Apps Script source, tests, dist/Code.gs)
+desktop/           C# / WPF desktop edition (SQLite, CPM, Gantt, QuestPDF, ClosedXML)
 clients/
   python/          Python client + CLI (standard library only)
   java/            Java 11+ client (no dependencies)

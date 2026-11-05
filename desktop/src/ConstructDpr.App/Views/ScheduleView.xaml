@@ -1,0 +1,33 @@
+<UserControl x:Class="ConstructDpr.App.Views.ScheduleView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:c="clr-namespace:ConstructDpr.App.Controls">
+  <DockPanel>
+    <DockPanel DockPanel.Dock="Top" Margin="0,0,0,12">
+      <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+        <TextBlock Text="Zoom" VerticalAlignment="Center" Foreground="{StaticResource Muted}" Margin="0,0,8,0"/>
+        <Slider x:Name="Zoom" Minimum="4" Maximum="36" Value="14" Width="140" VerticalAlignment="Center" ValueChanged="OnZoom" Margin="0,0,16,0"/>
+        <Button Content="▶ Recalculate CPM" Style="{StaticResource Success}" Click="OnRun"/>
+        <Button Content="Export PDF (A3)" Click="OnPdf"/>
+        <Button Content="Export Excel" Click="OnExcel" Margin="0"/>
+      </StackPanel>
+      <StackPanel>
+        <TextBlock Text="Schedule — Gantt chart" Style="{StaticResource H1}"/>
+        <TextBlock x:Name="Summary" Foreground="{StaticResource Muted}" FontSize="12"/>
+      </StackPanel>
+    </DockPanel>
+    <WrapPanel DockPanel.Dock="Bottom" Margin="0,10,0,0">
+      <Border Width="22" Height="10" Background="#1F6FA3" CornerRadius="2" Margin="0,0,6,0"/><TextBlock Text="Activity" Margin="0,0,18,0" FontSize="12"/>
+      <Border Width="22" Height="10" Background="#D84B4B" CornerRadius="2" Margin="0,0,6,0"/><TextBlock Text="Critical path" Margin="0,0,18,0" FontSize="12"/>
+      <Border Width="22" Height="10" Background="#0F3D5E" CornerRadius="2" Margin="0,0,6,0"/><TextBlock Text="Progress (approved)" Margin="0,0,18,0" FontSize="12"/>
+      <Border Width="22" Height="4" Background="#B5BEC7" CornerRadius="2" Margin="0,0,6,0"/><TextBlock Text="Baseline" Margin="0,0,18,0" FontSize="12"/>
+      <TextBlock Text="◆ Milestone" Margin="0,0,18,0" FontSize="12"/>
+      <TextBlock Text="┆ Today (data date)" Foreground="#B26B00" FontSize="12"/>
+    </WrapPanel>
+    <Border BorderBrush="{StaticResource Line}" BorderThickness="1" CornerRadius="6" Background="White">
+      <ScrollViewer x:Name="Scroll" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto">
+        <c:GanttChart x:Name="Chart" HorizontalAlignment="Left" VerticalAlignment="Top"/>
+      </ScrollViewer>
+    </Border>
+  </DockPanel>
+</UserControl>

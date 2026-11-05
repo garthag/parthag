@@ -101,3 +101,8 @@ __pycache__/
 
 # Google Workspace edition
 google-workspace/node_modules/
+
+# .NET desktop edition
+desktop/**/obj/
+desktop/**/bin/
+desktop/publish/

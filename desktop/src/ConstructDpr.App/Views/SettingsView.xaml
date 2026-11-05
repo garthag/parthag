@@ -1,0 +1,50 @@
+<UserControl x:Class="ConstructDpr.App.Views.SettingsView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <ScrollViewer VerticalScrollBarVisibility="Auto">
+    <StackPanel MaxWidth="980" HorizontalAlignment="Left">
+      <TextBlock Text="Settings" Style="{StaticResource H1}" Margin="0,0,0,14"/>
+      <Border Style="{StaticResource CardBorder}" Margin="0,0,0,12">
+        <StackPanel>
+          <TextBlock Text="You" Style="{StaticResource H2}"/>
+          <TextBlock Text="Your name as it appears on reports, approvals and the audit trail" Style="{StaticResource Label}"/>
+          <DockPanel>
+            <Button DockPanel.Dock="Right" Content="Save" Style="{StaticResource Primary}" Click="OnSaveUser" Margin="8,0,0,0"/>
+            <TextBox x:Name="UserBox"/>
+          </DockPanel>
+        </StackPanel>
+      </Border>
+      <Border Style="{StaticResource CardBorder}" Margin="0,0,0,12">
+        <StackPanel x:Name="ProjectForm">
+          <TextBlock Text="Project" Style="{StaticResource H2}"/>
+          <UniformGrid Columns="2">
+            <StackPanel Margin="0,0,12,10"><TextBlock Text="Code" Style="{StaticResource Label}"/><TextBox Text="{Binding Code}"/></StackPanel>
+            <StackPanel Margin="0,0,0,10"><TextBlock Text="Name" Style="{StaticResource Label}"/><TextBox Text="{Binding Name}"/></StackPanel>
+            <StackPanel Margin="0,0,12,10"><TextBlock Text="Client" Style="{StaticResource Label}"/><TextBox Text="{Binding Client}"/></StackPanel>
+            <StackPanel Margin="0,0,0,10"><TextBlock Text="Contractor" Style="{StaticResource Label}"/><TextBox Text="{Binding Contractor}"/></StackPanel>
+            <StackPanel Margin="0,0,12,10"><TextBlock Text="Work order no." Style="{StaticResource Label}"/><TextBox Text="{Binding WorkOrderNo}"/></StackPanel>
+            <StackPanel Margin="0,0,0,10"><TextBlock Text="Site address" Style="{StaticResource Label}"/><TextBox Text="{Binding SiteAddress}"/></StackPanel>
+            <StackPanel Margin="0,0,12,10"><TextBlock Text="Project start" Style="{StaticResource Label}"/><DatePicker x:Name="StartPick"/></StackPanel>
+            <StackPanel Margin="0,0,0,10"><TextBlock Text="Contract completion" Style="{StaticResource Label}"/><DatePicker x:Name="EndPick"/></StackPanel>
+            <StackPanel Margin="0,0,12,10"><TextBlock Text="Working days (0 = Sunday … 6 = Saturday)" Style="{StaticResource Label}"/><TextBox Text="{Binding WorkDays}"/></StackPanel>
+            <StackPanel Margin="0,22,0,10"><CheckBox Content="Allow people to approve their own reports" IsChecked="{Binding AllowSelfApproval}"/></StackPanel>
+          </UniformGrid>
+          <Button Content="Save project" Style="{StaticResource Primary}" HorizontalAlignment="Left" Click="OnSaveProject"/>
+        </StackPanel>
+      </Border>
+      <Border Style="{StaticResource CardBorder}">
+        <StackPanel>
+          <TextBlock Text="Data" Style="{StaticResource H2}"/>
+          <TextBlock x:Name="PathText" TextWrapping="Wrap" FontSize="12" Foreground="{StaticResource Muted}" Margin="0,0,0,10"/>
+          <WrapPanel>
+            <Button Content="Open data folder" Click="OnOpenFolder" Margin="0,0,8,6"/>
+            <Button Content="Back up database…" Style="{StaticResource Primary}" Click="OnBackup" Margin="0,0,8,6"/>
+            <Button Content="Reset to demo project…" Style="{StaticResource Danger}" Click="OnReset" Margin="0,0,8,6"/>
+          </WrapPanel>
+          <TextBlock Text="CONSTRUCT DPR Desktop · C# / WPF · .NET 8 · SQLite · QuestPDF (Community licence) · ClosedXML (MIT)"
+                     FontSize="11" Foreground="{StaticResource Muted}" Margin="0,10,0,0"/>
+        </StackPanel>
+      </Border>
+    </StackPanel>
+  </ScrollViewer>
+</UserControl>

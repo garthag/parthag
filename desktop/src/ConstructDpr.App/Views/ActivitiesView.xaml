@@ -1,0 +1,60 @@
+<UserControl x:Class="ConstructDpr.App.Views.ActivitiesView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <DockPanel>
+    <DockPanel DockPanel.Dock="Top" Margin="0,0,0,12">
+      <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+        <Button Content="＋ Add activity" Click="OnAdd"/>
+        <Button Content="Delete" Style="{StaticResource Danger}" Click="OnDelete"/>
+        <Button Content="Save changes" Style="{StaticResource Primary}" Click="OnSave"/>
+        <Button Content="▶ Run CPM schedule" Style="{StaticResource Success}" Click="OnSchedule"/>
+        <Button Content="Freeze baseline…" Click="OnBaseline" Margin="0"/>
+      </StackPanel>
+      <StackPanel>
+        <TextBlock Text="Activities &amp; BOQ" Style="{StaticResource H1}"/>
+        <TextBlock x:Name="Summary" Foreground="{StaticResource Muted}" FontSize="12"/>
+      </StackPanel>
+    </DockPanel>
+    <Border DockPanel.Dock="Bottom" Style="{StaticResource CardBorder}" Margin="0,12,0,0" Height="210">
+      <DockPanel>
+        <DockPanel DockPanel.Dock="Top" Margin="0,0,0,8">
+          <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+            <Button Content="＋ Add predecessor" Click="OnAddLink"/>
+            <Button Content="Remove" Style="{StaticResource Danger}" Click="OnRemoveLink" Margin="0"/>
+          </StackPanel>
+          <TextBlock x:Name="LinksTitle" Text="Predecessors" Style="{StaticResource H2}" VerticalAlignment="Center" Margin="0"/>
+        </DockPanel>
+        <DataGrid x:Name="Links">
+          <DataGrid.Columns>
+            <DataGridComboBoxColumn x:Name="PredColumn" Header="Predecessor" Width="320" SelectedValuePath="Id" DisplayMemberPath="Display" SelectedValueBinding="{Binding PredecessorId}"/>
+            <DataGridComboBoxColumn x:Name="TypeColumn" Header="Relationship" Width="130" SelectedItemBinding="{Binding Type}"/>
+            <DataGridTextColumn Header="Lag (+) / lead (−) days" Width="170" Binding="{Binding Lag}"/>
+          </DataGrid.Columns>
+        </DataGrid>
+      </DockPanel>
+    </Border>
+    <DataGrid x:Name="Grid" SelectionChanged="OnSelect" FrozenColumnCount="2">
+      <DataGrid.Columns>
+        <DataGridTextColumn Header="Code" Binding="{Binding Code}" Width="70"/>
+        <DataGridTextColumn Header="Activity" Binding="{Binding Name}" Width="240"/>
+        <DataGridTextColumn Header="WBS" Binding="{Binding Wbs}" Width="90"/>
+        <DataGridTextColumn Header="Area" Binding="{Binding Area}" Width="110"/>
+        <DataGridTextColumn Header="Unit" Binding="{Binding Unit}" Width="50"/>
+        <DataGridTextColumn Header="BOQ qty" Binding="{Binding TotalQty, StringFormat=#\,##0.###}" Width="80" ElementStyle="{StaticResource Num}"/>
+        <DataGridTextColumn Header="Rate ₹" Binding="{Binding Rate, StringFormat=#\,##0.##}" Width="80" ElementStyle="{StaticResource Num}"/>
+        <DataGridTextColumn Header="Weight" Binding="{Binding Weight}" Width="58" ElementStyle="{StaticResource Num}"/>
+        <DataGridTextColumn Header="Dur (d)" Binding="{Binding Duration}" Width="58" ElementStyle="{StaticResource Num}"/>
+        <DataGridCheckBoxColumn Header="MS" Binding="{Binding IsMilestone}" Width="36"/>
+        <DataGridTextColumn Header="Early start" Binding="{Binding EarlyStart, StringFormat=dd-MMM-yy}" IsReadOnly="True" Width="82"/>
+        <DataGridTextColumn Header="Early finish" Binding="{Binding EarlyFinish, StringFormat=dd-MMM-yy}" IsReadOnly="True" Width="82"/>
+        <DataGridTextColumn Header="Baseline finish" Binding="{Binding BaselineFinish, StringFormat=dd-MMM-yy}" IsReadOnly="True" Width="96"/>
+        <DataGridTextColumn Header="TF" Binding="{Binding TotalFloat}" IsReadOnly="True" Width="40" ElementStyle="{StaticResource Num}"/>
+        <DataGridCheckBoxColumn Header="Critical" Binding="{Binding Critical, Mode=OneWay}" IsReadOnly="True" Width="56"/>
+        <DataGridTextColumn Header="Accepted" Binding="{Binding AcceptedQty, StringFormat=#\,##0.###}" IsReadOnly="True" Width="78" ElementStyle="{StaticResource Num}"/>
+        <DataGridTextColumn Header="%" Binding="{Binding ProgressPct, StringFormat=0.#, Mode=OneWay}" IsReadOnly="True" Width="48" ElementStyle="{StaticResource Num}"/>
+        <DataGridTextColumn Header="Status" Binding="{Binding Status}" IsReadOnly="True" Width="90"/>
+        <DataGridTextColumn Header="Responsible" Binding="{Binding Responsible}" Width="140"/>
+      </DataGrid.Columns>
+    </DataGrid>
+  </DockPanel>
+</UserControl>
