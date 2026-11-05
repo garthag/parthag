@@ -34,23 +34,33 @@ It works fully **offline** on site. You can optionally turn on **Google sign-in 
 
 **Media library:** every photo and video in the project, with filters by type, category and tag. It has a full-screen viewer with pinch-zoom and video playback, and you can share or edit tags from it.
 
-**Steel weight calculator (IS codes)** – the calculator icon on the home screen
-- Unit weight (kg/m) of every common steel section, with a searchable IS steel table:
+**Steel (IS codes)** – the calculator icon on the home screen, and the **Steel** tab of every project
 
-| Section | Standard |
-|---|---|
-| ISMB, ISLB, ISJB, ISWB, ISHB beams and columns | IS 808 / SP 6(1) |
-| ISMC, ISLC, ISJC channels | IS 808 / SP 6(1) |
-| ISA equal and unequal angles | IS 808 / SP 6(1) |
-| UB and UC universal beams/columns | BS 4-1 |
-| Plates and flats | IS 2062, IS 1730, IS 1731 |
-| Round and square bars | IS 1732 |
-| TMT / HYSD rebar | IS 1786 nominal mass |
-| MS pipes, Light/Medium/Heavy | IS 1239 (Pt 1) |
-| SHS and RHS hollow sections | IS 4923 |
+*IS steel library*, organised **Category → Family → Size**:
 
-- Pick a size from the table or type a custom size; for plates, flats, bars, pipes and hollow sections the weight is worked out at 7850 kg/m³.
-- Enter length and number of pieces to get kg and MT, build a take-off list and share it on WhatsApp.
+| Category | Families | Standard |
+|---|---|---|
+| Plates & flats | Plate, Flat | IS 2062, IS 1730, IS 1731 |
+| Bars & rebar | Round, Square, TMT/HYSD | IS 1732, IS 1786 |
+| Angles | ISA equal, ISA unequal | IS 808 / SP 6(1) |
+| Channels | ISMC, ISLC, ISJC | IS 808 / SP 6(1) |
+| Beams & columns | ISMB, ISLB, ISJB, ISWB, ISHB, UB, UC | IS 808 / SP 6(1), BS 4-1 |
+| Pipes & hollow sections | MS pipe Light/Medium/Heavy, SHS, RHS | IS 1239 (Pt 1), IS 4923 |
+
+- **Search** across all sizes: `ismb300`, `ISMB 300`, `50x50`, `TMT 12`, `IS 1239`.
+- **Filter** by category, family and kg/m range. **Sort** by IS table order, weight or designation.
+- **Section detail:** standard, dimensions, kg/m, weight of 6 m and 12 m lengths, metres per MT.
+- **Related sizes:** the next smaller and larger size, and alternatives within ±10 % weight in the same category (for example ISMB 300 ↔ ISWB 250).
+
+*Calculator:* choose category → section → size (or type a custom size for plates, flats, bars, pipes and hollow sections at 7850 kg/m³), then length, pieces and member mark to get kg and MT. Build a list, share it, or save it to a project take-off.
+
+*Project steel take-offs* (Steel tab):
+- Members with mark, location and remarks, each linked to its IS section. Custom sizes are also allowed.
+- Totals by category and by family (pieces, metres, kg, MT), wastage %, net and gross weight, and status (Estimate → Ordered → Received → Erected).
+- Filter by mark, section or location and by family; sort by entry order, mark, size or weight.
+- Share on WhatsApp; synced to Google cloud with the rest of the project.
+- **Post to DPR:** adds the tonnage to *Work done* ("Structural steel erection", MT, with the take-off weight as scope) and/or *Materials* (family-wise, MT). The take-off records which DPRs it was posted to, and the DPR shows a link back to the take-off. From a DPR, use **⋮ → Add steel from take-off**.
+- **Keeping links consistent:** deleting a DPR removes its postings, and deleting a project removes its take-offs.
 
 **Output**
 - **PDF** on A4 in CPWD/PWD style: header block, every section as a table, a photo grid with captions, tags, time and GPS, a video register, and signature blocks. You can preview, print or share it.
@@ -133,7 +143,8 @@ lib/
   main.dart                  App entry, theme, providers
   models/models.dart         Project, DailyReport and all section models (JSON)
   data/standards.dart        IS-code catalogues: trades, materials, activities, tests, PPE, permits…
-  data/steel_sections.dart   IS 808 steel tables and unit-weight formulas
+  data/steel_sections.dart   IS steel tables, unit-weight formulas, library search/sort/relations
+  models/steel_takeoff.dart  Steel take-off, items and DPR postings
   data/local_store.dart      Offline JSON store
   data/sample_data.dart      Demo project
   state/app_state.dart       Projects/reports state, carry-forward, dashboard summary
@@ -141,7 +152,8 @@ lib/
   services/pdf_service.dart    PDF report
   services/report_text.dart    WhatsApp text summary
   services/cloud_sync.dart     Google sign-in + Firestore/Storage sync
-  screens/                   Home, project, DPR editor, media gallery/viewer, settings, steel weight
+  services/steel_text.dart     Steel take-off text for WhatsApp
+  screens/                   Home, project, DPR editor, media gallery/viewer, settings, steel calculator/library/take-offs
   widgets/                   Section editors, generic entry form, shared widgets
 test/                        Model, state, PDF and widget tests
 ```
