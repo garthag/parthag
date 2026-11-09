@@ -1,3 +1,0 @@
-﻿<Project>
-  <Import Project="../buildMultiTargeting/ConstructDpr.Server.props" />
-</Project>

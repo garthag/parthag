@@ -1,3 +1,0 @@
-﻿<Project>
-  <Import Project="../build/ConstructDpr.UI.props" />
-</Project>

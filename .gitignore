@@ -106,3 +106,8 @@ google-workspace/node_modules/
 desktop/**/obj/
 desktop/**/bin/
 desktop/publish/
+
+# .NET build output
+**/bin/
+**/obj/
+src/ConstructDpr.Server/data/
