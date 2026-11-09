@@ -1,0 +1,16 @@
+/home/user/parthag/src/ConstructDpr.Client/bin/Debug/net10.0/ConstructDpr.Client.deps.json
+/home/user/parthag/src/ConstructDpr.Client/bin/Debug/net10.0/ConstructDpr.Client.dll
+/home/user/parthag/src/ConstructDpr.Client/bin/Debug/net10.0/ConstructDpr.Client.pdb
+/home/user/parthag/src/ConstructDpr.Client/bin/Debug/net10.0/ConstructDpr.Shared.dll
+/home/user/parthag/src/ConstructDpr.Client/bin/Debug/net10.0/ConstructDpr.Shared.pdb
+/home/user/parthag/src/ConstructDpr.Client/obj/Debug/net10.0/ConstructDpr.Client.csproj.AssemblyReference.cache
+/home/user/parthag/src/ConstructDpr.Client/obj/Debug/net10.0/ConstructDpr.Client.GeneratedMSBuildEditorConfig.editorconfig
+/home/user/parthag/src/ConstructDpr.Client/obj/Debug/net10.0/ConstructDpr.Client.AssemblyInfoInputs.cache
+/home/user/parthag/src/ConstructDpr.Client/obj/Debug/net10.0/ConstructDpr.Client.AssemblyInfo.cs
+/home/user/parthag/src/ConstructDpr.Client/obj/Debug/net10.0/ConstructDpr.Client.csproj.CoreCompileInputs.cache
+/home/user/parthag/src/ConstructDpr.Client/obj/Debug/net10.0/ConstructDpr.Client.sourcelink.json
+/home/user/parthag/src/ConstructDpr.Client/obj/Debug/net10.0/Construc.ECC3E930.Up2Date
+/home/user/parthag/src/ConstructDpr.Client/obj/Debug/net10.0/ConstructDpr.Client.dll
+/home/user/parthag/src/ConstructDpr.Client/obj/Debug/net10.0/refint/ConstructDpr.Client.dll
+/home/user/parthag/src/ConstructDpr.Client/obj/Debug/net10.0/ConstructDpr.Client.pdb
+/home/user/parthag/src/ConstructDpr.Client/obj/Debug/net10.0/ref/ConstructDpr.Client.dll

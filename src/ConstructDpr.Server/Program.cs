@@ -51,7 +51,7 @@ builder.Services.ConfigureHttpJsonOptions(o => Json.Configure(o.SerializerOption
 builder.Services.Configure<ForwardedHeadersOptions>(o =>
 {
     o.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
-    o.KnownNetworks.Clear(); // hosting platforms (Render, Azure, a reverse proxy) terminate HTTPS in front of the app
+    o.KnownIPNetworks.Clear(); // hosting platforms (Render, Azure, a reverse proxy) terminate HTTPS in front of the app
     o.KnownProxies.Clear();
 });
 builder.Services.AddRateLimiter(o =>
