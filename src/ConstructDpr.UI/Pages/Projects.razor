@@ -1,0 +1,60 @@
+@page "/projects"
+@inject AppState State
+@inject IConstructDprApi Api
+@inject Notifier Notes
+@inject NavigationManager Nav
+
+<h1>Projects</h1>
+<p class="sub">Projects you are a member of. Your role decides what you can do on each.</p>
+<div class="list">
+    @foreach (var p in State.Projects)
+    {
+        <a class="item" href="" @onclick="() => Open(p.Id)" @onclick:preventDefault>
+            <div><div class="t">@p.Code — @p.Name</div><div class="s">@p.Client · @Permissions.Label(p.MyRole)</div></div>
+            @if (p.Id == State.ProjectId) { <span class="badge good">OPEN</span> }
+        </a>
+    }
+</div>
+<div class="row" style="margin-top:14px">
+    <button class="btn" disabled="@_busy" @onclick="Demo">Load demo project</button>
+    @if (State.Features?.AdminPortal == true) { <button class="btn primary" @onclick="() => _creating = true">＋ New project</button> }
+</div>
+@if (State.Features?.AdminPortal != true)
+{
+    <p class="small muted" style="margin-top:12px">Creating projects and managing people is part of the admin portal, which is switched off on this server for now.</p>
+}
+<Modal Title="New project" @bind-Open="_creating">
+    <div class="fields">
+        <div class="field"><label>Code</label><input @bind="_new.Code" placeholder="BF3" /></div>
+        <div class="field"><label>Start</label><input type="date" @bind="_new.StartDate" /></div>
+    </div>
+    <div class="field"><label>Name</label><input @bind="_new.Name" /></div>
+    <div class="field"><label>Client</label><input @bind="_new.Client" /></div>
+    <button class="btn primary" disabled="@_busy" @onclick="Create">Create</button>
+    <button class="btn ghost" @onclick="() => _creating = false">Cancel</button>
+</Modal>
+@code {
+    private bool _busy, _creating;
+    private Project _new = new() { StartDate = DateOnly.FromDateTime(DateTime.Today) };
+
+    private async Task Open(int id)
+    {
+        await State.OpenProjectAsync(id);
+        Nav.NavigateTo("");
+    }
+
+    private async Task Demo()
+    {
+        _busy = true;
+        await Notes.TryAsync(async () => { var p = await Api.CreateDemoProjectAsync(); await State.RefreshProjectsAsync(); await Open(p.Id); }, "Demo project loaded.");
+        _busy = false;
+    }
+
+    private async Task Create()
+    {
+        _busy = true;
+        if (await Notes.TryAsync(async () => { var p = await Api.CreateProjectAsync(_new); await State.RefreshProjectsAsync(); await Open(p.Id); }, "Project created. Add activities next."))
+            (_creating, _new) = (false, new() { StartDate = DateOnly.FromDateTime(DateTime.Today) });
+        _busy = false;
+    }
+}

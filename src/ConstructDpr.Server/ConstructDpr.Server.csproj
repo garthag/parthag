@@ -7,6 +7,7 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\ConstructDpr.Core\ConstructDpr.Core.csproj" />
+    <ProjectReference Include="..\ConstructDpr.Web\ConstructDpr.Web.csproj" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.Server" Version="8.0.11" />

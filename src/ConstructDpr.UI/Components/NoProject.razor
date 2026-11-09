@@ -1,0 +1,24 @@
+@inject AppState State
+@inject Notifier Notes
+@inject IConstructDprApi Api
+<div class="card" style="max-width:640px">
+    <h1>Welcome, @State.Me?.DisplayName</h1>
+    <p class="sub">You are not on any project yet.</p>
+    <p>Try the app with a sample project: a blast-furnace job with a schedule, a week of approved daily reports and one report waiting for approval.</p>
+    <button class="btn primary" disabled="@_busy" @onclick="Demo">Load demo project</button>
+    <p class="small muted" style="margin-top:14px">To join your real project, ask its administrator to add your e-mail (@State.Me?.Email) under Settings → People. It then appears here automatically.</p>
+</div>
+@code {
+    private bool _busy;
+    private async Task Demo()
+    {
+        _busy = true;
+        await Notes.TryAsync(async () =>
+        {
+            var p = await Api.CreateDemoProjectAsync();
+            await State.RefreshProjectsAsync();
+            await State.OpenProjectAsync(p.Id);
+        }, "Demo project loaded.");
+        _busy = false;
+    }
+}

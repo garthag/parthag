@@ -1,0 +1,123 @@
+is_global = true
+build_property.TargetFramework = net8.0
+build_property.TargetPlatformMinVersion = 
+build_property.UsingMicrosoftNETSdkWeb = 
+build_property.ProjectTypeGuids = 
+build_property.InvariantGlobalization = 
+build_property.PlatformNeutralAssembly = 
+build_property.EnforceExtendedAnalyzerRules = 
+build_property._SupportedPlatformList = Linux,macOS,Windows,browser
+build_property.RootNamespace = ConstructDpr.UI
+build_property.RootNamespace = ConstructDpr.UI
+build_property.ProjectDir = /home/user/parthag/src/ConstructDpr.UI/
+build_property.EnableComHosting = 
+build_property.EnableGeneratedComInterfaceComImportInterop = 
+build_property.RazorLangVersion = 8.0
+build_property.SupportLocalizedComponentNames = 
+build_property.GenerateRazorMetadataSourceChecksumAttributes = 
+build_property.MSBuildProjectDirectory = /home/user/parthag/src/ConstructDpr.UI
+build_property._RazorSourceGeneratorDebug = 
+
+[/home/user/parthag/src/ConstructDpr.UI/Components/Cell.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50cy9DZWxsLnJhem9y
+build_metadata.AdditionalFiles.CssScope = 
+
+[/home/user/parthag/src/ConstructDpr.UI/Components/DecCell.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50cy9EZWNDZWxsLnJhem9y
+build_metadata.AdditionalFiles.CssScope = 
+
+[/home/user/parthag/src/ConstructDpr.UI/Components/GanttChart.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50cy9HYW50dENoYXJ0LnJhem9y
+build_metadata.AdditionalFiles.CssScope = 
+
+[/home/user/parthag/src/ConstructDpr.UI/Components/IntCell.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50cy9JbnRDZWxsLnJhem9y
+build_metadata.AdditionalFiles.CssScope = 
+
+[/home/user/parthag/src/ConstructDpr.UI/Components/Modal.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50cy9Nb2RhbC5yYXpvcg==
+build_metadata.AdditionalFiles.CssScope = 
+
+[/home/user/parthag/src/ConstructDpr.UI/Components/NoProject.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50cy9Ob1Byb2plY3QucmF6b3I=
+build_metadata.AdditionalFiles.CssScope = 
+
+[/home/user/parthag/src/ConstructDpr.UI/Components/SCurve.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50cy9TQ3VydmUucmF6b3I=
+build_metadata.AdditionalFiles.CssScope = 
+
+[/home/user/parthag/src/ConstructDpr.UI/Components/StatusBadge.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50cy9TdGF0dXNCYWRnZS5yYXpvcg==
+build_metadata.AdditionalFiles.CssScope = 
+
+[/home/user/parthag/src/ConstructDpr.UI/Components/TextField.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50cy9UZXh0RmllbGQucmF6b3I=
+build_metadata.AdditionalFiles.CssScope = 
+
+[/home/user/parthag/src/ConstructDpr.UI/Components/Toasts.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50cy9Ub2FzdHMucmF6b3I=
+build_metadata.AdditionalFiles.CssScope = 
+
+[/home/user/parthag/src/ConstructDpr.UI/Layout/LoginLayout.razor]
+build_metadata.AdditionalFiles.TargetPath = TGF5b3V0L0xvZ2luTGF5b3V0LnJhem9y
+build_metadata.AdditionalFiles.CssScope = 
+
+[/home/user/parthag/src/ConstructDpr.UI/Layout/MainLayout.razor]
+build_metadata.AdditionalFiles.TargetPath = TGF5b3V0L01haW5MYXlvdXQucmF6b3I=
+build_metadata.AdditionalFiles.CssScope = 
+
+[/home/user/parthag/src/ConstructDpr.UI/Pages/Activities.razor]
+build_metadata.AdditionalFiles.TargetPath = UGFnZXMvQWN0aXZpdGllcy5yYXpvcg==
+build_metadata.AdditionalFiles.CssScope = 
+
+[/home/user/parthag/src/ConstructDpr.UI/Pages/Approvals.razor]
+build_metadata.AdditionalFiles.TargetPath = UGFnZXMvQXBwcm92YWxzLnJhem9y
+build_metadata.AdditionalFiles.CssScope = 
+
+[/home/user/parthag/src/ConstructDpr.UI/Pages/DprEdit.razor]
+build_metadata.AdditionalFiles.TargetPath = UGFnZXMvRHByRWRpdC5yYXpvcg==
+build_metadata.AdditionalFiles.CssScope = 
+
+[/home/user/parthag/src/ConstructDpr.UI/Pages/DprNew.razor]
+build_metadata.AdditionalFiles.TargetPath = UGFnZXMvRHByTmV3LnJhem9y
+build_metadata.AdditionalFiles.CssScope = 
+
+[/home/user/parthag/src/ConstructDpr.UI/Pages/Dprs.razor]
+build_metadata.AdditionalFiles.TargetPath = UGFnZXMvRHBycy5yYXpvcg==
+build_metadata.AdditionalFiles.CssScope = 
+
+[/home/user/parthag/src/ConstructDpr.UI/Pages/Home.razor]
+build_metadata.AdditionalFiles.TargetPath = UGFnZXMvSG9tZS5yYXpvcg==
+build_metadata.AdditionalFiles.CssScope = 
+
+[/home/user/parthag/src/ConstructDpr.UI/Pages/Login.razor]
+build_metadata.AdditionalFiles.TargetPath = UGFnZXMvTG9naW4ucmF6b3I=
+build_metadata.AdditionalFiles.CssScope = 
+
+[/home/user/parthag/src/ConstructDpr.UI/Pages/More.razor]
+build_metadata.AdditionalFiles.TargetPath = UGFnZXMvTW9yZS5yYXpvcg==
+build_metadata.AdditionalFiles.CssScope = 
+
+[/home/user/parthag/src/ConstructDpr.UI/Pages/Projects.razor]
+build_metadata.AdditionalFiles.TargetPath = UGFnZXMvUHJvamVjdHMucmF6b3I=
+build_metadata.AdditionalFiles.CssScope = 
+
+[/home/user/parthag/src/ConstructDpr.UI/Pages/Reports.razor]
+build_metadata.AdditionalFiles.TargetPath = UGFnZXMvUmVwb3J0cy5yYXpvcg==
+build_metadata.AdditionalFiles.CssScope = 
+
+[/home/user/parthag/src/ConstructDpr.UI/Pages/Schedule.razor]
+build_metadata.AdditionalFiles.TargetPath = UGFnZXMvU2NoZWR1bGUucmF6b3I=
+build_metadata.AdditionalFiles.CssScope = 
+
+[/home/user/parthag/src/ConstructDpr.UI/Pages/Settings.razor]
+build_metadata.AdditionalFiles.TargetPath = UGFnZXMvU2V0dGluZ3MucmF6b3I=
+build_metadata.AdditionalFiles.CssScope = 
+
+[/home/user/parthag/src/ConstructDpr.UI/Routes.razor]
+build_metadata.AdditionalFiles.TargetPath = Um91dGVzLnJhem9y
+build_metadata.AdditionalFiles.CssScope = 
+
+[/home/user/parthag/src/ConstructDpr.UI/_Imports.razor]
+build_metadata.AdditionalFiles.TargetPath = X0ltcG9ydHMucmF6b3I=
+build_metadata.AdditionalFiles.CssScope = 

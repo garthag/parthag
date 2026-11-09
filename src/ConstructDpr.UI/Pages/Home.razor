@@ -1,0 +1,69 @@
+@page "/"
+@inherits ProjectPage
+
+<div class="head">
+    <div><h1>Dashboard</h1><p class="sub">@State.Project?.Name · data date @Fmt.D(Today)</p></div>
+    @if (State.Can(Module.Dpr, Act.Create)) { <a class="btn primary" href="dprs/new">＋ Today's DPR</a> }
+</div>
+
+@if (Loading || _s is null) { <div class="loading"><span class="spinner"></span></div> }
+else
+{
+    var variance = _s.ActualPct - _s.PlannedPct;
+    <div class="grid kpis">
+        <div class="card kpi @(variance < -2 ? "bad" : "good")"><div class="label">Physical progress</div><div class="value">@Fmt.N(_s.ActualPct)%</div><div class="note">Planned @Fmt.N(_s.PlannedPct)% · variance @(variance >= 0 ? "+" : "")@Fmt.N(variance)%</div></div>
+        <div class="card kpi @(Late ? "bad" : "good")"><div class="label">Forecast finish</div><div class="value">@Fmt.D(_s.ForecastFinish)</div><div class="note">@FinishNote</div></div>
+        <div class="card kpi"><div class="label">Executed value</div><div class="value">@Fmt.Money(_s.ExecutedValue)</div><div class="note">of @Fmt.Money(_s.ContractValue) BOQ (@Fmt.N(_s.ContractValue == 0 ? 0 : _s.ExecutedValue * 100 / _s.ContractValue, 1)%)</div></div>
+        <a class="card kpi @(_s.PendingApprovals > 0 ? "warn" : "good")" href="approvals" style="text-decoration:none;color:inherit"><div class="label">Approvals pending</div><div class="value">@_s.PendingApprovals</div><div class="note">@_s.ApprovedReports approved · @_s.HeadcountToday workers in the last report</div></a>
+        <div class="card kpi"><div class="label">Activities</div><div class="value">@_s.Activities</div><div class="note">@_s.Critical on the critical path</div></div>
+        <div class="card kpi @(_s.Delayed > 0 ? "bad" : "good")"><div class="label">Delayed activities</div><div class="value">@_s.Delayed</div><div class="note">Past baseline finish, not complete</div></div>
+    </div>
+    <div class="grid two" style="margin-top:14px">
+        <div class="card"><h2>S-curve — weighted physical progress</h2><SCurve Points="_s.SCurve" /></div>
+        <div class="card">
+            <h2>Needs attention</h2>
+            <div class="list">
+                @foreach (var a in Attention)
+                {
+                    var late = (a.BaselineFinish ?? a.PlannedFinish) < Today;
+                    <div class="item">
+                        <div><div class="t">@a.Code @a.Name</div><div class="s">@(late ? $"Baseline finish {Fmt.D(a.BaselineFinish)} · {Fmt.N(a.ProgressPct, 0)}% done" : $"Finish {Fmt.D(a.EarlyFinish)} · float {a.TotalFloat} d")</div></div>
+                        <span class="badge @(late ? "bad" : "warn")">@(late ? "DELAYED" : "CRITICAL")</span>
+                    </div>
+                }
+                @if (!Attention.Any()) { <p class="muted">Nothing critical or late. 👍</p> }
+            </div>
+        </div>
+    </div>
+    <div class="card" style="margin-top:14px">
+        <h2>Progress by activity (approved quantities)</h2>
+        @foreach (var a in _acts.Where(a => a.TotalQty > 0))
+        {
+            <div class="row" style="margin:6px 0;flex-wrap:nowrap">
+                <div style="flex:0 0 42%;min-width:0" class="small nowrap" title="@a.Name"><b>@a.Code</b> @a.Name</div>
+                <div class="bar grow @(a.Critical ? "crit" : "")"><i style="width:@(a.ProgressPct.ToString("0.#", CultureInfo.InvariantCulture))%"></i></div>
+                <div class="small muted num" style="flex:0 0 120px">@Fmt.N(a.AcceptedQty) / @Fmt.N(a.TotalQty) @a.Unit</div>
+            </div>
+        }
+    </div>
+}
+
+@code {
+    private DashboardStats? _s;
+    private List<Activity> _acts = new();
+    private Project? _project;
+    private bool Late => _project?.CompletionDate is { } c && _s?.ForecastFinish > c;
+    private string FinishNote => _project?.CompletionDate is not { } c || _s?.ForecastFinish is not { } f ? "Run the schedule"
+        : f > c ? $"{f.DayNumber - c.DayNumber} days late vs {Fmt.D(c)}" : $"On time (contract {Fmt.D(c)})";
+    private IEnumerable<Activity> Attention => _acts
+        .Where(a => a.Status is not (ActivityStatus.Completed or ActivityStatus.Cancelled) && (a.Critical || (a.BaselineFinish ?? a.PlannedFinish) < Today))
+        .OrderBy(a => a.TotalFloat ?? 0).Take(7);
+
+    protected override async Task LoadAsync()
+    {
+        var t1 = Api.DashboardAsync(Pid);
+        var t2 = Api.ActivitiesAsync(Pid);
+        var t3 = Api.ProjectAsync(Pid);
+        (_s, _acts, _project) = (await t1, await t2, await t3);
+    }
+}

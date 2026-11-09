@@ -1,0 +1,97 @@
+@page "/reports"
+@inherits ProjectPage
+@inject IFileSaver Files
+
+<h1>Reports &amp; Excel</h1>
+<p class="sub">PDF reports are made with QuestPDF and Excel workbooks with ClosedXML, on the server.</p>
+<div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(280px,1fr))">
+    @if (State.Can(Module.Reports, Act.Export))
+    {
+        <div class="card">
+            <h2>Daily progress report</h2>
+            <p class="small muted">A4 PDF with activity progress, manpower, equipment, materials, narrative, sign-off and the approval hash.</p>
+            <div class="field">
+                <select @bind="_dprId" aria-label="Report">
+                    @foreach (var d in _dprs) { <option value="@d.Id">@d.Number@(d.Revision > 0 ? $" R{d.Revision}" : "") · @d.ReportDate.ToString("dd MMM yyyy", CultureInfo.InvariantCulture) · @d.Status</option> }
+                </select>
+            </div>
+            <div class="row">
+                <button class="btn primary" disabled="@(_busy || _dprId == 0)" @onclick="() => Download(ReportKind.DprPdf, _dprId)">PDF</button>
+                <button class="btn" disabled="@(_busy || _dprId == 0)" @onclick="() => Download(ReportKind.DprExcel, _dprId)">Excel</button>
+            </div>
+        </div>
+        <div class="card">
+            <h2>Schedule</h2>
+            <p class="small muted">A3 landscape PDF with the activity table and Gantt chart; Excel with CPM dates, floats and a BOQ value sheet with live formulas.</p>
+            <div class="row">
+                <button class="btn primary" disabled="@_busy" @onclick="() => Download(ReportKind.SchedulePdf, null)">Schedule PDF</button>
+                <button class="btn" disabled="@_busy" @onclick="() => Download(ReportKind.ScheduleExcel, null)">Schedule Excel</button>
+            </div>
+        </div>
+    }
+    <div class="card">
+        <h2>Import activities from Excel</h2>
+        <p class="small muted">One row per activity. Existing codes are updated, new codes added. The whole file is checked first: nothing is imported if any row has an error.</p>
+        <div class="row">
+            <button class="btn" disabled="@_busy" @onclick="() => Download(ReportKind.ActivityTemplate, null)">Download template</button>
+            @if (State.Can(Module.Masters, Act.Create | Act.Edit))
+            {
+                <label class="btn primary" style="margin:0;color:#fff">Import .xlsx… <InputFile OnChange="Import" accept=".xlsx" class="hidden" /></label>
+            }
+        </div>
+        @if (_importErrors.Count > 0)
+        {
+            <div class="notice bad">Nothing was imported. Fix these rows and try again:<ul>@foreach (var e in _importErrors.Take(25)) { <li>@e</li> }</ul></div>
+        }
+    </div>
+</div>
+
+@if (State.Can(Module.Reports, Act.View))
+{
+    <div class="card" style="margin-top:14px">
+        <h2>Audit trail (latest 50)</h2>
+        <div class="table-wrap">
+            <table>
+                <thead><tr><th>When</th><th>Who</th><th>Record</th><th>Action</th><th>Details</th></tr></thead>
+                <tbody>@foreach (var a in _audit) { <tr><td class="nowrap">@Fmt.Dt(a.At)</td><td>@a.User</td><td>@a.Entity</td><td>@a.Action</td><td>@a.Details</td></tr> }</tbody>
+            </table>
+        </div>
+    </div>
+}
+
+@code {
+    private List<DprSummary> _dprs = new();
+    private List<AuditEntry> _audit = new();
+    private List<string> _importErrors = new();
+    private int _dprId;
+    private bool _busy;
+
+    protected override async Task LoadAsync()
+    {
+        _dprs = await Api.DprsAsync(Pid);
+        if (_dprs.All(d => d.Id != _dprId)) _dprId = _dprs.FirstOrDefault()?.Id ?? 0;
+        if (State.Can(Module.Reports, Act.View)) _audit = await Api.AuditAsync(Pid, 50);
+    }
+
+    private async Task Download(ReportKind kind, int? dprId)
+    {
+        _busy = true;
+        await Notes.TryAsync(async () => { var f = await Api.ReportAsync(Pid, kind, dprId); await Files.SaveAsync(f.FileName, f.ContentType, f.Content); });
+        _busy = false;
+    }
+
+    private async Task Import(InputFileChangeEventArgs e)
+    {
+        _busy = true;
+        _importErrors.Clear();
+        await Notes.TryAsync(async () =>
+        {
+            using var ms = new MemoryStream();
+            await e.File.OpenReadStream(10 * 1024 * 1024).CopyToAsync(ms);
+            var r = await Api.ImportActivitiesAsync(Pid, ms.ToArray());
+            if (r.Errors.Count > 0) _importErrors = r.Errors.ToList();
+            else Notes.Show($"Imported {r.Created} new and {r.Updated} updated activities. Add their predecessors under Activities.");
+        });
+        _busy = false;
+    }
+}

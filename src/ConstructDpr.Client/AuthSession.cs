@@ -118,6 +118,16 @@ public sealed class AuthSession(ISessionStore store, Func<Uri, HttpMessageHandle
         await PersistAsync();
     }
 
+    public async Task<UserInfo> UpdateProfileAsync(string displayName)
+    {
+        var token = await GetAccessTokenAsync() ?? throw new UnauthorizedAccessException("Please sign in.");
+        using var req = new HttpRequestMessage(HttpMethod.Put, "api/account/profile") { Content = JsonContent.Create(new { displayName }, options: Json.Options) };
+        req.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+        using var res = await Http.SendAsync(req);
+        await RemoteApi.EnsureSuccessAsync(res);
+        return (await res.Content.ReadFromJsonAsync<UserInfo>(Json.Options))!;
+    }
+
     public async Task SignOutAsync()
     {
         _data = new SessionData { ServerUrl = _data.ServerUrl };

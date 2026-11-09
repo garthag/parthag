@@ -1,0 +1,43 @@
+@* Planned vs actual cumulative progress, drawn as SVG (scales to any width). *@
+@if (Points is null || Points.Count < 2)
+{
+    <p class="muted">No baseline yet. Run the schedule and freeze a baseline.</p>
+}
+else
+{
+    <svg viewBox="0 0 @W @H" width="100%" role="img" aria-label="S-curve: planned @Fmt.N(PlannedNow)% and actual @Fmt.N(ActualNow)%">
+        @for (var p = 0; p <= 100; p += 25)
+        {
+            <g><line x1="@L" x2="@(W - R)" y1="@Y(p)" y2="@Y(p)" stroke="var(--grid)" />
+            <text x="4" y="@(Y(p) + 4)" font-size="11" fill="var(--muted)">@(p)%</text></g>
+        }
+        @foreach (var m in Months)
+        {
+            <g><text x="@X(m)" y="@(H - 8)" font-size="11" fill="var(--muted)">@m.ToString("MMM yy", CultureInfo.InvariantCulture)</text></g>
+        }
+        <polyline points="@Line(Points.Select(c => (c.Date, (double?)c.Planned)))" fill="none" stroke="var(--series-1)" stroke-width="2.2" stroke-linejoin="round" />
+        <polyline points="@Line(Points.Select(c => (c.Date, c.Actual)))" fill="none" stroke="var(--series-2)" stroke-width="2.6" stroke-linejoin="round" />
+        @if (LastActual is { } la)
+        {
+            <circle cx="@X(la.Date)" cy="@Y(la.Actual!.Value)" r="4" fill="var(--series-2)" />
+        }
+        <line x1="@L" x2="@(L + 20)" y1="12" y2="12" stroke="var(--series-1)" stroke-width="2.2" />
+        <text x="@(L + 26)" y="16" font-size="11" fill="var(--muted)">Planned (baseline) @Fmt.N(PlannedNow)%</text>
+        <line x1="@(L + 220)" x2="@(L + 240)" y1="12" y2="12" stroke="var(--series-2)" stroke-width="2.6" />
+        <text x="@(L + 246)" y="16" font-size="11" fill="var(--muted)">Actual (approved) @Fmt.N(ActualNow)%</text>
+    </svg>
+}
+@code {
+    [Parameter] public IReadOnlyList<CurvePoint>? Points { get; set; }
+    private const double W = 760, H = 280, L = 40, R = 12, T = 28, B = 26;
+    private int From => Points![0].Date.DayNumber;
+    private int Span => Math.Max(1, Points![^1].Date.DayNumber - From);
+    private double X(DateOnly d) => Math.Round(L + (d.DayNumber - From) * (W - L - R) / Span, 1);
+    private double Y(double pct) => Math.Round(T + (H - T - B) * (1 - pct / 100), 1);
+    private CurvePoint? LastActual => Points!.LastOrDefault(p => p.Actual is not null);
+    private double? ActualNow => LastActual?.Actual;
+    private double? PlannedNow => LastActual is { } la ? Points!.Last(p => p.Date <= la.Date).Planned : Points!.FirstOrDefault()?.Planned;
+    private IEnumerable<DateOnly> Months => Points!.Select(p => new DateOnly(p.Date.Year, p.Date.Month, 1)).Distinct().Where(m => m.DayNumber >= From).Where((_, i) => Points!.Count < 200 || i % 2 == 0);
+    private string Line(IEnumerable<(DateOnly Date, double? V)> pts) =>
+        string.Join(" ", pts.Where(p => p.V is not null).Select(p => $"{X(p.Date).ToString(CultureInfo.InvariantCulture)},{Y(p.V!.Value).ToString(CultureInfo.InvariantCulture)}"));
+}

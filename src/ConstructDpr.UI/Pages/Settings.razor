@@ -1,0 +1,122 @@
+@page "/settings"
+@inherits ProjectPage
+@inject AuthSession Session
+
+<h1>Settings</h1>
+<p class="sub">Server @State.ServerUrl · @State.Platform app · server version @State.Features?.ServerVersion</p>
+
+<div class="card">
+    <h2>You</h2>
+    <div class="field"><label>Your name (shown on reports and approvals)</label><input @bind="_name" /></div>
+    <div class="row">
+        <button class="btn primary" disabled="@_busy" @onclick="SaveName">Save name</button>
+        <button class="btn danger" @onclick="State.SignOutAsync">Sign out</button>
+    </div>
+</div>
+
+@if (_p is not null)
+{
+    var edit = State.Can(Module.Project, Act.Edit);
+    <div class="card">
+        <h2>Project</h2>
+        <div class="fields">
+            <div class="field"><label>Code</label><input @bind="_p.Code" disabled="@(!edit)" /></div>
+            <div class="field"><label>Name</label><input @bind="_p.Name" disabled="@(!edit)" /></div>
+            <div class="field"><label>Client</label><input @bind="_p.Client" disabled="@(!edit)" /></div>
+            <div class="field"><label>Contractor</label><input @bind="_p.Contractor" disabled="@(!edit)" /></div>
+            <div class="field"><label>Work order no.</label><input @bind="_p.WorkOrderNo" disabled="@(!edit)" /></div>
+            <div class="field"><label>Site address</label><input @bind="_p.SiteAddress" disabled="@(!edit)" /></div>
+            <div class="field"><label>Project start</label><input type="date" @bind="_p.StartDate" disabled="@(!edit)" /></div>
+            <div class="field"><label>Contract completion</label><input type="date" @bind="_p.CompletionDate" disabled="@(!edit)" /></div>
+            <div class="field"><label>Working days (0 = Sunday … 6 = Saturday)</label><input @bind="_p.WorkDays" disabled="@(!edit)" /></div>
+            <div class="field" style="padding-top:22px"><label class="check"><input type="checkbox" @bind="_p.AllowSelfApproval" disabled="@(!edit)" /> Allow people to approve their own reports</label></div>
+        </div>
+        <h2 style="margin-top:6px">Holidays</h2>
+        @foreach (var h in _p.Holidays.OrderBy(h => h.Date).ToList())
+        {
+            <div class="row" style="margin-bottom:6px;flex-wrap:nowrap">
+                <input type="date" style="max-width:170px" @bind="h.Date" disabled="@(!edit)" />
+                <input class="grow" @bind="h.Name" disabled="@(!edit)" />
+                @if (edit) { <button class="btn ghost sm" @onclick="() => _p.Holidays.Remove(h)">✕</button> }
+            </div>
+        }
+        @if (edit)
+        {
+            <div class="row">
+                <button class="btn sm" @onclick="() => _p.Holidays.Add(new Holiday { Date = Today, Name = string.Empty })">＋ Holiday</button>
+                <button class="btn primary" disabled="@_busy" @onclick="SaveProject">Save project</button>
+            </div>
+        }
+    </div>
+
+    @if (State.Features?.AdminPortal == true && State.Can(Module.Members, Act.View))
+    {
+        <div class="card">
+            <h2>People on this project</h2>
+            <div class="list">
+                @foreach (var m in _members)
+                {
+                    <div class="item">
+                        <div><div class="t">@m.DisplayName</div><div class="s">@m.Email · @Permissions.Label(m.Role)</div></div>
+                        @if (State.Can(Module.Members, Act.Delete) && m.Email != State.Me?.Email) { <button class="btn ghost sm" @onclick="() => Remove(m)">Remove</button> }
+                    </div>
+                }
+            </div>
+            @if (State.Can(Module.Members, Act.Create))
+            {
+                <p class="small muted" style="margin-top:12px">The person must first create an account in the app with this e-mail.</p>
+                <div class="fields">
+                    <div class="field"><label>E-mail</label><input type="email" @bind="_memberEmail" /></div>
+                    <div class="field">
+                        <label>Role</label>
+                        <select @bind="_memberRole">@foreach (var r in Enum.GetValues<ProjectRole>()) { <option value="@r">@Permissions.Label(r)</option> }</select>
+                    </div>
+                </div>
+                <button class="btn primary" disabled="@_busy" @onclick="AddMember">Add / change role</button>
+            }
+        </div>
+    }
+}
+
+@code {
+    private Project? _p;
+    private List<ProjectMember> _members = new();
+    private string _name = "", _memberEmail = "";
+    private ProjectRole _memberRole = ProjectRole.SiteEngineer;
+    private bool _busy;
+
+    protected override async Task LoadAsync()
+    {
+        _name = State.Me?.DisplayName ?? "";
+        _p = await Api.ProjectAsync(Pid);
+        if (State.Features?.AdminPortal == true && State.Can(Module.Members, Act.View)) _members = await Api.MembersAsync(Pid);
+    }
+
+    protected override bool Wants(LiveChange c) => c.Entity is "project" or "members";
+
+    private async Task SaveName()
+    {
+        _busy = true;
+        if (await Notes.TryAsync(() => Session.UpdateProfileAsync(_name), "Name saved.")) await State.SignedInAsync();
+        _busy = false;
+    }
+
+    private async Task SaveProject()
+    {
+        _busy = true;
+        if (await Notes.TryAsync(async () => _p = await Api.SaveProjectAsync(_p!), "Project saved; schedule recalculated.")) await State.RefreshProjectsAsync();
+        _busy = false;
+    }
+
+    private async Task AddMember()
+    {
+        _busy = true;
+        if (await Notes.TryAsync(() => Api.AddMemberAsync(Pid, _memberEmail, _memberRole), "Saved.")) { _memberEmail = ""; _members = await Api.MembersAsync(Pid); }
+        _busy = false;
+    }
+
+    private async Task Remove(ProjectMember m)
+    {
+        if (await Notes.TryAsync(() => Api.RemoveMemberAsync(Pid, m.Id), "Removed.")) _members = await Api.MembersAsync(Pid);
+    }
+}

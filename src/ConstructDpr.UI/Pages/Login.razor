@@ -1,0 +1,89 @@
+@page "/login"
+@layout LoginLayout
+@inject AuthSession Session
+@inject AppState State
+@inject Notifier Notes
+@inject NavigationManager Nav
+
+<div class="card">
+    <div class="logo" style="margin-bottom:14px"><b>CONSTRUCT</b><span>DPR · Daily progress &amp; site management</span></div>
+
+    @if (!State.ServerFixed && (_editServer || string.IsNullOrEmpty(Session.ServerUrl)))
+    {
+        <div class="field">
+            <label for="server">Server address (from your administrator)</label>
+            <input id="server" @bind="_server" placeholder="https://yourcompany-dpr.onrender.com" autocomplete="url" inputmode="url" />
+        </div>
+        <button class="btn primary block" disabled="@_busy" @onclick="Connect">Connect</button>
+    }
+    else
+    {
+        @if (!State.ServerFixed)
+        {
+            <p class="small muted">Server: @Session.ServerUrl <button class="btn ghost sm" @onclick="() => _editServer = true">change</button></p>
+        }
+        @if (_register)
+        {
+            <div class="field"><label for="name">Your name</label><input id="name" @bind="_name" autocomplete="name" /></div>
+        }
+        <div class="field"><label for="email">E-mail</label><input id="email" type="email" @bind="_email" autocomplete="username" /></div>
+        <div class="field">
+            <label for="pw">Password @(_register ? "(at least 8 characters)" : "")</label>
+            <input id="pw" type="password" @bind="_password" autocomplete="@(_register ? "new-password" : "current-password")" @onkeyup="Enter" />
+        </div>
+        <button class="btn primary block" disabled="@_busy" @onclick="Submit">@(_register ? "Create account" : "Sign in")</button>
+        @if (_features?.Registration != false)
+        {
+            <p class="small" style="text-align:center;margin-top:14px">
+                @if (_register) { <span>Already have an account? </span><a href="" @onclick="() => _register = false" @onclick:preventDefault>Sign in</a> }
+                else { <span>New here? </span><a href="" @onclick="() => _register = true" @onclick:preventDefault>Create an account</a> }
+            </p>
+        }
+    }
+    @if (_busy) { <p class="small muted" style="text-align:center"><span class="spinner"></span> Please wait… (a free server may need up to a minute to wake up)</p> }
+</div>
+
+@code {
+    private string _server = "", _name = "", _email = "", _password = "";
+    private bool _busy, _register, _editServer;
+    private AppFeatures? _features;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await State.StartAsync();
+        if (Session.IsSignedIn) { Nav.NavigateTo(""); return; }
+        _server = Session.ServerUrl;
+        _email = Session.Email ?? "";
+        if (!string.IsNullOrEmpty(Session.ServerUrl)) await Notes.TryAsync(async () => _features = await Session.FeaturesAsync());
+    }
+
+    private async Task Connect()
+    {
+        _busy = true;
+        if (await Notes.TryAsync(async () =>
+            {
+                await Session.SetServerAsync(_server);
+                _features = await Session.FeaturesAsync();
+            }, "Connected to the server."))
+            _editServer = false;
+        _busy = false;
+    }
+
+    private async Task Enter(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter") await Submit();
+    }
+
+    private async Task Submit()
+    {
+        _busy = true;
+        var ok = await Notes.TryAsync(async () =>
+        {
+            if (_register) await Session.RegisterAsync(_email, _password, _name);
+            await Session.SignInAsync(_email, _password);
+            await State.SignedInAsync();
+        });
+        _busy = false;
+        if (ok) Nav.NavigateTo("");
+    }
+}

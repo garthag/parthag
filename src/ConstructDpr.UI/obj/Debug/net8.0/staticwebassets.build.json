@@ -1,0 +1,58 @@
+{
+  "Version": 1,
+  "Hash": "V8z5LOP/rClj57p+GT177YO42FClSnICp9ko1Xzj6/M=",
+  "Source": "ConstructDpr.UI",
+  "BasePath": "_content/ConstructDpr.UI",
+  "Mode": "Default",
+  "ManifestType": "Build",
+  "ReferencedProjectsConfiguration": [],
+  "DiscoveryPatterns": [
+    {
+      "Name": "ConstructDpr.UI/wwwroot",
+      "Source": "ConstructDpr.UI",
+      "ContentRoot": "/home/user/parthag/src/ConstructDpr.UI/wwwroot/",
+      "BasePath": "_content/ConstructDpr.UI",
+      "Pattern": "**"
+    }
+  ],
+  "Assets": [
+    {
+      "Identity": "/home/user/parthag/src/ConstructDpr.UI/wwwroot/app.css",
+      "SourceId": "ConstructDpr.UI",
+      "SourceType": "Discovered",
+      "ContentRoot": "/home/user/parthag/src/ConstructDpr.UI/wwwroot/",
+      "BasePath": "_content/ConstructDpr.UI",
+      "RelativePath": "app.css",
+      "AssetKind": "All",
+      "AssetMode": "All",
+      "AssetRole": "Primary",
+      "AssetMergeBehavior": "PreferTarget",
+      "AssetMergeSource": "",
+      "RelatedAsset": "",
+      "AssetTraitName": "",
+      "AssetTraitValue": "",
+      "CopyToOutputDirectory": "Never",
+      "CopyToPublishDirectory": "PreserveNewest",
+      "OriginalItemSpec": "wwwroot/app.css"
+    },
+    {
+      "Identity": "/home/user/parthag/src/ConstructDpr.UI/wwwroot/app.js",
+      "SourceId": "ConstructDpr.UI",
+      "SourceType": "Discovered",
+      "ContentRoot": "/home/user/parthag/src/ConstructDpr.UI/wwwroot/",
+      "BasePath": "_content/ConstructDpr.UI",
+      "RelativePath": "app.js",
+      "AssetKind": "All",
+      "AssetMode": "All",
+      "AssetRole": "Primary",
+      "AssetMergeBehavior": "PreferTarget",
+      "AssetMergeSource": "",
+      "RelatedAsset": "",
+      "AssetTraitName": "",
+      "AssetTraitValue": "",
+      "CopyToOutputDirectory": "Never",
+      "CopyToPublishDirectory": "PreserveNewest",
+      "OriginalItemSpec": "wwwroot/app.js"
+    }
+  ]
+}

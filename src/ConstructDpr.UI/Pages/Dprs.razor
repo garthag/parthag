@@ -1,0 +1,37 @@
+@page "/dprs"
+@inherits ProjectPage
+
+<div class="head">
+    <div><h1>Daily reports</h1><p class="sub">@_all.Count reports · newest first</p></div>
+    @if (State.Can(Module.Dpr, Act.Create)) { <a class="btn primary" href="dprs/new">＋ New report</a> }
+</div>
+<div class="row" style="margin-bottom:12px">
+    @foreach (var f in new[] { "All", "Draft", "Submitted", "Approved", "Rejected" })
+    {
+        <button class="btn sm @(_filter == f ? "primary" : "")" @onclick="() => _filter = f">@f @(f == "All" ? "" : $"({_all.Count(d => d.Status.ToString() == f)})")</button>
+    }
+</div>
+@if (Loading) { <div class="loading"><span class="spinner"></span></div> }
+else
+{
+    <div class="list">
+        @foreach (var d in Shown)
+        {
+            <a class="item" href="dprs/@d.Id">
+                <div>
+                    <div class="t">@d.Number@(d.Revision > 0 ? $" · R{d.Revision}" : "")</div>
+                    <div class="s">@d.ReportDate.ToString("ddd dd MMM yyyy", CultureInfo.InvariantCulture) · @d.Shift shift · @d.PreparedBy</div>
+                </div>
+                <StatusBadge Status="d.Status" />
+            </a>
+        }
+        @if (!Shown.Any()) { <p class="muted">No reports here yet.</p> }
+    </div>
+}
+@code {
+    private List<DprSummary> _all = new();
+    private string _filter = "All";
+    private IEnumerable<DprSummary> Shown => _filter == "All" ? _all : _all.Where(d => d.Status.ToString() == _filter);
+    protected override async Task LoadAsync() => _all = await Api.DprsAsync(Pid);
+    protected override bool Wants(LiveChange c) => c.Entity is "dpr" or "all";
+}

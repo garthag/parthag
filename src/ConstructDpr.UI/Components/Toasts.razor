@@ -1,0 +1,13 @@
+@implements IDisposable
+@inject Notifier Notes
+<div class="toasts" aria-live="polite">
+    @foreach (var t in Notes.Toasts.ToList())
+    {
+        <div class="toast @t.Kind" @onclick="() => Notes.Dismiss(t)">@t.Message</div>
+    }
+</div>
+@code {
+    protected override void OnInitialized() => Notes.Changed += Refresh;
+    private void Refresh() => InvokeAsync(StateHasChanged);
+    public void Dispose() => Notes.Changed -= Refresh;
+}

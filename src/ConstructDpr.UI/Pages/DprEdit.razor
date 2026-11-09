@@ -1,0 +1,379 @@
+@page "/dprs/{Id:int}"
+@inherits ProjectPage
+@using System.Text.Json
+@using ConstructDpr.Shared.Calculations
+@inject IKeyValueStore Store
+@inject IFileSaver Files
+
+@if (Loading || _d is null) { <div class="loading"><span class="spinner"></span></div> }
+else
+{
+    <div class="head">
+        <div>
+            <h1>@_d.Number@(_d.Revision > 0 ? $" · R{_d.Revision}" : "")</h1>
+            <p class="sub" style="margin:0">@_d.ReportDate.ToString("dddd, dd MMM yyyy", CultureInfo.InvariantCulture) · @_d.Shift shift · prepared by @_d.PreparedBy@(_d.ApprovedBy is null ? "" : $" · approved by {_d.ApprovedBy} on {Fmt.Dt(_d.ApprovedAt)}")</p>
+        </div>
+        <StatusBadge Status="_d.Status" />
+    </div>
+
+    @if (_remoteChange) { <div class="notice warn">Someone changed this report on another device. <button class="btn sm" @onclick="Reload">Load their version</button> (your unsaved edits here would be replaced).</div> }
+    @if (_backup is not null) { <div class="notice warn">Unsaved changes from earlier were found on this device. <button class="btn sm" @onclick="RestoreBackup">Restore them</button> <button class="btn sm ghost" @onclick="DropBackup">Discard</button></div> }
+    @switch (_d.Status)
+    {
+        case DprStatus.Approved:
+            <div class="notice @(_verified == false ? "bad" : "good")">@(_verified == false ? "⚠ The stored content no longer matches its approval snapshot (SHA-256). It may have been altered outside the app." : $"✔ Approved and locked. Snapshot SHA-256 {_d.SnapshotHash?[..Math.Min(16, _d.SnapshotHash.Length)]}… verified. Corrections are made as a new revision.")</div>
+            break;
+        case DprStatus.Rejected:
+            <div class="notice bad">Rejected: @_d.ReviewComment — correct and submit again.</div>
+            break;
+        case DprStatus.Submitted:
+            <div class="notice warn">Waiting for review. @(CanApprove ? "Adjust the Accepted quantity if needed; the reported quantity is kept." : "")</div>
+            break;
+        default:
+            if (_d.ReviewComment is not null) { <div class="notice">@_d.ReviewComment</div> }
+            break;
+    }
+
+    <div class="row" style="margin:10px 0 4px">
+        @if (Editable)
+        {
+            <button class="btn" disabled="@(_busy || !_dirty)" @onclick="Save">Save draft</button>
+            @if (State.Can(Module.Dpr, Act.Submit)) { <button class="btn primary" disabled="@_busy" @onclick="Submit">Submit for review</button> }
+        }
+        @if (CanApprove)
+        {
+            <button class="btn success" disabled="@_busy" @onclick="Approve">✔ Approve</button>
+        }
+        @if (_d.Status == DprStatus.Submitted && State.Can(Module.Dpr, Act.Reject))
+        {
+            <button class="btn danger" disabled="@_busy" @onclick="() => _rejecting = true">✖ Reject…</button>
+        }
+        @if (_d.Status == DprStatus.Approved && State.Can(Module.Dpr, Act.Create | Act.Edit))
+        {
+            <button class="btn" disabled="@_busy" @onclick="() => _revising = true">Start revision…</button>
+        }
+        @if (State.Can(Module.Reports, Act.Export))
+        {
+            <button class="btn" disabled="@_busy" @onclick="() => Download(ReportKind.DprPdf)">PDF</button>
+            <button class="btn" disabled="@_busy" @onclick="() => Download(ReportKind.DprExcel)">Excel</button>
+        }
+        @if (_dirty) { <span class="small" style="color:var(--warn)">● unsaved changes</span> }
+        @if (_busy) { <span class="spinner"></span> }
+    </div>
+
+    <div class="tabs" role="tablist">
+        @foreach (var (key, label) in Tabs)
+        {
+            <button class="@(_tab == key ? "on" : "")" role="tab" @onclick="() => _tab = key">@label</button>
+        }
+    </div>
+
+    @if (_tab == "work")
+    {
+        @if (Editable)
+        {
+            <div class="row" style="margin-bottom:10px;flex-wrap:nowrap">
+                <select @bind="_pick" class="grow" aria-label="Activity to add">
+                    <option value="0">Add an activity to this report…</option>
+                    @foreach (var a in _acts.Where(a => a.Status is not (ActivityStatus.Completed or ActivityStatus.Cancelled) && _d.Activities.All(l => l.ActivityId != a.Id)))
+                    {
+                        <option value="@a.Id">@a.Code — @a.Name (@a.Unit)</option>
+                    }
+                </select>
+                <button class="btn" disabled="@(_pick == 0)" @onclick="AddLine">＋ Add</button>
+            </div>
+        }
+        @foreach (var l in _d.Activities)
+        {
+            var a = l.Activity!;
+            <div class="line">
+                <div class="top-row">
+                    <span class="code">@a.Code</span><span class="grow">@a.Name</span>
+                    @if (Editable) { <button class="btn ghost sm" title="Remove" @onclick="() => RemoveLine(l)">✕</button> }
+                </div>
+                <div class="figs">
+                    <div>BOQ<b>@Fmt.N(a.TotalQty) @a.Unit</b></div>
+                    <div>Previous<b>@Fmt.N(l.PrevCum)</b></div>
+                    <div>Cumulative<b style="@(a.TotalQty > 0 && l.CumQty > a.TotalQty ? "color:var(--bad)" : "")">@Fmt.N(l.CumQty)</b></div>
+                    <div>Balance<b>@Fmt.N(l.Balance)</b></div>
+                    <div>Actual %<b>@Fmt.N(l.ActualPct, 1)</b></div>
+                    <div>Plan %<b>@Fmt.N(l.PlannedPct, 1)</b></div>
+                </div>
+                <div class="inputs">
+                    <div>
+                        <label>Today (@a.Unit)</label>
+                        @if (Editable) { <input class="qty" type="number" inputmode="decimal" step="any" min="0" value="@l.QtyToday" @onchange="e => SetQty(l, e, false)" /> }
+                        else { <b>@Fmt.N(l.QtyToday)</b> }
+                    </div>
+                    <div>
+                        @if (_d.Status != DprStatus.Draft)
+                        {
+                            <label>Accepted</label>
+                            @if (CanApprove) { <input class="qty" type="number" inputmode="decimal" step="any" min="0" value="@(l.QtyAccepted ?? l.QtyToday)" @onchange="e => SetQty(l, e, true)" /> }
+                            else { <b>@Fmt.N(l.QtyAccepted)</b> }
+                        }
+                    </div>
+                </div>
+                @if (Editable || !string.IsNullOrEmpty(l.DelayReason))
+                {
+                    <div class="field" style="margin:8px 0 0">
+                        <label>Delay / remarks</label>
+                        @if (Editable) { <input value="@l.DelayReason" @onchange="e => { l.DelayReason = e.Value?.ToString(); Touched(); }" /> } else { <span>@l.DelayReason</span> }
+                    </div>
+                }
+            </div>
+        }
+        @if (_d.Activities.Count == 0) { <p class="muted">No activities in this report yet.</p> }
+    }
+    else if (_tab == "crew")
+    {
+        <div class="table-wrap">
+            <table>
+                <thead><tr><th>Agency</th><th>Trade</th><th class="num">Skilled</th><th class="num">Semi</th><th class="num">Unskilled</th><th class="num">Supv.</th><th class="num">Hours</th><th class="num">Total</th>@if (Editable) { <th></th> }</tr></thead>
+                <tbody>
+                    @foreach (var m in _d.Manpower)
+                    {
+                        <tr>
+                            <td><Cell Value="@m.Agency" Edit="Editable" Changed="v => { m.Agency = v; Touched(); }" /></td>
+                            <td><Cell Value="@m.Trade" Edit="Editable" Changed="v => { m.Trade = v; Touched(); }" /></td>
+                            <td><IntCell Value="m.Skilled" Edit="Editable" Changed="v => { m.Skilled = v; Touched(); }" /></td>
+                            <td><IntCell Value="m.SemiSkilled" Edit="Editable" Changed="v => { m.SemiSkilled = v; Touched(); }" /></td>
+                            <td><IntCell Value="m.Unskilled" Edit="Editable" Changed="v => { m.Unskilled = v; Touched(); }" /></td>
+                            <td><IntCell Value="m.Supervisors" Edit="Editable" Changed="v => { m.Supervisors = v; Touched(); }" /></td>
+                            <td><DecCell Value="m.Hours" Edit="Editable" Changed="v => { m.Hours = v; Touched(); }" /></td>
+                            <td class="num"><b>@m.Headcount</b></td>
+                            @if (Editable) { <td><button class="btn ghost sm" @onclick="() => { _d.Manpower.Remove(m); Touched(); }">✕</button></td> }
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        <div class="row" style="margin-top:8px">
+            <span class="muted small grow">Total @_d.Manpower.Sum(m => m.Headcount) workers · @Fmt.N(_d.Manpower.Sum(m => m.ManHours), 0) man-hours</span>
+            @if (Editable) { <button class="btn sm" @onclick="() => { _d.Manpower.Add(new ManpowerLine()); Touched(); }">＋ Crew</button> }
+        </div>
+    }
+    else if (_tab == "equipment")
+    {
+        <div class="table-wrap">
+            <table>
+                <thead><tr><th>Code</th><th>Type</th><th class="num">Working h</th><th class="num">Idle h</th><th class="num">Breakdown h</th><th>Breakdown reason</th><th class="num">Util. %</th>@if (Editable) { <th></th> }</tr></thead>
+                <tbody>
+                    @foreach (var e in _d.Equipment)
+                    {
+                        <tr>
+                            <td><Cell Value="@e.Code" Edit="Editable" Changed="v => { e.Code = v; Touched(); }" /></td>
+                            <td><Cell Value="@e.Type" Edit="Editable" Changed="v => { e.Type = v; Touched(); }" /></td>
+                            <td><DecCell Value="e.WorkingHours" Edit="Editable" Changed="v => { e.WorkingHours = v; Touched(); }" /></td>
+                            <td><DecCell Value="e.IdleHours" Edit="Editable" Changed="v => { e.IdleHours = v; Touched(); }" /></td>
+                            <td><DecCell Value="e.BreakdownHours" Edit="Editable" Changed="v => { e.BreakdownHours = v; Touched(); }" /></td>
+                            <td><Cell Value="@e.BreakdownReason" Edit="Editable" Changed="v => { e.BreakdownReason = v; Touched(); }" /></td>
+                            <td class="num">@Fmt.N(e.UtilisationPct, 1)</td>
+                            @if (Editable) { <td><button class="btn ghost sm" @onclick="() => { _d.Equipment.Remove(e); Touched(); }">✕</button></td> }
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        @if (Editable) { <button class="btn sm" style="margin-top:8px" @onclick="() => { _d.Equipment.Add(new EquipmentLine()); Touched(); }">＋ Equipment</button> }
+    }
+    else if (_tab == "materials")
+    {
+        <div class="table-wrap">
+            <table>
+                <thead><tr><th>Code</th><th>Description</th><th>Unit</th><th class="num">Opening</th><th class="num">Received</th><th class="num">Issued</th><th class="num">Closing</th><th>Challan</th>@if (Editable) { <th></th> }</tr></thead>
+                <tbody>
+                    @foreach (var m in _d.Materials)
+                    {
+                        <tr>
+                            <td><Cell Value="@m.Code" Edit="Editable" Changed="v => { m.Code = v; Touched(); }" /></td>
+                            <td><Cell Value="@m.Description" Edit="Editable" Changed="v => { m.Description = v; Touched(); }" /></td>
+                            <td><Cell Value="@m.Unit" Edit="Editable" Changed="v => { m.Unit = v; Touched(); }" /></td>
+                            <td><DecCell Value="m.Opening" Edit="Editable" Changed="v => { m.Opening = v; Touched(); }" /></td>
+                            <td><DecCell Value="m.Received" Edit="Editable" Changed="v => { m.Received = v; Touched(); }" /></td>
+                            <td><DecCell Value="m.Issued" Edit="Editable" Changed="v => { m.Issued = v; Touched(); }" /></td>
+                            <td class="num" style="@(m.Closing < 0 ? "color:var(--bad)" : "")"><b>@Fmt.N(m.Closing)</b></td>
+                            <td><Cell Value="@m.ChallanNo" Edit="Editable" Changed="v => { m.ChallanNo = v; Touched(); }" /></td>
+                            @if (Editable) { <td><button class="btn ghost sm" @onclick="() => { _d.Materials.Remove(m); Touched(); }">✕</button></td> }
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        @if (Editable) { <button class="btn sm" style="margin-top:8px" @onclick="() => { _d.Materials.Add(new MaterialLine()); Touched(); }">＋ Material</button> }
+    }
+    else
+    {
+        <div class="card">
+            <div class="fields">
+                <TextField Label="Weather" Value="@_d.Weather" Edit="Editable" Changed="v => { _d.Weather = v; Touched(); }" />
+                <TextField Label="Site conditions" Value="@_d.SiteConditions" Edit="Editable" Changed="v => { _d.SiteConditions = v; Touched(); }" />
+                <TextField Label="Work completed today" Value="@_d.WorkCompleted" Edit="Editable" Multi Changed="v => { _d.WorkCompleted = v; Touched(); }" />
+                <TextField Label="Plan for tomorrow" Value="@_d.TomorrowPlan" Edit="Editable" Multi Changed="v => { _d.TomorrowPlan = v; Touched(); }" />
+                <TextField Label="Delays and hindrances" Value="@_d.DelayReasons" Edit="Editable" Multi Changed="v => { _d.DelayReasons = v; Touched(); }" />
+                <TextField Label="Safety (toolbox talks, permits, incidents)" Value="@_d.SafetyNotes" Edit="Editable" Multi Changed="v => { _d.SafetyNotes = v; Touched(); }" />
+            </div>
+        </div>
+    }
+
+    <Modal Title="Reject report" @bind-Open="_rejecting">
+        <div class="field"><label>Reason (the preparer sees this)</label><textarea @bind="_reason"></textarea></div>
+        <button class="btn danger" disabled="@string.IsNullOrWhiteSpace(_reason)" @onclick="Reject">Reject</button>
+        <button class="btn ghost" @onclick="() => _rejecting = false">Cancel</button>
+    </Modal>
+    <Modal Title="Start revision" @bind-Open="_revising">
+        <p class="small muted">The approved report stays unchanged. A new draft revision is created for the correction.</p>
+        <div class="field"><label>Reason for the revision</label><textarea @bind="_reason"></textarea></div>
+        <button class="btn primary" disabled="@string.IsNullOrWhiteSpace(_reason)" @onclick="Revise">Create revision</button>
+        <button class="btn ghost" @onclick="() => _revising = false">Cancel</button>
+    </Modal>
+}
+
+@code {
+    [Parameter] public int Id { get; set; }
+    private Dpr? _d;
+    private List<Activity> _acts = new();
+    private bool _busy, _dirty, _remoteChange, _rejecting, _revising;
+    private bool? _verified;
+    private Dpr? _backup;
+    private int _pick;
+    private string _tab = "work", _reason = "";
+    private bool Editable => _d?.IsEditable == true && (State.Can(Module.Dpr, Act.Edit) || (State.Can(Module.Dpr, Act.Create) && string.Equals(_d.PreparedBy, State.Me?.Email, StringComparison.OrdinalIgnoreCase)));
+    private bool CanApprove => _d?.Status == DprStatus.Submitted && State.Can(Module.Dpr, Act.Approve);
+    private string BackupKey => $"cdpr.draft.{Pid}.{Id}";
+    private (string, string)[] Tabs => [("work", $"Work ({_d?.Activities.Count})"), ("crew", $"Manpower ({_d?.Manpower.Sum(m => m.Headcount)})"), ("equipment", "Equipment"), ("materials", "Materials"), ("site", "Site & narrative")];
+
+    private int _loadedId;
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_loadedId != 0 && _loadedId != Id) await ReloadAsync(); // navigated to another report (e.g. a new revision)
+    }
+
+    protected override async Task LoadAsync()
+    {
+        _loadedId = Id;
+        var t1 = Api.DprAsync(Pid, Id);
+        var t2 = Api.ActivitiesAsync(Pid);
+        (_d, _acts) = (await t1, await t2);
+        (_dirty, _remoteChange, _verified) = (false, false, null);
+        if (_d.Status == DprStatus.Approved) _verified = await Api.VerifyDprAsync(Pid, Id);
+        _backup = null;
+        if (_d.IsEditable && await Store.GetAsync(BackupKey) is { } raw)
+        {
+            try
+            {
+                var b = JsonSerializer.Deserialize<Dpr>(raw, Json.Options);
+                if (b?.Version == _d.Version) _backup = b; else await Store.SetAsync(BackupKey, null);
+            }
+            catch (JsonException) { await Store.SetAsync(BackupKey, null); }
+        }
+    }
+
+    protected override bool Wants(LiveChange c)
+    {
+        if (c.Entity == "all") return !_dirty;
+        if (c.Entity != "dpr" || c.Id != Id || c.By == State.Me?.Email) return false;
+        if (_dirty) { _remoteChange = true; InvokeAsync(StateHasChanged); return false; }
+        return true;
+    }
+
+    private async Task Reload() => await ReloadAsync();
+
+    private void Touched()
+    {
+        if (_d is null) return;
+        _dirty = true;
+        foreach (var l in _d.Activities.Where(l => l.Activity is not null))
+            Progress.ApplyLine(l, l.Activity!, l.PrevCum, _d.ReportDate, _d.Status == DprStatus.Submitted);
+        if (_d.IsEditable) _ = Store.SetAsync(BackupKey, JsonSerializer.Serialize(_d, Json.Options)); // safe on this device even if the network drops
+    }
+
+    private void SetQty(DprActivityLine l, ChangeEventArgs e, bool accepted)
+    {
+        var v = Fmt.ParseDec(e.Value?.ToString());
+        if (v is null || v < 0) { Notes.Show("Enter a quantity of 0 or more.", "bad"); return; }
+        if (accepted) l.QtyAccepted = v; else l.QtyToday = v.Value;
+        Touched();
+    }
+
+    private async Task AddLine()
+    {
+        if (_d is null || _pick == 0) return;
+        _d.Activities.Add(new DprActivityLine { ActivityId = _pick, Activity = _acts.First(a => a.Id == _pick) });
+        _pick = 0;
+        await Notes.TryAsync(async () =>
+        {
+            var calc = await Api.RecalculateDprAsync(Pid, _d);
+            foreach (var l in _d.Activities)
+                if (calc.Activities.FirstOrDefault(c => c.ActivityId == l.ActivityId) is { } c) l.PrevCum = c.PrevCum;
+        });
+        Touched();
+    }
+
+    private void RemoveLine(DprActivityLine l)
+    {
+        _d!.Activities.Remove(l);
+        Touched();
+    }
+
+    private async Task RestoreBackup()
+    {
+        if (_backup is null || _d is null) return;
+        _d = _backup;
+        _backup = null;
+        foreach (var l in _d.Activities) l.Activity ??= _acts.FirstOrDefault(a => a.Id == l.ActivityId);
+        _d.Activities.RemoveAll(l => l.Activity is null);
+        Touched();
+        await Task.CompletedTask;
+    }
+
+    private async Task DropBackup()
+    {
+        _backup = null;
+        await Store.SetAsync(BackupKey, null);
+    }
+
+    private async Task Run(Func<Task<Dpr>> work, string message)
+    {
+        _busy = true;
+        Dpr? result = null;
+        await Notes.TryAsync(async () => result = await work(), message);
+        _busy = false;
+        if (result is null) return;
+        await Store.SetAsync(BackupKey, null);
+        if (result.Id != Id) { Nav.NavigateTo($"dprs/{result.Id}"); return; }
+        (_d, _dirty, _remoteChange, _backup) = (result, false, false, null);
+        if (_d.Status == DprStatus.Approved) _verified = await Api.VerifyDprAsync(Pid, Id);
+    }
+
+    private Task Save() => Run(() => Api.SaveDprAsync(Pid, _d!), "Draft saved.");
+    private Task Submit() => Run(() => Api.SubmitDprAsync(Pid, _d!), "Submitted for review.");
+    private Task Approve() => Run(() => Api.ApproveDprAsync(Pid, Id,
+        _d!.Activities.Where(l => l.QtyAccepted is not null).ToDictionary(l => l.ActivityId, l => l.QtyAccepted!.Value)), "Approved. Progress and the schedule are updated.");
+
+    private async Task Reject()
+    {
+        _rejecting = false;
+        await Run(() => Api.RejectDprAsync(Pid, Id, _reason), "Report rejected.");
+        _reason = "";
+    }
+
+    private async Task Revise()
+    {
+        _revising = false;
+        await Run(() => Api.ReviseDprAsync(Pid, Id, _reason), "Revision started.");
+        _reason = "";
+    }
+
+    private async Task Download(ReportKind kind)
+    {
+        if (_dirty) { Notes.Show("Save the report first, so the file shows your latest changes.", "bad"); return; }
+        _busy = true;
+        await Notes.TryAsync(async () =>
+        {
+            var f = await Api.ReportAsync(Pid, kind, Id);
+            await Files.SaveAsync(f.FileName, f.ContentType, f.Content);
+        });
+        _busy = false;
+    }
+}

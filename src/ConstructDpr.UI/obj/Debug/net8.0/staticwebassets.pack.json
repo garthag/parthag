@@ -1,0 +1,29 @@
+{
+  "Files": [
+    {
+      "Id": "/home/user/parthag/src/ConstructDpr.UI/wwwroot/app.css",
+      "PackagePath": "staticwebassets/app.css"
+    },
+    {
+      "Id": "/home/user/parthag/src/ConstructDpr.UI/wwwroot/app.js",
+      "PackagePath": "staticwebassets/app.js"
+    },
+    {
+      "Id": "obj/Debug/net8.0/staticwebassets/msbuild.ConstructDpr.UI.Microsoft.AspNetCore.StaticWebAssets.props",
+      "PackagePath": "build\\Microsoft.AspNetCore.StaticWebAssets.props"
+    },
+    {
+      "Id": "obj/Debug/net8.0/staticwebassets/msbuild.build.ConstructDpr.UI.props",
+      "PackagePath": "build\\ConstructDpr.UI.props"
+    },
+    {
+      "Id": "obj/Debug/net8.0/staticwebassets/msbuild.buildMultiTargeting.ConstructDpr.UI.props",
+      "PackagePath": "buildMultiTargeting\\ConstructDpr.UI.props"
+    },
+    {
+      "Id": "obj/Debug/net8.0/staticwebassets/msbuild.buildTransitive.ConstructDpr.UI.props",
+      "PackagePath": "buildTransitive\\ConstructDpr.UI.props"
+    }
+  ],
+  "ElementsToRemove": []
+}

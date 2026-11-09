@@ -1,0 +1,16 @@
+@if (Open)
+{
+    <div class="modal-back" @onclick="Close">
+        <div class="modal" @onclick:stopPropagation="true" role="dialog" aria-label="@Title">
+            <h2>@Title</h2>
+            @ChildContent
+        </div>
+    </div>
+}
+@code {
+    [Parameter] public bool Open { get; set; }
+    [Parameter] public EventCallback<bool> OpenChanged { get; set; }
+    [Parameter] public string Title { get; set; } = "";
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+    private Task Close() => OpenChanged.InvokeAsync(false);
+}

@@ -1,0 +1,168 @@
+@page "/activities"
+@inherits ProjectPage
+
+<div class="head">
+    <div>
+        <h1>Activities &amp; BOQ</h1>
+        <p class="sub" style="margin:0">@_acts.Count activities · BOQ value @Fmt.Money(_acts.Sum(a => a.TotalQty * a.Rate)) · @_acts.Count(a => a.Critical) critical@(CanEdit ? " · edit in the table, then Save" : "")</p>
+    </div>
+</div>
+<div class="row" style="margin-bottom:12px">
+    @if (State.Can(Module.Masters, Act.Create)) { <button class="btn" @onclick="Add">＋ Activity</button> }
+    @if (CanEdit) { <button class="btn primary" disabled="@(_busy || !Dirty)" @onclick="Save">Save changes</button> }
+    @if (State.Can(Module.Schedule, Act.Edit | Act.Submit)) { <button class="btn" disabled="@(_busy || Dirty)" @onclick="() => _baseline = true">Freeze baseline…</button> }
+    @if (Dirty) { <span class="small" style="color:var(--warn)">● unsaved changes</span> <button class="btn ghost sm" @onclick="ReloadAsync">Undo</button> }
+    @if (_busy) { <span class="spinner"></span> }
+</div>
+
+@if (Loading) { <div class="loading"><span class="spinner"></span></div> }
+else
+{
+    <div class="table-wrap" style="max-height:62vh">
+        <table>
+            <thead>
+                <tr>
+                    <th>Code</th><th>Activity</th><th>WBS</th><th>Area</th><th>Unit</th><th class="num">BOQ qty</th><th class="num">Rate ₹</th><th class="num">Weight</th>
+                    <th class="num">Days</th><th>Early start</th><th>Early finish</th><th>Baseline finish</th><th class="num">TF</th><th class="num">Done %</th>@if (CanDelete) { <th></th> }
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var a in _acts)
+                {
+                    <tr class="click @(a == _sel ? "sel" : "")" @onclick="() => Select(a)" style="@(a.Critical ? "color:var(--crit-dark)" : "")">
+                        <td><Cell Value="@a.Code" Edit="CanEdit" Width="70" Changed="v => Set(a, () => a.Code = v)" /></td>
+                        <td><Cell Value="@a.Name" Edit="CanEdit" Width="220" Changed="v => Set(a, () => a.Name = v)" /></td>
+                        <td><Cell Value="@a.Wbs" Edit="CanEdit" Width="90" Changed="v => Set(a, () => a.Wbs = v)" /></td>
+                        <td><Cell Value="@a.Area" Edit="CanEdit" Width="80" Changed="v => Set(a, () => a.Area = v)" /></td>
+                        <td><Cell Value="@a.Unit" Edit="CanEdit" Width="50" Changed="v => Set(a, () => a.Unit = v)" /></td>
+                        <td><DecCell Value="a.TotalQty" Edit="CanBoq" Changed="v => Set(a, () => a.TotalQty = v)" /></td>
+                        <td><DecCell Value="a.Rate" Edit="CanBoq" Changed="v => Set(a, () => a.Rate = v)" /></td>
+                        <td><DecCell Value="a.Weight" Edit="CanEdit" Changed="v => Set(a, () => a.Weight = v)" /></td>
+                        <td><IntCell Value="a.Duration" Edit="CanEdit" Changed="v => Set(a, () => a.Duration = v)" /></td>
+                        <td class="nowrap">@Fmt.Ds(a.EarlyStart)</td><td class="nowrap">@Fmt.Ds(a.EarlyFinish)</td><td class="nowrap">@Fmt.Ds(a.BaselineFinish)</td>
+                        <td class="num">@a.TotalFloat</td><td class="num">@Fmt.N(a.ProgressPct, 1)</td>
+                        @if (CanDelete) { <td><button class="btn ghost sm" title="Delete" @onclick="() => Delete(a)" @onclick:stopPropagation="true">✕</button></td> }
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+
+    @if (_sel is not null)
+    {
+        <div class="card" style="margin-top:14px">
+            <div class="row" style="margin-bottom:8px">
+                <h2 class="grow" style="margin:0">Predecessors of @_sel.Code — @_sel.Name</h2>
+                @if (CanLinks && _sel.Id != 0) { <button class="btn sm" @onclick="AddLink">＋ Predecessor</button> }
+            </div>
+            @if (_sel.Id == 0) { <p class="muted small">Save the new activity first, then add its predecessors.</p> }
+            else
+            {
+                var links = _deps.Where(d => d.SuccessorId == _sel.Id).ToList();
+                @if (links.Count == 0) { <p class="muted small">No predecessors: starts at the project start (or its actual start).</p> }
+                @foreach (var d in links)
+                {
+                    <div class="row" style="margin-bottom:6px;flex-wrap:nowrap">
+                        <select class="grow" value="@d.PredecessorId" disabled="@(!CanLinks)" @onchange="e => SetLink(d, () => d.PredecessorId = int.Parse(e.Value!.ToString()!))">
+                            @foreach (var a in _acts.Where(a => a.Id != 0 && a.Id != _sel.Id)) { <option value="@a.Id">@a.Code — @a.Name</option> }
+                        </select>
+                        <select style="max-width:90px" value="@d.Type" disabled="@(!CanLinks)" @onchange="e => SetLink(d, () => d.Type = Enum.Parse<DependencyType>(e.Value!.ToString()!))">
+                            @foreach (var t in Enum.GetValues<DependencyType>()) { <option value="@t">@t</option> }
+                        </select>
+                        <input type="number" style="max-width:90px" title="Lag (+) or lead (−) in working days" value="@d.Lag" disabled="@(!CanLinks)" @onchange="e => SetLink(d, () => d.Lag = int.TryParse(e.Value?.ToString(), out var v) ? v : 0)" />
+                        @if (CanLinks) { <button class="btn ghost sm" @onclick="() => { _deps.Remove(d); _linksFor.Add(_sel.Id); }">✕</button> }
+                    </div>
+                }
+                <p class="small muted">FS finish→start · SS start→start · FF finish→finish · SF start→finish. Lag in working days (negative = lead).</p>
+            }
+        </div>
+    }
+
+    <Modal Title="Freeze baseline" @bind-Open="_baseline">
+        <p class="small muted">The current CPM dates become the planned dates and a new baseline revision. Earlier baselines are kept.</p>
+        <div class="field"><label>Baseline name</label><input @bind="_baselineName" /></div>
+        <button class="btn primary" disabled="@string.IsNullOrWhiteSpace(_baselineName)" @onclick="Freeze">Freeze</button>
+        <button class="btn ghost" @onclick="() => _baseline = false">Cancel</button>
+    </Modal>
+}
+
+@code {
+    private List<Activity> _acts = new();
+    private List<Dependency> _deps = new();
+    private Activity? _sel;
+    private readonly HashSet<Activity> _changed = new();
+    private readonly HashSet<int> _deleted = new(), _linksFor = new();
+    private bool _busy, _baseline;
+    private string _baselineName = $"Revised baseline {DateTime.Today:dd MMM yyyy}";
+    private bool CanEdit => State.Can(Module.Masters, Act.Edit);
+    private bool CanBoq => CanEdit && (State.Can(Module.Boq, Act.Edit) || State.Can(Module.Masters, Act.Delete));
+    private bool CanDelete => State.Can(Module.Masters, Act.Delete);
+    private bool CanLinks => State.Can(Module.Schedule, Act.Edit);
+    private bool Dirty => _changed.Count + _deleted.Count + _linksFor.Count > 0;
+
+    protected override async Task LoadAsync()
+    {
+        var t1 = Api.ActivitiesAsync(Pid);
+        var t2 = Api.DependenciesAsync(Pid);
+        (_acts, _deps) = (await t1, await t2);
+        _changed.Clear(); _deleted.Clear(); _linksFor.Clear();
+        _sel = _acts.FirstOrDefault(a => a.Id == _sel?.Id) ?? _acts.FirstOrDefault();
+    }
+
+    protected override bool Wants(LiveChange c) => (c.Entity is "activities" or "all" or "dpr") && !Dirty;
+
+    private void Select(Activity a) => _sel = a;
+    private void Set(Activity a, Action change) { change(); _changed.Add(a); }
+    private void SetLink(Dependency d, Action change) { change(); _linksFor.Add(d.SuccessorId); }
+
+    private void Add()
+    {
+        var next = _acts.Select(a => a.Code).Where(c => c.StartsWith('A') && int.TryParse(c[1..], out _)).Select(c => int.Parse(c[1..])).DefaultIfEmpty(1000).Max() + 10;
+        var a = new Activity { ProjectId = Pid, Code = $"A{next}", Name = "New activity", Duration = 5, Weight = 1, Unit = "nos", SortOrder = _acts.Select(x => x.SortOrder).DefaultIfEmpty().Max() + 10 };
+        _acts.Add(a);
+        _changed.Add(a);
+        _sel = a;
+    }
+
+    private void Delete(Activity a)
+    {
+        _acts.Remove(a);
+        _changed.Remove(a);
+        if (a.Id != 0) _deleted.Add(a.Id);
+        _deps.RemoveAll(d => d.PredecessorId == a.Id || d.SuccessorId == a.Id);
+        if (_sel == a) _sel = _acts.FirstOrDefault();
+    }
+
+    private void AddLink()
+    {
+        if (_sel is null) return;
+        var pred = _acts.Where(a => a.Id != 0 && a.Id != _sel.Id && _deps.All(d => !(d.SuccessorId == _sel.Id && d.PredecessorId == a.Id)))
+            .OrderByDescending(a => a.SortOrder < _sel.SortOrder).ThenByDescending(a => a.SortOrder).FirstOrDefault();
+        if (pred is null) return;
+        _deps.Add(new Dependency { ProjectId = Pid, PredecessorId = pred.Id, SuccessorId = _sel.Id, Type = DependencyType.FS });
+        _linksFor.Add(_sel.Id);
+    }
+
+    private async Task Save()
+    {
+        _busy = true;
+        var changes = new ActivityChanges
+        {
+            Upserts = _changed.ToList(), Deletes = _deleted.ToList(), LinksFor = _linksFor.ToList(),
+            Links = _deps.Where(d => _linksFor.Contains(d.SuccessorId)).ToList(),
+        };
+        if (await Notes.TryAsync(() => Api.SaveActivitiesAsync(Pid, changes), "Saved. The schedule was recalculated."))
+            await ReloadAsync();
+        _busy = false;
+    }
+
+    private async Task Freeze()
+    {
+        _baseline = false;
+        _busy = true;
+        Baseline? b = null;
+        await Notes.TryAsync(async () => b = await Api.FreezeBaselineAsync(Pid, _baselineName));
+        if (b is not null) { Notes.Show($"Baseline revision {b.Revision} \"{b.Name}\" frozen."); await ReloadAsync(); }
+        _busy = false;
+    }
+}
