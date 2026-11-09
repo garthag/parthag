@@ -1,86 +1,166 @@
-name: Desktop edition (C# / WPF)
+name: Build and release (C# / .NET 10)
 
-# Builds and tests the C# desktop edition, takes screenshots of every screen,
-# produces sample PDF/Excel reports and publishes them with the Windows .exe
-# on the "CONSTRUCT DPR Desktop (C#)" release page.
+# One pipeline for the whole C# solution:
+#   test     – unit + server tests (in-memory server driven by the real client), PostgreSQL smoke test, Docker image
+#   windows  – WPF app (single .exe) with screenshots, Windows server package
+#   android  – .NET MAUI Android app (.apk)
+#   publish  – replaces the "apps-latest" download page with the new files (fixed names, links never change)
 on:
   push:
     branches: [main, claude/construct-dpr-app-z3h0j8]
-    paths: ['desktop/**', '.github/workflows/desktop.yml']
+    paths-ignore: ['legacy/**', '**.md']
   workflow_dispatch:
 
 permissions:
   contents: write
 
 concurrency:
-  group: desktop-${{ github.ref }}
+  group: build-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+  VERSION: 2.0.${{ github.run_number }}
+
 jobs:
-  build:
-    runs-on: windows-latest
-    defaults:
-      run:
-        shell: pwsh
-        working-directory: desktop
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env: { POSTGRES_PASSWORD: ci-only-password }
+        ports: [ "5432:5432" ]
+        options: --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
-        with: { dotnet-version: 8.0.x }
+        with: { dotnet-version: 10.0.x }
+      - name: Tests
+        run: dotnet test tests/ConstructDpr.Tests -c Release --logger "console;verbosity=normal"
+      - name: Publish server (Linux, with the web app inside)
+        run: dotnet publish src/ConstructDpr.Server -c Release -p:Version=$VERSION -o out/server-linux
+      - name: Smoke test on PostgreSQL (sign up, demo project, PDF)
+        run: |
+          cd out/server-linux
+          DATABASE_URL=postgres://postgres:ci-only-password@localhost:5432/postgres ASPNETCORE_URLS=http://127.0.0.1:5080 dotnet ConstructDpr.Server.dll &
+          for i in $(seq 1 60); do curl -sf http://127.0.0.1:5080/health && break; sleep 1; done
+          curl -sf -X POST http://127.0.0.1:5080/api/account/register -H 'content-type: application/json' -d '{"email":"ci@example.com","password":"ci-password-1","displayName":"CI"}'
+          TOKEN=$(curl -sf -X POST http://127.0.0.1:5080/api/identity/login -H 'content-type: application/json' -d '{"email":"ci@example.com","password":"ci-password-1"}' | jq -r .accessToken)
+          PID=$(curl -sf -X POST http://127.0.0.1:5080/api/projects/demo -H "authorization: Bearer $TOKEN" -H 'content-type: application/json' -d '{}' | jq -r .id)
+          curl -sf http://127.0.0.1:5080/api/projects/$PID/dashboard -H "authorization: Bearer $TOKEN" | jq '{plannedPct, actualPct, pendingApprovals}'
+          curl -sf -o schedule.pdf http://127.0.0.1:5080/api/projects/$PID/reports/SchedulePdf -H "authorization: Bearer $TOKEN"
+          head -c 4 schedule.pdf | grep -q '%PDF'
+          curl -sf http://127.0.0.1:5080/ | grep -q 'CONSTRUCT DPR'
+          echo "Smoke test passed"
+      - name: Sample reports (QuestPDF + ClosedXML)
+        run: dotnet run --project tools/ConstructDpr.Preview -c Release -- out/samples
+      - name: Docker image builds
+        run: docker build -t construct-dpr:ci .
+      - name: Package
+        run: |
+          cd out && (cd server-linux && zip -qr ../CONSTRUCT-DPR-server-linux.zip .)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: server-linux
+          path: |
+            out/CONSTRUCT-DPR-server-linux.zip
+            out/samples/*
 
-      - name: Build everything (incl. WPF app)
-        run: dotnet build ConstructDpr.sln -c Release
-
-      - name: Unit tests (CPM, DPR workflow, PDF, Excel)
-        run: dotnet test tests/ConstructDpr.Tests -c Release --no-build --logger "console;verbosity=normal"
-
-      - name: Publish single-file Windows app
+  windows:
+    runs-on: windows-latest
+    defaults: { run: { shell: pwsh } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with: { dotnet-version: 10.0.x }
+      - name: Publish the Windows app (single self-contained .exe)
         run: >
           dotnet publish src/ConstructDpr.App/ConstructDpr.App.csproj -c Release -r win-x64 --self-contained true
           -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true
-          -p:Version=1.0.${{ github.run_number }} -o publish
-
-      - name: Screenshots of every screen (app runs on a fresh demo database)
+          -p:Version=${{ env.VERSION }} -o publish/app
+      - name: Screenshots of every screen (fresh offline demo database)
         run: |
           New-Item -ItemType Directory -Force -Path out | Out-Null
-          $p = Start-Process -FilePath "publish\ConstructDpr.exe" -ArgumentList "--screenshots", "$PWD\out" -PassThru
-          if (-not $p.WaitForExit(180000)) { $p.Kill(); throw "Screenshot run timed out" }
+          $p = Start-Process -FilePath "publish\app\ConstructDpr.exe" -ArgumentList "--screenshots", "$PWD\out" -PassThru
+          if (-not $p.WaitForExit(240000)) { $p.Kill(); throw "Screenshot run timed out" }
           if (Test-Path out\error.txt) { Get-Content out\error.txt; Remove-Item out\error.txt }
           if ($p.ExitCode -ne 0) { throw "Screenshot run failed with exit code $($p.ExitCode)" }
-          Get-ChildItem out
           if ((Get-ChildItem out -Filter *.png).Count -lt 7) { throw "Expected 7 screenshots" }
-
-      - name: Sample reports (QuestPDF + ClosedXML)
-        run: dotnet run --project tools/ConstructDpr.Preview -c Release -- out
-
+          Get-ChildItem out | ForEach-Object { Rename-Item $_.FullName ("windows-" + $_.Name) }
+      - name: Publish the server for a Windows site-office PC
+        run: dotnet publish src/ConstructDpr.Server -c Release -r win-x64 --self-contained true -p:Version=${{ env.VERSION }} -o publish/server
       - name: Collect
         run: |
-          Copy-Item publish\ConstructDpr.exe out\CONSTRUCT-DPR-Desktop.exe
-          Compress-Archive -Path out\*.png -DestinationPath out\screenshots.zip
-
+          Copy-Item publish\app\ConstructDpr.exe out\CONSTRUCT-DPR-windows.exe
+          Compress-Archive -Path publish\server\* -DestinationPath out\CONSTRUCT-DPR-server-windows.zip
       - uses: actions/upload-artifact@v4
-        with: { name: desktop, path: desktop/out/* }
+        with: { name: windows, path: out/* }
+
+  android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with: { dotnet-version: 10.0.x }
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: '21' }
+      - name: Install the .NET MAUI Android workload
+        run: dotnet workload install maui-android
+      - name: Build the Android app (.apk)
+        env:
+          KEYSTORE: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          SIGN=""
+          # With signing secrets the app keeps one signature, so new versions install over old ones.
+          # Without them it is signed with a build-machine key: uninstall the old app before installing a new build.
+          if [ -n "$KEYSTORE" ]; then
+            echo "$KEYSTORE" | base64 -d > "$RUNNER_TEMP/release.keystore"
+            SIGN="-p:AndroidKeyStore=true -p:AndroidSigningKeyStore=$RUNNER_TEMP/release.keystore -p:AndroidSigningStorePass=env:KEYSTORE_PASSWORD -p:AndroidSigningKeyAlias=$KEY_ALIAS -p:AndroidSigningKeyPass=env:KEY_PASSWORD"
+          fi
+          dotnet publish src/ConstructDpr.Mobile/ConstructDpr.Mobile.csproj -f net10.0-android -c Release \
+            -p:ApplicationVersion=${{ github.run_number }} -p:ApplicationDisplayVersion=${{ env.VERSION }} \
+            -p:AndroidSdkDirectory=$ANDROID_HOME $SIGN -o out
+      - name: Collect
+        run: |
+          ls -la out
+          cp "$(ls out/*-Signed.apk | head -1)" CONSTRUCT-DPR-android.apk
+      - uses: actions/upload-artifact@v4
+        with: { name: android, path: CONSTRUCT-DPR-android.apk }
 
   publish:
-    needs: build
+    needs: [test, windows, android]
     runs-on: ubuntu-latest
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       GH_REPO: ${{ github.repository }}
     steps:
       - uses: actions/download-artifact@v4
-        with: { name: desktop, path: dist }
-      - name: Replace the desktop download page
+        with: { path: built, merge-multiple: true }
+      - name: Replace the download page (old files are removed)
         run: |
+          mkdir dist
+          find built -type f \( -name '*.apk' -o -name '*.exe' -o -name '*.zip' -o -name '*.png' -o -name 'sample-*' -o -name 'activity-import-template.xlsx' \) -exec cp {} dist/ \;
+          ls -la dist
+          gh release delete apps-latest --cleanup-tag --yes || true
           gh release delete desktop-latest --cleanup-tag --yes || true
           cat > notes.md <<NOTES
-          **CONSTRUCT DPR Desktop (C# / WPF) — version 1.0.${{ github.run_number }}**, built $(date -u '+%d %b %Y %H:%M UTC') from commit ${GITHUB_SHA::7}.
+          **CONSTRUCT DPR $VERSION** — one C# / .NET 10 code base, built $(date -u '+%d %b %Y %H:%M UTC') from commit ${GITHUB_SHA::7}.
 
-          * **CONSTRUCT-DPR-Desktop.exe** — the Windows program (64-bit Windows 10/11). No installation: download, double-click. Data is stored in %LOCALAPPDATA%\\ConstructDpr. If "Windows protected your PC" appears: **More info → Run anyway** (not code-signed yet).
-          * **01–07 *.png** — screenshots of every screen, taken automatically from this build.
-          * **sample-*.pdf / *.xlsx** — reports generated from the demo project (QuestPDF + ClosedXML).
+          | Device | File | |
+          |---|---|---|
+          | Android phone / tablet | **CONSTRUCT-DPR-android.apk** | Open on the phone → allow installing from this source → Install |
+          | Windows PC | **CONSTRUCT-DPR-windows.exe** | Double-click (no installation). "Windows protected your PC" → More info → Run anyway |
+          | Web browser | your server's address | Served by the server itself |
+          | Server (cloud) | — | Deploy with render.yaml or the Dockerfile in the repository |
+          | Server (Windows site-office PC) | **CONSTRUCT-DPR-server-windows.zip** | Unzip, run ConstructDpr.Server.exe |
+          | Server (Linux) | **CONSTRUCT-DPR-server-linux.zip** | Needs the .NET 10 ASP.NET Core runtime |
 
-          Stack: C# · WPF · .NET 8 · SQLite (EF Core) · custom Gantt control · CPM in C# · QuestPDF · ClosedXML. Guide: desktop/README.md
+          The Windows app also works **offline on one PC** without any server (Settings → "This PC only").
+          Phones and browsers sign in to the server and stay in live sync. Guide: docs/START_HERE.md
           NOTES
-          gh release create desktop-latest dist/* --target "$GITHUB_SHA" --latest=false \
-            --title "CONSTRUCT DPR Desktop (C#) — v1.0.${{ github.run_number }}" --notes-file notes.md
+          gh release create apps-latest dist/* --target "$GITHUB_SHA" --latest \
+            --title "CONSTRUCT DPR $VERSION (C# / .NET) — $(date -u '+%d %b %Y')" --notes-file notes.md

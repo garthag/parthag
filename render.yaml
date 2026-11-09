@@ -1,0 +1,18 @@
+# One-click deployment on Render (render.com → New → Blueprint → this repository).
+# You only paste DATABASE_URL (e.g. from Supabase: Project Settings → Database → Connection string → URI, session pooler).
+services:
+  - type: web
+    name: construct-dpr
+    runtime: docker
+    plan: free
+    branch: claude/construct-dpr-app-z3h0j8
+    healthCheckPath: /health
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: Features__AdminPortal
+        value: "false"
+      - key: Features__Registration
+        value: "true"
+      - key: Site__TimeZone
+        value: Asia/Kolkata

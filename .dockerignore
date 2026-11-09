@@ -1,0 +1,6 @@
+**/bin
+**/obj
+legacy
+.git
+.github
+**/node_modules
