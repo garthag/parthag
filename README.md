@@ -20,6 +20,10 @@ All devices signed in to the same server stay in **live sync**. An approval on a
 |---|---|---|
 | ![](docs/screenshots/web-11-phone-dpr-entry.png) | ![](docs/screenshots/web-10-phone-dashboard.png) | ![](docs/screenshots/web-12-phone-gantt.png) |
 
+| Windows app: daily report review | Windows app: native Gantt chart |
+|---|---|
+| ![](docs/screenshots/windows-dpr-review.png) | ![](docs/screenshots/windows-gantt.png) |
+
 ## Get started
 
 **Not a programmer?** Follow [docs/START_HERE.md](docs/START_HERE.md). It takes about 30 minutes, all in the browser: database → server → apps.
