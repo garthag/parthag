@@ -1,0 +1,206 @@
+{
+  "format": 1,
+  "restore": {
+    "/home/user/parthag/src/ConstructDpr.Core/ConstructDpr.Core.csproj": {}
+  },
+  "projects": {
+    "/home/user/parthag/src/ConstructDpr.Core/ConstructDpr.Core.csproj": {
+      "version": "1.0.0",
+      "restore": {
+        "projectUniqueName": "/home/user/parthag/src/ConstructDpr.Core/ConstructDpr.Core.csproj",
+        "projectName": "ConstructDpr.Core",
+        "projectPath": "/home/user/parthag/src/ConstructDpr.Core/ConstructDpr.Core.csproj",
+        "packagesPath": "/root/.nuget/packages/",
+        "outputPath": "/home/user/parthag/src/ConstructDpr.Core/obj/",
+        "projectStyle": "PackageReference",
+        "configFilePaths": [
+          "/root/.nuget/NuGet/NuGet.Config"
+        ],
+        "originalTargetFrameworks": [
+          "net8.0"
+        ],
+        "sources": {
+          "https://api.nuget.org/v3/index.json": {}
+        },
+        "frameworks": {
+          "net8.0": {
+            "targetAlias": "net8.0",
+            "projectReferences": {
+              "/home/user/parthag/src/ConstructDpr.Reports/ConstructDpr.Reports.csproj": {
+                "projectPath": "/home/user/parthag/src/ConstructDpr.Reports/ConstructDpr.Reports.csproj"
+              },
+              "/home/user/parthag/src/ConstructDpr.Shared/ConstructDpr.Shared.csproj": {
+                "projectPath": "/home/user/parthag/src/ConstructDpr.Shared/ConstructDpr.Shared.csproj"
+              }
+            }
+          }
+        },
+        "warningProperties": {
+          "warnAsError": [
+            "NU1605"
+          ]
+        }
+      },
+      "frameworks": {
+        "net8.0": {
+          "targetAlias": "net8.0",
+          "dependencies": {
+            "Microsoft.AspNetCore.DataProtection.EntityFrameworkCore": {
+              "target": "Package",
+              "version": "[8.0.11, )"
+            },
+            "Microsoft.AspNetCore.Identity.EntityFrameworkCore": {
+              "target": "Package",
+              "version": "[8.0.11, )"
+            },
+            "Microsoft.EntityFrameworkCore.Sqlite": {
+              "target": "Package",
+              "version": "[8.0.11, )"
+            },
+            "Npgsql.EntityFrameworkCore.PostgreSQL": {
+              "target": "Package",
+              "version": "[8.0.11, )"
+            }
+          },
+          "imports": [
+            "net461",
+            "net462",
+            "net47",
+            "net471",
+            "net472",
+            "net48",
+            "net481"
+          ],
+          "assetTargetFallback": true,
+          "warn": true,
+          "frameworkReferences": {
+            "Microsoft.NETCore.App": {
+              "privateAssets": "all"
+            }
+          },
+          "runtimeIdentifierGraphPath": "/usr/lib/dotnet/sdk/8.0.133/PortableRuntimeIdentifierGraph.json"
+        }
+      }
+    },
+    "/home/user/parthag/src/ConstructDpr.Reports/ConstructDpr.Reports.csproj": {
+      "version": "1.0.0",
+      "restore": {
+        "projectUniqueName": "/home/user/parthag/src/ConstructDpr.Reports/ConstructDpr.Reports.csproj",
+        "projectName": "ConstructDpr.Reports",
+        "projectPath": "/home/user/parthag/src/ConstructDpr.Reports/ConstructDpr.Reports.csproj",
+        "packagesPath": "/root/.nuget/packages/",
+        "outputPath": "/home/user/parthag/src/ConstructDpr.Reports/obj/",
+        "projectStyle": "PackageReference",
+        "configFilePaths": [
+          "/root/.nuget/NuGet/NuGet.Config"
+        ],
+        "originalTargetFrameworks": [
+          "net8.0"
+        ],
+        "sources": {
+          "https://api.nuget.org/v3/index.json": {}
+        },
+        "frameworks": {
+          "net8.0": {
+            "targetAlias": "net8.0",
+            "projectReferences": {
+              "/home/user/parthag/src/ConstructDpr.Shared/ConstructDpr.Shared.csproj": {
+                "projectPath": "/home/user/parthag/src/ConstructDpr.Shared/ConstructDpr.Shared.csproj"
+              }
+            }
+          }
+        },
+        "warningProperties": {
+          "warnAsError": [
+            "NU1605"
+          ]
+        }
+      },
+      "frameworks": {
+        "net8.0": {
+          "targetAlias": "net8.0",
+          "dependencies": {
+            "ClosedXML": {
+              "target": "Package",
+              "version": "[0.105.1, )"
+            },
+            "QuestPDF": {
+              "target": "Package",
+              "version": "[2026.9.1, )"
+            }
+          },
+          "imports": [
+            "net461",
+            "net462",
+            "net47",
+            "net471",
+            "net472",
+            "net48",
+            "net481"
+          ],
+          "assetTargetFallback": true,
+          "warn": true,
+          "frameworkReferences": {
+            "Microsoft.NETCore.App": {
+              "privateAssets": "all"
+            }
+          },
+          "runtimeIdentifierGraphPath": "/usr/lib/dotnet/sdk/8.0.133/PortableRuntimeIdentifierGraph.json"
+        }
+      }
+    },
+    "/home/user/parthag/src/ConstructDpr.Shared/ConstructDpr.Shared.csproj": {
+      "version": "1.0.0",
+      "restore": {
+        "projectUniqueName": "/home/user/parthag/src/ConstructDpr.Shared/ConstructDpr.Shared.csproj",
+        "projectName": "ConstructDpr.Shared",
+        "projectPath": "/home/user/parthag/src/ConstructDpr.Shared/ConstructDpr.Shared.csproj",
+        "packagesPath": "/root/.nuget/packages/",
+        "outputPath": "/home/user/parthag/src/ConstructDpr.Shared/obj/",
+        "projectStyle": "PackageReference",
+        "configFilePaths": [
+          "/root/.nuget/NuGet/NuGet.Config"
+        ],
+        "originalTargetFrameworks": [
+          "net8.0"
+        ],
+        "sources": {
+          "https://api.nuget.org/v3/index.json": {}
+        },
+        "frameworks": {
+          "net8.0": {
+            "targetAlias": "net8.0",
+            "projectReferences": {}
+          }
+        },
+        "warningProperties": {
+          "warnAsError": [
+            "NU1605"
+          ]
+        }
+      },
+      "frameworks": {
+        "net8.0": {
+          "targetAlias": "net8.0",
+          "imports": [
+            "net461",
+            "net462",
+            "net47",
+            "net471",
+            "net472",
+            "net48",
+            "net481"
+          ],
+          "assetTargetFallback": true,
+          "warn": true,
+          "frameworkReferences": {
+            "Microsoft.NETCore.App": {
+              "privateAssets": "all"
+            }
+          },
+          "runtimeIdentifierGraphPath": "/usr/lib/dotnet/sdk/8.0.133/PortableRuntimeIdentifierGraph.json"
+        }
+      }
+    }
+  }
+}

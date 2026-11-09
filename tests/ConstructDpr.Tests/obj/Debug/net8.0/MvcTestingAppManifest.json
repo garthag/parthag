@@ -1,0 +1,7 @@
+{
+  "ConstructDpr.Client, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null": "\/home\/user\/parthag\/src\/ConstructDpr.Client",
+  "ConstructDpr.Core, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null": "\/home\/user\/parthag\/src\/ConstructDpr.Core",
+  "ConstructDpr.Reports, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null": "\/home\/user\/parthag\/src\/ConstructDpr.Reports",
+  "ConstructDpr.Server, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null": "\/home\/user\/parthag\/src\/ConstructDpr.Server",
+  "ConstructDpr.Shared, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null": "\/home\/user\/parthag\/src\/ConstructDpr.Shared"
+}

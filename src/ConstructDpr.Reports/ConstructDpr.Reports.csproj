@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- PDF (QuestPDF) and Excel (ClosedXML) documents. Generated on the server, or in the offline Windows app. -->
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="ClosedXML" Version="0.105.1" />
+    <PackageReference Include="QuestPDF" Version="2026.9.1" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\ConstructDpr.Shared\ConstructDpr.Shared.csproj" />
+  </ItemGroup>
+</Project>

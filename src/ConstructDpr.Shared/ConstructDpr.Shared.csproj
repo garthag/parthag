@@ -1,0 +1,6 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Everything every app shares: entities, rules, CPM, Gantt geometry, permissions, the API contract. No dependencies, so it also runs in the browser (Blazor) and on Android. -->
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+  </PropertyGroup>
+</Project>
