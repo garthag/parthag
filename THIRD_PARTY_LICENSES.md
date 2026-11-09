@@ -1,28 +1,15 @@
-# Third-party software and services
+# Third-party software
 
-CONSTRUCT DPR is licensed under Apache-2.0 (see LICENSE).
+CONSTRUCT DPR is licensed under Apache-2.0 (see LICENSE). It uses:
 
-## Runtime libraries (bundled in the web app)
+| Component | Used for | Licence |
+|---|---|---|
+| .NET 10, ASP.NET Core, Blazor, WPF, .NET MAUI | Runtime, server, apps | MIT |
+| Entity Framework Core, Microsoft.Data.Sqlite, ASP.NET Core Identity, SignalR | Database, sign-in, live updates | MIT |
+| Npgsql + Npgsql.EntityFrameworkCore.PostgreSQL | PostgreSQL driver | PostgreSQL Licence |
+| SQLite (via SQLitePCLRaw) | Local database | Public domain / Apache-2.0 |
+| QuestPDF | PDF reports | QuestPDF Community licence: free for individuals, non-profits, open-source projects and organisations with under USD 1 million annual gross revenue; others need a commercial licence (questpdf.com/license) |
+| ClosedXML (+ DocumentFormat.OpenXml) | Excel export and import | MIT |
+| xUnit, Microsoft.AspNetCore.Mvc.Testing | Tests (not shipped) | Apache-2.0 / MIT |
 
-| Package | License |
-|---|---|
-| react, react-dom | MIT |
-| react-router-dom | MIT |
-| @supabase/supabase-js | MIT |
-| react-hook-form, @hookform/resolvers | MIT |
-| zod | MIT |
-| recharts | MIT |
-| jspdf, jspdf-autotable | MIT |
-| decimal.js | MIT |
-| idb | ISC |
-| papaparse | MIT |
-
-Build/test tooling (not shipped): vite, @vitejs/plugin-react, tailwindcss, vite-plugin-pwa / workbox (MIT), typescript (Apache-2.0), vitest (MIT), fake-indexeddb (Apache-2.0), oxlint (MIT).
-
-## Backend software
-
-Supabase components (PostgreSQL — PostgreSQL License; PostgREST — MIT; Supabase Auth/GoTrue — MIT; Realtime — Apache-2.0; Edge Runtime — MIT). Self-hostable.
-
-## External services (optional, separate terms)
-
-Google Drive API, Google Identity/OAuth, Chrome Web Speech API (Google), Supabase Cloud, your static host. See docs/COSTS_AND_LIMITS.md.
+Services you may choose: Supabase or Neon (PostgreSQL hosting), Render or Azure (server hosting). Each has its own terms. Components of the earlier editions are listed in legacy/THIRD_PARTY_LICENSES.md.

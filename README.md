@@ -1,122 +1,75 @@
 # CONSTRUCT DPR
 
-**Open-source construction Daily Progress Reporting & site management** — a mobile-first, installable web app (PWA) for industrial construction: structural steel, mechanical equipment erection, piping, refractory, civil, fabrication, supply, testing and commissioning.
+**Construction daily progress reporting and site management** for industrial projects: structural steel, mechanical erection, piping, refractory, civil, testing and commissioning. One C# / .NET 10 code base runs everywhere:
 
-Simple enough for a site supervisor on an Android phone; structured enough for project controls (BOQ, baselines, critical path, S-curves, approvals, audit).
+| | Technology | Where |
+|---|---|---|
+| **Server** | ASP.NET Core · Identity sign-in · REST API · SignalR live updates | Cloud (Render, Azure, any Docker host) or a site-office Windows PC |
+| **Database** | PostgreSQL (shared server) or SQLite (one PC) · EF Core | Your Supabase/Neon/own PostgreSQL, or a file |
+| **Web app** | Blazor WebAssembly, installable (PWA) | Any browser, served by the server |
+| **Android app** | .NET MAUI Blazor Hybrid (same screens as the web app) | `.apk` from Releases |
+| **Windows app** | WPF with a native Gantt control | `.exe` from Releases. Works **offline on one PC** or **signed in to the server** |
+| **Scheduling** | CPM in C# (FS/SS/FF/SF, lag/lead, calendars, floats, critical path, baselines) | Shared by all |
+| **Reports** | QuestPDF (PDF) · ClosedXML (Excel export/import) | Server, or the offline Windows app |
 
-* **Records** → PostgreSQL (Supabase, cloud or self-hosted), protected by row-level security
-* **Photos, video, voice notes, drawings, PDFs** → your Google Drive, in a standard project folder tree
-* **Works offline** on site; synchronises safely without duplicates when the network returns
+All devices signed in to the same server stay in **live sync**. An approval on a PC appears on the phones within a second.
 
----
+![Dashboard](docs/screenshots/web-01-dashboard.png)
 
-## Apps for Android, Windows and the web
+| Phone: daily report entry | Phone: live dashboard | Phone: Gantt chart |
+|---|---|---|
+| ![](docs/screenshots/web-11-phone-dpr-entry.png) | ![](docs/screenshots/web-10-phone-dashboard.png) | ![](docs/screenshots/web-12-phone-gantt.png) |
 
-Download the **Android APK** and the **Windows installer** from the repository's *Releases* page (**CONSTRUCT DPR apps — v1.0.x**), or use any browser. All are live-synchronised with each other — see [docs/APPS.md](docs/APPS.md).
+## Get started
 
-> **Admin portal is switched off for now** (project creation, members & roles, setup, integrations). Turn it back on with `VITE_ADMIN_PORTAL=true` — see [docs/ADMIN_PORTAL.md](docs/ADMIN_PORTAL.md).
+**Not a programmer?** Follow [docs/START_HERE.md](docs/START_HERE.md). It takes about 30 minutes, all in the browser: database → server → apps.
 
-## Editions — pick one
+**Just want to try it on one PC?** Download **CONSTRUCT-DPR-windows.exe** from the *Releases* page and double-click it. It opens offline with a demo project; no server or account is needed.
 
-| | |
-|---|---|
-| **Web edition** (this README) | Installable web app + PostgreSQL (Supabase). Strict database-enforced controls, scales to many projects. Start: [docs/START_HERE.md](docs/START_HERE.md) |
-| **Desktop edition (C# / WPF)** | Classic Windows program: C# + WPF, .NET 8, SQLite, custom Gantt chart, CPM in C#, QuestPDF + ClosedXML reports. Works offline on one PC. Start: [desktop/README.md](desktop/README.md) |
-| **Google Workspace edition** | Everything inside Google: Sheets + AppSheet + Apps Script + Drive + Looker Studio. No hosting; customise the app without code. Start: [docs/GOOGLE_WORKSPACE_EDITION.md](docs/GOOGLE_WORKSPACE_EDITION.md) |
-
-## What you get
+## What it does
 
 | Area | Highlights |
 |---|---|
-| **Daily DPR wizard** | 8 steps (report → activities → manpower → equipment → materials → safety & QA → narrative → review). Live previous / cumulative / balance / % / planned % / variance; overrun protection; autosave on the device |
-| **Evidence** | Camera (front/rear, multi-shot, retake), short video, gallery/files, voice notes with optional speech-to-text, one-shot GPS or typed location. Nothing is activated without a tap |
-| **Voice → structured entry** | "At the skip bridge, erected twelve metric tonnes … one mobile crane and twenty-four workers" → activity, 12 MT, location, shift, crane, 24 workers — confirmed by the user before anything is added |
-| **Approvals** | Submit → review → approve (accepted quantity) / reject (reason) → revise. No self-approval by default. Approved reports become immutable snapshots with SHA-256 |
-| **PDF reports** | 18-section A4 portrait/landscape report with photos, page numbers, sign-off and revision history; published to Drive |
-| **Offline & sync** | IndexedDB drafts, outbox with idempotency keys, exponential backoff, explicit conflict resolution, separate status for data and files |
-| **Live updates** | Supabase Realtime: approvals, lists and masters refresh on every device when changes are committed |
-| **Scheduling (P6-style)** | WBS, FS/SS/FF/SF with lag/lead, constraints, calendars & holidays, CPM (early/late dates, total/free float, critical path), look-ahead, frozen baseline revisions, variance |
-| **Resources** | Manpower by trade/agency/area/shift, equipment utilisation & certificate expiry, store ledger with shortages |
-| **Commercial** | BOQ with tender/revised qty, rate (₹), executed / measured / certified / billed kept separate, authorised revisions with reasons |
-| **Safety & QA/QC** | Permits with configurable checklists (hot work, height, lifting, confined space, excavation, LOTO), observations, inspections & hold points, NCRs, constraints, actions, commissioning & punch list |
-| **Dashboards** | KPIs, S-curve, production, manpower, equipment, area & contractor progress, delay Pareto, materials, quantity & billing — each with range, unit, method, table view |
-| **Security** | 13 roles × 12 modules × 8 actions, per-project overrides, RLS on every table, server-side validation, audit log, no secrets in the browser |
-| **Integrations** | Works with other software: REST API (OpenAPI), ordered event feed, `integration` role, ready-made **Python** and **Java** clients, CLI, Excel/Power BI/Google Sheets recipes — [docs/INTEGRATIONS.md](docs/INTEGRATIONS.md) |
-| **Portability** | CSV export on every register, full-project JSON export, CSV activity import |
+| **Daily progress report** | Activities with today's quantity, live previous / cumulative / balance / actual % / planned %, overrun blocked. Also manpower by agency and trade, equipment hours and breakdowns, material stock (opening + received − issued), weather, narrative and safety notes. Crews are copied from the previous report |
+| **Approvals** | Draft → submit → approve (the reviewer may lower the *accepted* quantity) or reject (reason required) → revise. No self-approval unless the project allows it. Approved reports are locked with a SHA-256 snapshot, and tampering is detected |
+| **Schedule** | Activities and BOQ, predecessors, CPM with data date and actual dates, critical path, numbered baselines, custom Gantt chart (web/Android SVG, Windows native) |
+| **Dashboard** | Physical progress vs plan, S-curve, forecast finish vs contract, executed value (₹), approvals pending, delayed/critical activities |
+| **Reports & Excel** | DPR PDF (A4), schedule PDF with Gantt (A3), Excel exports with formulas, Excel activity import that rejects the whole file if any row is wrong |
+| **People & roles** | 13 roles × 7 modules × 8 actions ([docs/PERMISSIONS.md](docs/PERMISSIONS.md)), enforced on the server for every call |
+| **Safety of data** | Every save carries a version: a stale copy from another device is refused instead of overwriting newer work. Unsaved report edits are kept on the device. There is a full audit trail |
+| **Integration** | Plain REST/JSON API ([docs/API.md](docs/API.md)) for ERP, Power BI, Python or Java |
 
-## Quick start
+> **Admin portal is off for now** (creating projects and managing people). Everyone can load the demo project. Switch it on with the server setting `Features__AdminPortal=true`.
 
-**Not a programmer?** Follow [docs/START_HERE.md](docs/START_HERE.md): browser-only setup with Supabase + Netlify, about 30–45 minutes. Then install it on Windows: [docs/WINDOWS.md](docs/WINDOWS.md).
-
-**Developers:**
+## For developers
 
 ```bash
-# 1. Backend: create a Supabase project (or self-host), then apply the migrations
-npx supabase link --project-ref <your-ref> && npx supabase db push
-
-# 2. Web app
-cd web
-cp .env.example .env        # VITE_SUPABASE_URL + VITE_SUPABASE_ANON_KEY
-npm ci && npm run dev       # http://localhost:5173
-
-# 3. Sign up in the app → "Load demo project"
+dotnet test tests/ConstructDpr.Tests                       # 40 tests (needs the .NET 10 SDK)
+dotnet run --project src/ConstructDpr.Server               # http://localhost:5080 — SQLite file in src/ConstructDpr.Server/data
+DATABASE_URL=postgres://user:pass@localhost:5432/db dotnet run --project src/ConstructDpr.Server   # PostgreSQL
+dotnet run --project src/ConstructDpr.App                  # Windows app (Windows only)
+dotnet build src/ConstructDpr.Mobile -f net10.0-android    # Android (needs: dotnet workload install maui-android)
+docker compose up -d                                       # server + PostgreSQL (set POSTGRES_PASSWORD in .env)
 ```
 
-Google Drive storage and Google sign-in: [docs/GOOGLE_SETUP.md](docs/GOOGLE_SETUP.md). Full instructions incl. self-hosting with Docker: [docs/SETUP.md](docs/SETUP.md).
-
-## Tests
-
-```bash
-cd web && npm test              # 39 unit tests
-supabase/tests/run.sh           # 60 database acceptance checks (PostgreSQL 15+)
-cd clients/python && python -m unittest discover -s tests   # 9 Python client tests
-cd clients/java && ./build.sh test                          # 11 Java client tests
-cd google-workspace && npm ci && npm test                   # 12 Google-edition end-to-end tests
-cd desktop && dotnet test tests/ConstructDpr.Tests          # 25 C# desktop-edition tests
 ```
-Status against acceptance tests A–L: [docs/TESTING.md](docs/TESTING.md).
-
-## Documentation
-
-| | |
-|---|---|
-| [Architecture](docs/ARCHITECTURE.md) | System diagram, key decisions, request flow |
-| [Database](docs/DATABASE.md) | ER diagram, tables, integrity rules, functions |
-| [Permissions](docs/PERMISSIONS.md) | Role × module matrix |
-| [Workflows](docs/WORKFLOWS.md) | Reporting, voice, approval, offline sync, planning |
-| [Google setup](docs/GOOGLE_SETUP.md) | OAuth, Drive scopes, folder tree, security implications |
-| [Setup & deployment](docs/SETUP.md) | Cloud, self-hosted, local dev, env vars |
-| [User manual](docs/USER_MANUAL.md) | By role |
-| [Integrations](docs/INTEGRATIONS.md) | Python, Java, ERP, Excel/Power BI, Google Sheets; API and event feed |
-| [Costs & limits](docs/COSTS_AND_LIMITS.md) | What is free, what is not, quotas |
-| [Security](docs/SECURITY.md) | Controls, privacy, residual risks |
-| [Backup & retention](docs/BACKUP_AND_RETENTION.md) | Backup/restore, retention, deletion |
-| [Troubleshooting](docs/TROUBLESHOOTING.md) | Common problems |
-| [Implementation plan](docs/IMPLEMENTATION_PLAN.md) | Phases 1–6 status and next steps |
-| [P6 exchange](docs/P6_EXCHANGE.md) · [Sheets prototype](docs/SHEETS_PROTOTYPE.md) | Interop and its limits |
-
-## Repository layout
-
+src/
+  ConstructDpr.Shared/   entities, CPM, Gantt layout, progress maths, permissions, the API contract (no dependencies)
+  ConstructDpr.Core/     EF Core (PostgreSQL schema "cdpr" / SQLite), workflow services, LocalApi = all rules in one place
+  ConstructDpr.Reports/  QuestPDF and ClosedXML documents
+  ConstructDpr.Server/   ASP.NET Core: sign-in, REST, SignalR hub, serves the web app
+  ConstructDpr.Client/   AuthSession, RemoteApi, LiveClient (used by web, Android and Windows apps)
+  ConstructDpr.UI/       Blazor screens shared by the web and Android apps
+  ConstructDpr.Web/      Blazor WebAssembly host (PWA)
+  ConstructDpr.Mobile/   .NET MAUI Android host
+  ConstructDpr.App/      WPF Windows app (offline or server mode)
+tests/ConstructDpr.Tests  xUnit: CPM, workflow, permissions, conflicts, PDF/Excel, server end-to-end
+tools/ConstructDpr.Preview  writes sample PDFs and workbooks
+legacy/                  the earlier TypeScript/Supabase, Electron, Capacitor and Google Workspace editions (kept for reference)
 ```
-supabase/
-  migrations/      11 SQL migrations: schema, RLS, workflow functions, demo loader
-  functions/drive/ Google Drive gateway (Deno edge function; core logic unit-tested)
-  tests/           database acceptance tests
-web/
-  src/lib/         sync engine, IndexedDB, CPM, calculations, voice parser, PDF, Drive client
-  src/pages/       Home, Projects, DPR wizard/view, Activities, Schedule, Manpower, Equipment,
-                   Materials, Safety & QA/QC, Documents, Dashboards, Approvals, Settings
-  src/components/  UI kit, evidence capture, charts, master tables
-native/desktop/    Windows app (Electron shell around web/)
-web/android/       Android app (Capacitor project)
-google-workspace/  Google Workspace edition (Apps Script source, tests, dist/Code.gs)
-desktop/           C# / WPF desktop edition (SQLite, CPM, Gantt, QuestPDF, ClosedXML)
-clients/
-  python/          Python client + CLI (standard library only)
-  java/            Java 11+ client (no dependencies)
-docs/              architecture, guides and manuals
-```
+
+Architecture: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) · Self-hosting: [docs/SELF_HOSTING.md](docs/SELF_HOSTING.md) · API: [docs/API.md](docs/API.md)
 
 ## Licence
 
-Apache-2.0. Third-party licences: [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md).
+Apache-2.0. Third-party components: [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md). QuestPDF is free under its Community licence for organisations with under USD 1 million annual revenue; larger companies need a QuestPDF commercial licence. EPPlus is not used (ClosedXML is MIT).

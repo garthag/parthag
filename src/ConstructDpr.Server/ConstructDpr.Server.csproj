@@ -13,6 +13,9 @@
     <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.Server" Version="10.0.14" />
   </ItemGroup>
   <ItemGroup>
+    <None Update="start-server.cmd" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+  <ItemGroup>
     <InternalsVisibleTo Include="ConstructDpr.Tests" />
   </ItemGroup>
 </Project>
