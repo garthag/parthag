@@ -1,7 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
 using ConstructDpr.Shared.Scheduling;
-using ConstructDpr.Reports;
 
 namespace ConstructDpr.App.Views;
 
@@ -9,10 +8,23 @@ public partial class ScheduleView : UserControl, IRefreshable
 {
     public ScheduleView() => InitializeComponent();
 
-    public void Refresh()
+    private List<ConstructDpr.Shared.Model.Activity> _acts = new();
+    private List<ConstructDpr.Shared.Model.Dependency> _deps = new();
+
+    public async Task RefreshAsync()
     {
-        var acts = AppState.Activities();
-        var model = GanttLayout.Build(acts, AppState.Dependencies(), AppState.Today, Zoom.Value, 28);
+        if (AppState.Pid == 0) { Chart.Model = null; return; }
+        var t1 = AppState.Api.ActivitiesAsync(AppState.Pid);
+        var t2 = AppState.Api.DependenciesAsync(AppState.Pid);
+        (_acts, _deps) = (await t1, await t2);
+        Draw();
+    }
+
+    private void Draw()
+    {
+        var acts = _acts;
+        if (acts.Count == 0) { Chart.Model = null; Summary.Text = "No activities yet."; return; }
+        var model = GanttLayout.Build(acts, _deps, AppState.Today, Zoom.Value, 28);
         Chart.Model = model;
         var finish = acts.Max(a => a.EarlyFinish);
         Summary.Text = $"{acts.Count} activities · {acts.Count(a => a.Critical)} critical · forecast finish {finish:dd MMM yyyy} · " +
@@ -24,25 +36,19 @@ public partial class ScheduleView : UserControl, IRefreshable
 
     private void OnZoom(object sender, RoutedPropertyChangedEventArgs<double> e)
     {
-        if (IsLoaded) Refresh();
+        if (IsLoaded) Draw();
     }
 
-    private void OnRun(object sender, RoutedEventArgs e)
+    private async void OnRun(object sender, RoutedEventArgs e)
     {
-        try
-        {
-            AppState.Schedule.Run(AppState.Project.Id, AppState.Today);
-            AppState.NotifyChanged();
-            Refresh();
-        }
-        catch (ScheduleException ex) { Dialogs.Error(ex.Message); }
+        ConstructDpr.Shared.Api.ScheduleSummary? r = null;
+        if (await Dialogs.RunAsync(async () => r = await AppState.Api.RunScheduleAsync(AppState.Pid)))
+            await Dialogs.RunAsync(RefreshAsync);
     }
 
-    private void OnPdf(object sender, RoutedEventArgs e) =>
-        Dialogs.SaveAndOpen(SchedulePdfReport.Generate(AppState.Project, AppState.Activities(), AppState.Dependencies(), AppState.Today),
-            $"{AppState.Project.Code}-schedule-{AppState.Today:yyyyMMdd}.pdf", "PDF (*.pdf)|*.pdf");
+    private async void OnPdf(object sender, RoutedEventArgs e) =>
+        await Dialogs.RunAsync(async () => Dialogs.SaveAndOpen(await AppState.Api.ReportAsync(AppState.Pid, ConstructDpr.Shared.Api.ReportKind.SchedulePdf)));
 
-    private void OnExcel(object sender, RoutedEventArgs e) =>
-        Dialogs.SaveAndOpen(ExcelService.ExportSchedule(AppState.Project, AppState.Activities()),
-            $"{AppState.Project.Code}-schedule-{AppState.Today:yyyyMMdd}.xlsx", "Excel workbook (*.xlsx)|*.xlsx");
+    private async void OnExcel(object sender, RoutedEventArgs e) =>
+        await Dialogs.RunAsync(async () => Dialogs.SaveAndOpen(await AppState.Api.ReportAsync(AppState.Pid, ConstructDpr.Shared.Api.ReportKind.ScheduleExcel)));
 }

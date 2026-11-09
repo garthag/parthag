@@ -3,7 +3,6 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using ConstructDpr.Shared.Model;
-using ConstructDpr.Core.Services;
 
 namespace ConstructDpr.App.Views;
 
@@ -13,10 +12,14 @@ public partial class DashboardView : UserControl, IRefreshable
 {
     public DashboardView() => InitializeComponent();
 
-    public void Refresh()
+    public async Task RefreshAsync()
     {
-        var p = AppState.Project;
-        var s = new DashboardService(AppState.Db).Build(p.Id, AppState.Today);
+        if (AppState.Pid == 0) { Kpis.Children.Clear(); Attention.ItemsSource = null; Bars.ItemsSource = null; Curve.Points = null; return; }
+        var api = AppState.Api;
+        var t1 = api.DashboardAsync(AppState.Pid);
+        var t2 = api.ProjectAsync(AppState.Pid);
+        var t3 = api.ActivitiesAsync(AppState.Pid);
+        var (s, p, all) = (await t1, await t2, await t3);
         var inr = CultureInfo.GetCultureInfo("en-IN");
         var variance = s.ActualPct - s.PlannedPct;
         var good = (Brush)FindResource("Good"); var warn = (Brush)FindResource("Warn"); var bad = (Brush)FindResource("Bad"); var brand = (Brush)FindResource("BrandMid");
@@ -34,7 +37,7 @@ public partial class DashboardView : UserControl, IRefreshable
         Kpis.Children.Add(Kpi("Contract completion", p.CompletionDate?.ToString("dd MMM yyyy") ?? "—", $"Start {p.StartDate:dd MMM yyyy}", brand));
         Curve.Points = s.SCurve;
 
-        var acts = AppState.Activities().Where(a => a.Status != ActivityStatus.Cancelled).ToList();
+        var acts = all.Where(a => a.Status != ActivityStatus.Cancelled).ToList();
         Attention.ItemsSource = acts
             .Where(a => a.Status != ActivityStatus.Completed && (a.Critical || (a.BaselineFinish ?? a.PlannedFinish) < AppState.Today))
             .OrderBy(a => a.TotalFloat ?? 0).Take(7)

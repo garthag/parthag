@@ -2,18 +2,20 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Threading;
+using ConstructDpr.Shared.Api;
+using ConstructDpr.Shared.Calculations;
 using ConstructDpr.Shared.Model;
-using ConstructDpr.Core.Services;
-using ConstructDpr.Reports;
+using ConstructDpr.Shared.Security;
 
 namespace ConstructDpr.App.Views;
 
 public sealed record DprItem(int Id, string Title, string Sub, string Status, Brush Brush);
 
+/// <summary>Daily reports: list, editor and the submit → approve/reject → revise workflow (rules enforced by the API).</summary>
 public partial class DprView : UserControl, IRefreshable
 {
     private Dpr? _dpr;
-    private bool _loading;
+    private bool _loading, _dirty;
 
     public DprView()
     {
@@ -22,6 +24,16 @@ public partial class DprView : UserControl, IRefreshable
         NewShift.SelectedItem = Shift.Day;
         NewDate.SelectedDate = DateTime.Today;
         NewDate.DisplayDateEnd = DateTime.Today;
+        foreach (var box in FindTextBoxes(Narrative)) box.TextChanged += (_, _) => { if (!_loading) _dirty = true; };
+    }
+
+    private static IEnumerable<TextBox> FindTextBoxes(DependencyObject root)
+    {
+        foreach (var c in LogicalTreeHelper.GetChildren(root).OfType<DependencyObject>())
+        {
+            if (c is TextBox t) yield return t;
+            foreach (var x in FindTextBoxes(c)) yield return x;
+        }
     }
 
     public static Brush StatusBrush(DprStatus s) => new SolidColorBrush(s switch
@@ -32,53 +44,94 @@ public partial class DprView : UserControl, IRefreshable
         _ => Color.FromRgb(0x6B, 0x77, 0x82),
     });
 
-    public void Refresh() => LoadList(_dpr?.Id);
-
-    /// <summary>Opens a report by id (used by the screenshot mode and after creating a report).</summary>
-    public void Open(int id) => LoadList(id);
-
-    private void LoadList(int? select)
+    public async Task RefreshAsync()
     {
-        _loading = true;
-        var items = AppState.Dprs.List(AppState.Project.Id).Select(d => new DprItem(d.Id,
+        if (_dirty) { await LoadListAsync(_dpr?.Id, keepEditor: true); return; } // unsaved edits stay; the list still updates
+        await LoadListAsync(_dpr?.Id);
+    }
+
+    /// <summary>Opens a report by id (screenshot mode, and after creating a report).</summary>
+    public Task OpenAsync(int id) => LoadListAsync(id);
+
+    private async Task LoadListAsync(int? select, bool keepEditor = false)
+    {
+        if (AppState.Pid == 0) { List.ItemsSource = null; Show(null); return; }
+        var items = (await AppState.Api.DprsAsync(AppState.Pid)).Select(d => new DprItem(d.Id,
             d.Number + (d.Revision > 0 ? $"  R{d.Revision}" : ""),
             $"{d.ReportDate:ddd dd MMM yyyy} · {d.Shift} · {d.PreparedBy}", d.Status.ToString().ToUpperInvariant(), StatusBrush(d.Status))).ToList();
+        _loading = true;
         List.ItemsSource = items;
-        _loading = false;
         var target = items.FirstOrDefault(i => i.Id == select) ?? items.FirstOrDefault();
         List.SelectedItem = target;
+        _loading = false;
+        if (keepEditor) return;
         if (target is null) Show(null);
+        else Show(await AppState.Api.DprAsync(AppState.Pid, target.Id));
     }
 
-    private void OnPick(object sender, SelectionChangedEventArgs e)
+    private async void OnPick(object sender, SelectionChangedEventArgs e)
     {
-        if (_loading || List.SelectedItem is not DprItem item) return;
-        if (_dpr is { IsEditable: true } previous && previous.Id != item.Id) AppState.Dprs.Save(previous); // drafts autosave
-        Show(AppState.Dprs.Load(item.Id));
+        if (_loading || List.SelectedItem is not DprItem item || item.Id == _dpr?.Id) return;
+        if (_dpr is { IsEditable: true } && _dirty && Dialogs.Confirm($"Save your changes to {_dpr.Number} first?"))
+            if (!await SaveAsync()) return;
+        _dirty = false;
+        await Dialogs.RunAsync(async () => Show(await AppState.Api.DprAsync(AppState.Pid, item.Id)));
     }
 
-    private void Show(Dpr? d)
+    private bool CanEdit(Dpr d) => d.IsEditable && (AppState.Can(Module.Dpr, Act.Edit) ||
+        (AppState.Can(Module.Dpr, Act.Create) && string.Equals(d.PreparedBy, AppState.IsServer ? AppState.Me.Email : AppState.Me.DisplayName, StringComparison.OrdinalIgnoreCase)));
+
+    private async void Show(Dpr? d)
     {
+        _loading = true;
         _dpr = d;
+        _dirty = false;
         Editor.IsEnabled = d is not null;
-        if (d is null) { Title.Text = "No reports yet"; Meta.Text = "Create the first daily report on the left."; return; }
-        AppState.Dprs.Recalculate(d, d.Status is DprStatus.Submitted or DprStatus.Approved);
-
+        if (d is null)
+        {
+            Title.Text = "No reports yet";
+            Meta.Text = "Create the first daily report on the left.";
+            Notice.Visibility = Visibility.Collapsed;
+            Lines.ItemsSource = Crew.ItemsSource = Equipment.ItemsSource = Materials.ItemsSource = null;
+            _loading = false;
+            return;
+        }
         Title.Text = $"{d.Number}{(d.Revision > 0 ? $" · Revision {d.Revision}" : "")}";
         Meta.Text = $"{d.ReportDate:dddd, dd MMM yyyy} · {d.Shift} shift · prepared by {d.PreparedBy}" +
                     (d.ApprovedBy is null ? "" : $" · approved by {d.ApprovedBy} on {d.ApprovedAt?.ToLocalTime():dd MMM yyyy HH:mm}");
         Badge.Background = StatusBrush(d.Status);
         BadgeText.Text = d.Status.ToString().ToUpperInvariant();
 
+        var editable = CanEdit(d);
+        var reviewing = d.Status == DprStatus.Submitted && AppState.Can(Module.Dpr, Act.Approve);
+        SaveBtn.IsEnabled = editable;
+        SubmitBtn.IsEnabled = editable && AppState.Can(Module.Dpr, Act.Submit);
+        ApproveBtn.IsEnabled = reviewing;
+        RejectBtn.IsEnabled = d.Status == DprStatus.Submitted && AppState.Can(Module.Dpr, Act.Reject);
+        ReviseBtn.IsEnabled = d.Status == DprStatus.Approved && AppState.Can(Module.Dpr, Act.Create | Act.Edit);
+        AddLineBar.IsEnabled = AddCrewBtn.IsEnabled = AddEqBtn.IsEnabled = AddMatBtn.IsEnabled = editable;
+        Lines.IsReadOnly = !(editable || reviewing);
+        TodayCol.IsReadOnly = DelayCol.IsReadOnly = !editable;
+        AcceptedCol.IsReadOnly = !reviewing;
+        Crew.IsReadOnly = Equipment.IsReadOnly = Materials.IsReadOnly = !editable;
+        Narrative.IsEnabled = editable;
+
+        ActivityPick.ItemsSource = (await AppState.Api.ActivitiesAsync(AppState.Pid))
+            .Where(a => a.Status is not (ActivityStatus.Completed or ActivityStatus.Cancelled))
+            .Select(a => new ActivityChoice(a.Id, $"{a.Code}  {a.Name}  ({a.Unit})")).ToList();
+        Narrative.DataContext = d;
+        Bind();
+
         var (notice, tone) = d.Status switch
         {
-            DprStatus.Approved when AppState.Dprs.VerifyIntegrity(d) => ($"✔ Approved and locked. Snapshot SHA-256 {d.SnapshotHash?[..16]}… verified. Corrections are made as a new revision.", "Good"),
-            DprStatus.Approved => ("⚠ The stored content no longer matches its approval snapshot (SHA-256). The database file may have been altered outside the app.", "Bad"),
+            DprStatus.Approved when await AppState.Api.VerifyDprAsync(AppState.Pid, d.Id) => ($"✔ Approved and locked. Snapshot SHA-256 {d.SnapshotHash?[..16]}… verified. Corrections are made as a new revision.", "Good"),
+            DprStatus.Approved => ("⚠ The stored content no longer matches its approval snapshot (SHA-256). The database may have been altered outside the app.", "Bad"),
             DprStatus.Rejected => ("Rejected: " + d.ReviewComment + "  — correct and submit again.", "Bad"),
             DprStatus.Submitted => ("Waiting for review. The reviewer can adjust the Accepted quantity before approving; the reported quantity is kept.", "Warn"),
             _ when d.ReviewComment is not null => (d.ReviewComment, "Muted"),
             _ => ("", ""),
         };
+        if (_dpr != d) { _loading = false; return; } // another report was opened meanwhile
         Notice.Visibility = notice.Length == 0 ? Visibility.Collapsed : Visibility.Visible;
         NoticeText.Text = notice;
         if (tone.Length > 0)
@@ -87,23 +140,7 @@ public partial class DprView : UserControl, IRefreshable
             Notice.Background = new SolidColorBrush(Color.FromArgb(0x1C, c.R, c.G, c.B));
             NoticeText.Foreground = new SolidColorBrush(c);
         }
-
-        var editable = d.IsEditable;
-        var reviewing = d.Status == DprStatus.Submitted;
-        SaveBtn.IsEnabled = SubmitBtn.IsEnabled = editable;
-        ApproveBtn.IsEnabled = RejectBtn.IsEnabled = reviewing;
-        ReviseBtn.IsEnabled = d.Status == DprStatus.Approved;
-        AddLineBar.IsEnabled = AddCrewBtn.IsEnabled = AddEqBtn.IsEnabled = AddMatBtn.IsEnabled = editable;
-        Lines.IsReadOnly = !(editable || reviewing);
-        TodayCol.IsReadOnly = DelayCol.IsReadOnly = !editable;
-        AcceptedCol.IsReadOnly = !reviewing;
-        Crew.IsReadOnly = Equipment.IsReadOnly = Materials.IsReadOnly = !editable;
-        Narrative.IsEnabled = editable;
-
-        ActivityPick.ItemsSource = AppState.Activities().Where(a => a.Status != ActivityStatus.Completed && a.Status != ActivityStatus.Cancelled)
-            .Select(a => new ActivityChoice(a.Id, $"{a.Code}  {a.Name}  ({a.Unit})")).ToList();
-        Narrative.DataContext = d;
-        Bind();
+        _loading = false;
     }
 
     private void Bind()
@@ -116,14 +153,23 @@ public partial class DprView : UserControl, IRefreshable
         CrewTotal.Text = $"Total {_dpr.Manpower.Sum(m => m.Headcount)} workers · {_dpr.Manpower.Sum(m => m.ManHours):0} man-hours";
     }
 
+    /// <summary>Recomputes cumulative / balance / % on this PC while typing; the API repeats it on save.</summary>
+    private void Recalc()
+    {
+        if (_dpr is null) return;
+        foreach (var l in _dpr.Activities.Where(l => l.Activity is not null))
+            Progress.ApplyLine(l, l.Activity!, l.PrevCum, _dpr.ReportDate, _dpr.Status == DprStatus.Submitted);
+    }
+
     private void OnCellEdited(object? sender, DataGridCellEditEndingEventArgs e)
     {
         if (e.EditAction != DataGridEditAction.Commit || sender is not DataGrid grid) return;
+        _dirty = true;
         Dispatcher.BeginInvoke(() =>
         {
             if (_dpr is null) return;
             grid.CommitEdit(DataGridEditingUnit.Row, true);
-            AppState.Dprs.Recalculate(_dpr, _dpr.Status == DprStatus.Submitted);
+            Recalc();
             Bind();
         }, DispatcherPriority.Background);
     }
@@ -133,88 +179,74 @@ public partial class DprView : UserControl, IRefreshable
         foreach (var g in new[] { Lines, Crew, Equipment, Materials }) g.CommitEdit(DataGridEditingUnit.Row, true);
     }
 
-    private void OnNew(object sender, RoutedEventArgs e)
+    private async void OnNew(object sender, RoutedEventArgs e)
     {
         var date = DateOnly.FromDateTime(NewDate.SelectedDate ?? DateTime.Today);
-        var svc = AppState.Dprs;
-        var d = svc.Create(AppState.Project.Id, date, (Shift)NewShift.SelectedItem);
-        // Start from the previous report's crews and equipment: on site these change little from day to day.
-        var last = svc.List(AppState.Project.Id).Where(x => x.Id != d.Id && x.ReportDate <= date).OrderByDescending(x => x.ReportDate).ThenByDescending(x => x.Revision).FirstOrDefault();
-        if (last is not null)
-        {
-            var prev = svc.Load(last.Id);
-            d.Manpower.AddRange(prev.Manpower.Select(m => new ManpowerLine { Agency = m.Agency, Trade = m.Trade, Skilled = m.Skilled, SemiSkilled = m.SemiSkilled, Unskilled = m.Unskilled, Supervisors = m.Supervisors, Hours = m.Hours }));
-            d.Equipment.AddRange(prev.Equipment.Select(q => new EquipmentLine { Code = q.Code, Type = q.Type }));
-            d.Materials.AddRange(prev.Materials.Select(m => new MaterialLine { Code = m.Code, Description = m.Description, Unit = m.Unit, Opening = m.Closing }));
-            svc.Save(d);
-        }
-        AppState.NotifyChanged();
-        LoadList(d.Id);
+        Dpr? d = null;
+        if (await Dialogs.RunAsync(async () => d = await AppState.Api.CreateDprAsync(AppState.Pid, date, (Shift)NewShift.SelectedItem)))
+            await LoadListAsync(d!.Id);
     }
 
-    private void OnAddLine(object sender, RoutedEventArgs e)
+    private async void OnAddLine(object sender, RoutedEventArgs e)
     {
         if (_dpr is null || ActivityPick.SelectedValue is not int id) return;
         if (_dpr.Activities.Any(l => l.ActivityId == id)) { Dialogs.Error("That activity is already in this report."); return; }
-        _dpr.Activities.Add(new DprActivityLine { ActivityId = id, Activity = AppState.Db.Activities.Find(id) });
-        AppState.Dprs.Recalculate(_dpr, false);
+        _dpr.Activities.Add(new DprActivityLine { ActivityId = id });
+        _dirty = true;
+        await Dialogs.RunAsync(async () =>
+        {
+            var calc = await AppState.Api.RecalculateDprAsync(AppState.Pid, _dpr); // brings the activity and its previous quantity
+            foreach (var l in _dpr.Activities)
+                if (calc.Activities.FirstOrDefault(c => c.ActivityId == l.ActivityId) is { } c) (l.Activity, l.PrevCum) = (c.Activity, c.PrevCum);
+        });
+        Recalc();
         Bind();
         Tabs.SelectedIndex = 0;
     }
 
-    private void OnAddCrew(object sender, RoutedEventArgs e) { _dpr?.Manpower.Add(new ManpowerLine { Agency = "Agency", Trade = "Trade" }); Bind(); }
-    private void OnAddEquipment(object sender, RoutedEventArgs e) { _dpr?.Equipment.Add(new EquipmentLine { Code = "EQ-", Type = "Type" }); Bind(); }
-    private void OnAddMaterial(object sender, RoutedEventArgs e) { _dpr?.Materials.Add(new MaterialLine { Code = "MAT-", Description = "Description", Unit = "nos" }); Bind(); }
+    private void OnAddCrew(object sender, RoutedEventArgs e) { _dpr?.Manpower.Add(new ManpowerLine { Agency = "Agency", Trade = "Trade" }); _dirty = true; Bind(); }
+    private void OnAddEquipment(object sender, RoutedEventArgs e) { _dpr?.Equipment.Add(new EquipmentLine { Code = "EQ-", Type = "Type" }); _dirty = true; Bind(); }
+    private void OnAddMaterial(object sender, RoutedEventArgs e) { _dpr?.Materials.Add(new MaterialLine { Code = "MAT-", Description = "Description", Unit = "nos" }); _dirty = true; Bind(); }
 
-    private void Act(Action<DprService, Dpr> action, string? done = null)
+    private async Task<bool> RunWorkflow(Func<IConstructDprApi, Dpr, Task<Dpr>> action, string? done = null)
     {
-        if (_dpr is null) return;
+        if (_dpr is null) return false;
         Commit();
-        try
-        {
-            action(AppState.Dprs, _dpr);
-            AppState.NotifyChanged();
-            LoadList(_dpr.Id);
-            if (done is not null) Dialogs.Info(done);
-        }
-        catch (WorkflowException ex) { Dialogs.Error(ex.Message); }
+        var current = _dpr;
+        Dpr? result = null;
+        if (!await Dialogs.RunAsync(async () => result = await action(AppState.Api, current))) return false;
+        _dirty = false;
+        await LoadListAsync(result!.Id);
+        if (done is not null) Dialogs.Info(done);
+        return true;
     }
 
-    private void OnSave(object sender, RoutedEventArgs e) => Act((s, d) => s.Save(d), "Draft saved.");
-    private void OnSubmit(object sender, RoutedEventArgs e) => Act((s, d) => { s.Save(d); s.Submit(d); }, "Submitted for review.");
-    private void OnApprove(object sender, RoutedEventArgs e) => Act((s, d) => s.Approve(d), "Approved. The report is now locked and the activity progress is updated.");
+    private Task<bool> SaveAsync() => RunWorkflow((api, d) => api.SaveDprAsync(AppState.Pid, d));
+    private async void OnSave(object sender, RoutedEventArgs e) => await RunWorkflow((api, d) => api.SaveDprAsync(AppState.Pid, d), "Draft saved.");
+    private async void OnSubmit(object sender, RoutedEventArgs e) => await RunWorkflow((api, d) => api.SubmitDprAsync(AppState.Pid, d), "Submitted for review.");
+    private async void OnApprove(object sender, RoutedEventArgs e) => await RunWorkflow((api, d) => api.ApproveDprAsync(AppState.Pid, d.Id,
+        d.Activities.Where(l => l.QtyAccepted is not null).ToDictionary(l => l.ActivityId, l => l.QtyAccepted!.Value)), "Approved. The report is locked and progress is updated.");
 
-    private void OnReject(object sender, RoutedEventArgs e)
+    private async void OnReject(object sender, RoutedEventArgs e)
     {
         var reason = Dialogs.Prompt("Reject report", "Reason for rejection (the preparer sees this):");
-        if (reason is not null) Act((s, d) => s.Reject(d, reason));
+        if (reason is not null) await RunWorkflow((api, d) => api.RejectDprAsync(AppState.Pid, d.Id, reason));
     }
 
-    private void OnRevise(object sender, RoutedEventArgs e)
+    private async void OnRevise(object sender, RoutedEventArgs e)
     {
         if (_dpr is null) return;
         var reason = Dialogs.Prompt("Start revision", $"{_dpr.Number} is approved and locked. A new draft revision will be created; the approved revision stays unchanged.\n\nReason for the revision:");
-        if (reason is null) return;
-        try
-        {
-            var rev = AppState.Dprs.StartRevision(_dpr, reason);
-            AppState.NotifyChanged();
-            LoadList(rev.Id);
-        }
-        catch (WorkflowException ex) { Dialogs.Error(ex.Message); }
+        if (reason is not null) await RunWorkflow((api, d) => api.ReviseDprAsync(AppState.Pid, d.Id, reason));
     }
 
-    private void OnPdf(object sender, RoutedEventArgs e)
-    {
-        if (_dpr is null) return;
-        Commit();
-        Dialogs.SaveAndOpen(DprPdfReport.Generate(_dpr, AppState.Project), $"{_dpr.Number}-R{_dpr.Revision}.pdf", "PDF (*.pdf)|*.pdf");
-    }
+    private async void OnPdf(object sender, RoutedEventArgs e) => await Download(ReportKind.DprPdf);
+    private async void OnExcel(object sender, RoutedEventArgs e) => await Download(ReportKind.DprExcel);
 
-    private void OnExcel(object sender, RoutedEventArgs e)
+    private async Task Download(ReportKind kind)
     {
         if (_dpr is null) return;
-        Commit();
-        Dialogs.SaveAndOpen(ExcelService.ExportDpr(_dpr, AppState.Project), $"{_dpr.Number}-R{_dpr.Revision}.xlsx", "Excel workbook (*.xlsx)|*.xlsx");
+        if (_dirty) { Dialogs.Error("Save the report first, so the file shows your latest changes."); return; }
+        await Dialogs.RunAsync(async () => Dialogs.SaveAndOpen(await AppState.Api.ReportAsync(AppState.Pid, kind, _dpr.Id)));
     }
 }

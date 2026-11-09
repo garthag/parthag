@@ -18,7 +18,7 @@
       <StackPanel DockPanel.Dock="Bottom" Margin="22,12,22,18">
         <TextBlock Text="Signed in as" Foreground="#8EA6BA" FontSize="11"/>
         <TextBlock x:Name="UserText" Foreground="White" FontSize="13" TextTrimming="CharacterEllipsis"/>
-        <TextBlock Text="Offline · data on this PC (SQLite)" Foreground="#8EA6BA" FontSize="11" Margin="0,8,0,0" TextWrapping="Wrap"/>
+        <TextBlock x:Name="ModeText" Foreground="#8EA6BA" FontSize="11" Margin="0,8,0,0" TextWrapping="Wrap"/>
       </StackPanel>
       <StackPanel x:Name="Nav">
         <RadioButton Style="{StaticResource Nav}" Tag="dashboard" Checked="OnNav" IsChecked="True" Content="▦   Dashboard"/>
@@ -35,10 +35,13 @@
       <Border DockPanel.Dock="Top" Background="White" BorderBrush="{StaticResource Line}" BorderThickness="0,0,0,1" Padding="24,12">
         <DockPanel>
           <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+            <Ellipse x:Name="LiveDot" Width="9" Height="9" Fill="{StaticResource Muted}" VerticalAlignment="Center" Margin="0,0,6,0"/>
+            <TextBlock x:Name="LiveText" Foreground="{StaticResource Muted}" VerticalAlignment="Center" FontSize="13" Margin="0,0,18,0"/>
             <TextBlock x:Name="DateText" Foreground="{StaticResource Muted}" VerticalAlignment="Center" FontSize="13"/>
           </StackPanel>
           <StackPanel>
-            <TextBlock x:Name="ProjectText" FontSize="16" FontWeight="SemiBold" Foreground="{StaticResource BrandDark}"/>
+            <ComboBox x:Name="ProjectPicker" FontSize="15" FontWeight="SemiBold" BorderThickness="0" Background="Transparent" HorizontalAlignment="Left"
+                      MinWidth="380" DisplayMemberPath="Title" SelectedValuePath="Id" SelectionChanged="OnProjectPicked"/>
             <TextBlock x:Name="ProjectSub" FontSize="12" Foreground="{StaticResource Muted}"/>
           </StackPanel>
         </DockPanel>

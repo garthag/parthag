@@ -1,7 +1,7 @@
 using System.Globalization;
 using System.Windows;
 using System.Windows.Media;
-using ConstructDpr.Core.Services;
+using ConstructDpr.Shared.Api;
 
 namespace ConstructDpr.App.Controls;
 

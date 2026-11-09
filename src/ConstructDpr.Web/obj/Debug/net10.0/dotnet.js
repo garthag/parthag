@@ -5,7 +5,7 @@ var e=!1;const t=async()=>WebAssembly.validate(new Uint8Array([0,97,115,109,1,0,
   "mainAssemblyName": "ConstructDpr.Web",
   "applicationEnvironment": "Development",
   "resources": {
-    "hash": "sha256-2b1oRg10FMr06/V/Gve/xOzP2Oca6zkzS3ztqFdIwsI=",
+    "hash": "sha256-IaY4IA8hec2YvIz/tmN4xJzBMmjsj4NWFfDNSO0lYOw=",
     "jsModuleNative": [
       {
         "name": "dotnet.native.bjoj0wmylw.js"
@@ -1278,52 +1278,52 @@ var e=!1;const t=async()=>WebAssembly.validate(new Uint8Array([0,97,115,109,1,0,
       },
       {
         "virtualPath": "ConstructDpr.Client.wasm",
-        "name": "ConstructDpr.Client.3ysgep1229.wasm",
-        "hash": "sha256-i1h+pcW6GkxTUokLrJJ+4jBEYEaDikq70iBHWpUIMzs=",
+        "name": "ConstructDpr.Client.09pm8u9hvl.wasm",
+        "hash": "sha256-VDnpGiV2Sd41nEfYRYiFwJ6lv8p0xGBkbsSnR2o+RWE=",
         "cache": "force-cache"
       },
       {
         "virtualPath": "ConstructDpr.Shared.wasm",
-        "name": "ConstructDpr.Shared.8gk0uqhvtg.wasm",
-        "hash": "sha256-iL0M3AUSy4l4eIXIljZSaLIAJgQ9VD+bGZtCTq+VelU=",
+        "name": "ConstructDpr.Shared.aysu3qgz33.wasm",
+        "hash": "sha256-7sY14u+moK2PFuDdyWYYw2p8BLijwZwiiC3Y6yVfnDE=",
         "cache": "force-cache"
       },
       {
         "virtualPath": "ConstructDpr.UI.wasm",
-        "name": "ConstructDpr.UI.ewlzxzh29m.wasm",
-        "hash": "sha256-YukmMTDiPR7dpR9tiny7C+gd8VioE6CEXLzN5hYf6to=",
+        "name": "ConstructDpr.UI.xcm2x9ywz7.wasm",
+        "hash": "sha256-sYK2vGq8ueFEb2A9ZshQU/5lblzAeNOkGncrQLPxfMg=",
         "cache": "force-cache"
       },
       {
         "virtualPath": "ConstructDpr.Web.wasm",
-        "name": "ConstructDpr.Web.3bdnqm068o.wasm",
-        "hash": "sha256-4Wr9CtZRR/y+4ApEV3Hj3MZiFS+dS0j3OfiHwuU81JM=",
+        "name": "ConstructDpr.Web.gcvv3w31vp.wasm",
+        "hash": "sha256-cIMGJFR7zUlQKIJx69jV7rtmV4bLtc0zvuHK8E7cnNQ=",
         "cache": "force-cache"
       }
     ],
     "pdb": [
       {
         "virtualPath": "ConstructDpr.UI.pdb",
-        "name": "ConstructDpr.UI.gvw85rxsha.pdb",
-        "hash": "sha256-bNneXClaC51QiUTfeAwmfUJyfX0SmxaFIulBCXXTTsk=",
+        "name": "ConstructDpr.UI.vr7wj69gxi.pdb",
+        "hash": "sha256-pbUNItrD+ALPPcPVaPR/Dtj7U+ElaXr1emaYhJ/KTcs=",
         "cache": "force-cache"
       },
       {
         "virtualPath": "ConstructDpr.Client.pdb",
-        "name": "ConstructDpr.Client.3wq8ar0f2k.pdb",
-        "hash": "sha256-I5B91uhGL/oCjmdlW1no6TBsm0v3A7ZZKp7nZ1pjaxU=",
+        "name": "ConstructDpr.Client.am93qtv4gu.pdb",
+        "hash": "sha256-cjEVR/+wEKRl70eRcsrhHqIEGDivWF18FgNPck8uoHU=",
         "cache": "force-cache"
       },
       {
         "virtualPath": "ConstructDpr.Shared.pdb",
-        "name": "ConstructDpr.Shared.5q1ju28l60.pdb",
-        "hash": "sha256-g4qi8Ll6Cryh3GzD35Zfbi00EcN4p5NAox6wXa099QA=",
+        "name": "ConstructDpr.Shared.lvhuq91vyq.pdb",
+        "hash": "sha256-/1utG+niIpTjBdF5zlbp9aRrZYpYEygbL5KVLKh+exE=",
         "cache": "force-cache"
       },
       {
         "virtualPath": "ConstructDpr.Web.pdb",
-        "name": "ConstructDpr.Web.b9moio0jbn.pdb",
-        "hash": "sha256-r/iTiwIzCHoWmynYeAE5mQ9mwhwiL97OZzESbk52uOQ=",
+        "name": "ConstructDpr.Web.yc75dkcav0.pdb",
+        "hash": "sha256-gvF3qinZAnBJ4MvfmH1jXUIxGAe16rchHP1bfCjFpWQ=",
         "cache": "force-cache"
       }
     ],

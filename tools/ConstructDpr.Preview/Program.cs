@@ -8,7 +8,7 @@ var outDir = Path.GetFullPath(args.Length > 0 ? args[0] : "preview");
 Directory.CreateDirectory(outDir);
 var dbPath = Path.Combine(Path.GetTempPath(), $"cdpr-preview-{Guid.NewGuid():N}.db");
 var today = DateOnly.FromDateTime(DateTime.Today);
-using (var db = AppDbContext.Open(dbPath))
+using (var db = AppDbContext.OpenSqlite(dbPath))
 {
     var p = DemoData.Create(db, today);
     var svc = new DprService(db, "planning.engineer");

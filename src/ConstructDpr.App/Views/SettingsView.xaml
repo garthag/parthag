@@ -6,6 +6,21 @@
       <TextBlock Text="Settings" Style="{StaticResource H1}" Margin="0,0,0,14"/>
       <Border Style="{StaticResource CardBorder}" Margin="0,0,0,12">
         <StackPanel>
+          <TextBlock Text="Where your data lives" Style="{StaticResource H2}"/>
+          <RadioButton x:Name="LocalMode" GroupName="Mode" Margin="0,0,0,6" Checked="OnMode"
+                       Content="This PC only — offline, no account, one SQLite file on this computer"/>
+          <RadioButton x:Name="ServerMode" GroupName="Mode" Margin="0,0,0,10" Checked="OnMode"
+                       Content="CONSTRUCT DPR server — sign in, live sync with the web and Android apps"/>
+          <TextBlock x:Name="ConnectionText" TextWrapping="Wrap" FontSize="12" Foreground="{StaticResource Muted}" Margin="0,0,0,8"/>
+          <WrapPanel>
+            <Button x:Name="SignInBtn" Content="Sign in…" Style="{StaticResource Primary}" Click="OnSignIn" Margin="0,0,8,6"/>
+            <Button x:Name="SignOutBtn" Content="Sign out" Style="{StaticResource Danger}" Click="OnSignOut" Margin="0,0,8,6"/>
+            <Button x:Name="DemoBtn" Content="Load demo project" Click="OnDemo" Margin="0,0,8,6"/>
+          </WrapPanel>
+        </StackPanel>
+      </Border>
+      <Border Style="{StaticResource CardBorder}" Margin="0,0,0,12">
+        <StackPanel>
           <TextBlock Text="You" Style="{StaticResource H2}"/>
           <TextBlock Text="Your name as it appears on reports, approvals and the audit trail" Style="{StaticResource Label}"/>
           <DockPanel>
@@ -32,16 +47,16 @@
           <Button Content="Save project" Style="{StaticResource Primary}" HorizontalAlignment="Left" Click="OnSaveProject"/>
         </StackPanel>
       </Border>
-      <Border Style="{StaticResource CardBorder}">
+      <Border x:Name="DataCard" Style="{StaticResource CardBorder}">
         <StackPanel>
-          <TextBlock Text="Data" Style="{StaticResource H2}"/>
+          <TextBlock Text="Data on this PC" Style="{StaticResource H2}"/>
           <TextBlock x:Name="PathText" TextWrapping="Wrap" FontSize="12" Foreground="{StaticResource Muted}" Margin="0,0,0,10"/>
           <WrapPanel>
             <Button Content="Open data folder" Click="OnOpenFolder" Margin="0,0,8,6"/>
             <Button Content="Back up database…" Style="{StaticResource Primary}" Click="OnBackup" Margin="0,0,8,6"/>
             <Button Content="Reset to demo project…" Style="{StaticResource Danger}" Click="OnReset" Margin="0,0,8,6"/>
           </WrapPanel>
-          <TextBlock Text="CONSTRUCT DPR Desktop · C# / WPF · .NET 8 · SQLite · QuestPDF (Community licence) · ClosedXML (MIT)"
+          <TextBlock Text="CONSTRUCT DPR for Windows · C# / WPF · .NET 10 · SQLite or server (PostgreSQL) · QuestPDF · ClosedXML"
                      FontSize="11" Foreground="{StaticResource Muted}" Margin="0,10,0,0"/>
         </StackPanel>
       </Border>

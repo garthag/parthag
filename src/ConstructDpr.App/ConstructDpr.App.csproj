@@ -1,4 +1,5 @@
 <Project Sdk="Microsoft.NET.Sdk">
+  <!-- The Windows app (WPF). Works offline on this PC (SQLite) or signed in to the server with live sync. -->
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <TargetFramework>net10.0-windows</TargetFramework>
@@ -11,7 +12,10 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\ConstructDpr.Core\ConstructDpr.Core.csproj" />
-    <ProjectReference Include="..\ConstructDpr.Reports\ConstructDpr.Reports.csproj" />
+    <ProjectReference Include="..\ConstructDpr.Client\ConstructDpr.Client.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="10.0.14" />
   </ItemGroup>
   <ItemGroup>
     <Resource Include="Assets\app.ico" />

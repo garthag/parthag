@@ -14,46 +14,37 @@ namespace ConstructDpr.App;
 /// </summary>
 public static class Screenshots
 {
-    public static void Capture(MainWindow window, string folder)
+    public static async void Capture(MainWindow window, string folder)
     {
         Directory.CreateDirectory(folder);
         window.WindowState = WindowState.Normal;
-        window.Width = 1440;
-        window.Height = 900;
-        var steps = new List<(string File, Action Show)>
+        var dprs = await AppState.Api.DprsAsync(AppState.Pid);
+        var steps = new List<(string File, Func<Task> Show)>
         {
-            ("01-dashboard", () => window.Navigate("dashboard")),
-            ("02-activities", () => ((ActivitiesView)window.Navigate("activities")).Select("A2010")),
-            ("03-schedule-gantt", () => window.Navigate("schedule")),
-            ("04-dpr-review", () =>
+            ("01-dashboard", () => window.NavigateAsync("dashboard")),
+            ("02-activities", async () => ((ActivitiesView)await window.NavigateAsync("activities")).Select("A2010")),
+            ("03-schedule-gantt", () => window.NavigateAsync("schedule")),
+            ("04-dpr-review", async () =>
             {
-                var view = (DprView)window.Navigate("dpr");
-                var pending = AppState.Db.Dprs.Where(d => d.Status == DprStatus.Submitted).Select(d => d.Id).FirstOrDefault();
-                if (pending > 0) view.Open(pending);
+                var view = (DprView)await window.NavigateAsync("dpr");
+                if (dprs.FirstOrDefault(d => d.Status == DprStatus.Submitted) is { } p) await view.OpenAsync(p.Id);
             }),
-            ("05-dpr-approved", () =>
+            ("05-dpr-approved", async () =>
             {
-                var view = (DprView)window.Navigate("dpr");
-                var approved = AppState.Db.Dprs.Where(d => d.Status == DprStatus.Approved).OrderByDescending(d => d.ReportDate).Select(d => d.Id).FirstOrDefault();
-                if (approved > 0) view.Open(approved);
+                var view = (DprView)await window.NavigateAsync("dpr");
+                if (dprs.FirstOrDefault(d => d.Status == DprStatus.Approved) is { } a) await view.OpenAsync(a.Id);
             }),
-            ("06-reports-excel", () => window.Navigate("reports")),
-            ("07-settings", () => window.Navigate("settings")),
+            ("06-reports-excel", () => window.NavigateAsync("reports")),
+            ("07-settings", () => window.NavigateAsync("settings")),
         };
-        var i = 0;
-        void Next()
+        foreach (var (file, show) in steps)
         {
-            if (i >= steps.Count) { Application.Current.Shutdown(0); return; }
-            var (file, show) = steps[i++];
-            show();
-            // Let layout and rendering settle, then capture.
-            window.Dispatcher.BeginInvoke(() =>
-            {
-                Save(window, Path.Combine(folder, file + ".png"));
-                window.Dispatcher.BeginInvoke(Next, DispatcherPriority.ApplicationIdle);
-            }, DispatcherPriority.ApplicationIdle);
+            await show();
+            await Task.Delay(700); // let async loads and layout settle
+            await window.Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
+            Save(window, Path.Combine(folder, file + ".png"));
         }
-        window.Dispatcher.BeginInvoke(Next, DispatcherPriority.ApplicationIdle);
+        Application.Current.Shutdown(0);
     }
 
     private static void Save(Window window, string path)

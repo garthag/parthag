@@ -1,6 +1,9 @@
 using System.Diagnostics;
 using System.IO;
 using System.Windows;
+using ConstructDpr.Shared.Api;
+using ConstructDpr.Shared.Scheduling;
+using ConstructDpr.Shared.Security;
 using Microsoft.Win32;
 
 namespace ConstructDpr.App;
@@ -15,6 +18,37 @@ public static class Dialogs
 
     public static bool Confirm(string message) =>
         MessageBox.Show(Application.Current.MainWindow, message, "CONSTRUCT DPR", MessageBoxButton.YesNo, MessageBoxImage.Question) == MessageBoxResult.Yes;
+
+    /// <summary>Runs an action; rule violations, conflicts and connection problems become a message instead of a crash.</summary>
+    public static async Task<bool> RunAsync(Func<Task> work, string? done = null)
+    {
+        var window = Application.Current.MainWindow;
+        var old = window?.Cursor;
+        if (window is not null) window.Cursor = System.Windows.Input.Cursors.Wait;
+        try
+        {
+            await work();
+            if (done is not null) Info(done);
+            return true;
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            Error(ex.Message);
+        }
+        catch (Exception ex) when (ex is WorkflowException or ScheduleException or ConflictException or ForbiddenException or NotFoundException or HttpRequestException or ArgumentException)
+        {
+            Error(ex.Message);
+        }
+        finally
+        {
+            if (window is not null) window.Cursor = old;
+        }
+        return false;
+    }
+
+    /// <summary>Saves a report file the API produced (asks where, offers to open it).</summary>
+    public static void SaveAndOpen(FileDownload f) =>
+        SaveAndOpen(f.Content, f.FileName, f.ContentType == "application/pdf" ? "PDF (*.pdf)|*.pdf" : "Excel workbook (*.xlsx)|*.xlsx");
 
     /// <summary>Asks where to save, writes the bytes and offers to open the file.</summary>
     public static void SaveAndOpen(byte[] bytes, string fileName, string filter)

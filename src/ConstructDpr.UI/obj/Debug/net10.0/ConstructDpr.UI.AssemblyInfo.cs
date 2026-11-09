@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("CONSTRUCT DPR")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+066ced09eff39e1f7638a1106e7bfd4b497d9de0")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+e11453c3173ff291d0d3b30a3383fd1d156f20ea")]
 [assembly: System.Reflection.AssemblyProductAttribute("CONSTRUCT DPR Desktop")]
 [assembly: System.Reflection.AssemblyTitleAttribute("ConstructDpr.UI")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
