@@ -14,6 +14,9 @@ public sealed class App : Application
         }) { Title = "CONSTRUCT DPR" };
         MainThread.BeginInvokeOnMainThread(async () =>
         {
+#if SCREENSHOTS
+            if (ScreenshotMode.Options is { } shots) { await ScreenshotMode.RunAsync(window, shots); return; }
+#endif
             bool signedIn;
             try { signedIn = await AppState.StartAsync(); }
             catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException) { signedIn = AppState.Session.IsSignedIn; }

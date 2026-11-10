@@ -13,6 +13,8 @@
     <ApplicationVersion>1</ApplicationVersion>
     <SupportedOSPlatformVersion Condition="'$(TargetFramework)' == 'net10.0-android'">24.0</SupportedOSPlatformVersion>
     <AndroidPackageFormat>apk</AndroidPackageFormat>
+    <!-- -p:CdprScreenshots=true builds the test-only screenshot mode (never used for the released .apk). -->
+    <DefineConstants Condition="'$(CdprScreenshots)' == 'true'">$(DefineConstants);SCREENSHOTS</DefineConstants>
   </PropertyGroup>
   <ItemGroup>
     <MauiIcon Include="Resources\AppIcon\appicon.svg" ForegroundFile="Resources\AppIcon\appiconfg.svg" Color="#0F3D5E" />

@@ -171,3 +171,55 @@ jobs:
           NOTES
           gh release create apps-latest dist/* --target "$GITHUB_SHA" --latest \
             --title "CONSTRUCT DPR $VERSION (C# / .NET) — $(date -u '+%d %b %Y')" --notes-file notes.md
+
+  # Preview of the Android app: a test build (with the screenshot mode compiled in) runs in an Android emulator
+  # against a sync server on the build machine, and saves a picture of each screen to the download page.
+  android-screens:
+    needs: [publish]
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with: { dotnet-version: 10.0.x }
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: '21' }
+      - name: Enable KVM for the emulator
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules && sudo udevadm trigger --name-match=kvm
+      - name: Build the test APK (screenshot mode)
+        run: |
+          dotnet workload install maui-android
+          dotnet publish src/ConstructDpr.Mobile/ConstructDpr.Mobile.csproj -f net10.0-android -c Release -p:CdprScreenshots=true -p:AndroidSdkDirectory=$ANDROID_HOME -o apk
+          ls apk
+      - name: Start a sync server for the emulator
+        run: |
+          dotnet build src/ConstructDpr.Server -c Release
+          (dotnet run --project src/ConstructDpr.Server -c Release --no-build -- --urls http://0.0.0.0:5080 > server.log 2>&1 &)
+          for i in $(seq 1 60); do curl -sf http://127.0.0.1:5080/health && break; sleep 1; done
+      - name: Run the app in an Android emulator and take screenshots
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          disable-animations: true
+          script: |
+            adb install -r "$(ls apk/*-Signed.apk | head -1)"
+            adb shell am start -n org.constructdpr.dpr/org.constructdpr.dpr.MainActivity --es cdpr_auto_server http://10.0.2.2:5080 --es cdpr_auto_email phone@example.com --es cdpr_auto_password phone-pass-123
+            for i in $(seq 1 72); do adb shell ls /sdcard/Android/data/org.constructdpr.dpr/files/screens/ 2>/dev/null | grep -qE 'done.txt|error.txt' && break; sleep 5; done
+            adb pull /sdcard/Android/data/org.constructdpr.dpr/files/screens ./screens || true
+            ls -la screens || true
+            cat screens/error.txt || true
+      - name: Add the screenshots to the download page
+        run: |
+          ls screens/*.png
+          gh release upload apps-latest screens/*.png --clobber
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: { name: android-screens, path: "screens/*\nserver.log" }

@@ -16,18 +16,19 @@ public sealed class AppShell : Shell
         {
             Items =
             {
-                Tab("Home", "⌂", () => new HomePage()),
-                Tab("Reports", "✎", () => new ReportsPage(approvals: false)),
-                Tab("Approve", "✔", () => new ReportsPage(approvals: true)),
-                Tab("Schedule", "▤", () => new SchedulePage()),
-                Tab("More", "☰", () => new MorePage()),
+                Tab("Home", "home", "⌂", () => new HomePage()),
+                Tab("Reports", "reports", "✎", () => new ReportsPage(approvals: false)),
+                Tab("Approve", "approve", "✔", () => new ReportsPage(approvals: true)),
+                Tab("Schedule", "schedule", "▤", () => new SchedulePage()),
+                Tab("More", "more", "☰", () => new MorePage()),
             },
         });
     }
 
-    private static ShellContent Tab(string title, string glyph, Func<Page> page) => new()
+    private static ShellContent Tab(string title, string route, string glyph, Func<Page> page) => new()
     {
         Title = title,
+        Route = route,
         Icon = new FontImageSource { Glyph = glyph, Size = 20, Color = Services.Ui.BrandMid },
         ContentTemplate = new DataTemplate(page),
     };
