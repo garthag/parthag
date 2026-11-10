@@ -76,7 +76,7 @@ public static class PdfReports
                 case DprSection.Activities when activities.Count > 0 || !opt.HideEmptySections:
                     pdf.Section(Head("Work progress (activities)"), $"{activities.Count(a => a.TodayQty > 0)} of {activities.Count} worked today");
                     pdf.Table([
-                            new("#", 0.35f), new("Activity", 2.8f), new("Location", 1.2f), new("Agency", 1.4f), new("Unit", 0.6f),
+                            new("#", 0.55f), new("Activity", 2.8f), new("Location", 1.2f), new("Agency", 1.4f), new("Unit", 0.6f),
                             new("Plan qty", 1.1f, true), new("Today", 1, true), new("To date", 1.1f, true), new("Balance", 1.1f, true),
                             new("Progress", 1.4f, false, true), new("Remarks", 1.3f)
                         ],
@@ -91,9 +91,9 @@ public static class PdfReports
                 case DprSection.Manpower when manpower.Count > 0 || !opt.HideEmptySections:
                     pdf.Section(Head("Manpower"), $"Total {sub + dept} nos · {N(b.Manpower.Sum(m => m.ManHours))} man-hrs");
                     pdf.Table(showCost
-                            ? [new("#", 0.4f), new("Type", 1f), new("Subcontractor / Department", 2.4f), new("Trade", 1.4f), new("Activity", 2f),
+                            ? [new("#", 0.55f), new("Type", 1f), new("Subcontractor / Department", 2.4f), new("Trade", 1.4f), new("Activity", 2f),
                                new("Nos", 0.7f, true), new("Hrs", 0.6f, true), new("Man-hrs", 0.9f, true), new("Cost", 1.2f, true)]
-                            : [new("#", 0.4f), new("Type", 1f), new("Subcontractor / Department", 2.6f), new("Trade", 1.6f), new("Activity", 2.2f),
+                            : [new("#", 0.55f), new("Type", 1f), new("Subcontractor / Department", 2.6f), new("Trade", 1.6f), new("Activity", 2.2f),
                                new("Nos", 0.7f, true), new("Hrs", 0.6f, true), new("Man-hrs", 0.9f, true)],
                         manpower.Select((m, i) => new[]
                         {
@@ -116,7 +116,7 @@ public static class PdfReports
                 case DprSection.Machinery when b.Machines.Count > 0 || !opt.HideEmptySections:
                     pdf.Section(Head("Machinery & equipment"), $"{b.Machines.Sum(m => m.Count)} nos");
                     pdf.Table([
-                            new("#", 0.4f), new("Machine / equipment", 2.2f), new("Own / Hired", 0.9f), new("Activity", 1.8f), new("Nos", 0.6f, true),
+                            new("#", 0.55f), new("Machine / equipment", 2.2f), new("Own / Hired", 0.9f), new("Activity", 1.8f), new("Nos", 0.6f, true),
                             new("Working hrs", 0.9f, true), new("Idle hrs", 0.8f, true), new("Fuel (L)", 0.8f, true), new("Cost", showCost ? 1.1f : 0.01f, true)
                         ],
                         b.Machines.Select((m, i) => new[]
@@ -131,7 +131,7 @@ public static class PdfReports
                 case DprSection.Materials when b.Materials.Count > 0 || !opt.HideEmptySections:
                     pdf.Section(Head("Materials & resources used"));
                     pdf.Table([
-                            new("#", 0.4f), new("Material / resource", 2.4f), new("Type", 0.9f), new("Activity", 1.8f), new("Unit", 0.6f),
+                            new("#", 0.55f), new("Material / resource", 2.4f), new("Type", 0.9f), new("Activity", 1.8f), new("Unit", 0.6f),
                             new("Received", 0.9f, true), new("Consumed", 0.9f, true), new("Cost", showCost ? 1.1f : 0.01f, true)
                         ],
                         b.Materials.Select((m, i) => new[]
@@ -205,7 +205,7 @@ public static class PdfReports
                     if (videos.Count > 0)
                     {
                         pdf.Section("Videos");
-                        pdf.Table([new("#", 0.4f), new("File", 2.5f), new("Caption", 3), new("Recorded", 1.5f)],
+                        pdf.Table([new("#", 0.55f), new("File", 2.5f), new("Caption", 3), new("Recorded", 1.5f)],
                             videos.Select((v, i) => new[] { (i + 1).ToString(), v.FileName, v.Caption, v.CapturedAtUtc.ToLocalTime().ToString("dd-MMM HH:mm") }));
                     }
                     break;

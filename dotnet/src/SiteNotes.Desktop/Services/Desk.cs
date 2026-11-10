@@ -162,13 +162,30 @@ public static class Desk
 /// <summary>Message boxes, prompts, file dialogs and opening files.</summary>
 public static class Dialogs
 {
+    /// <summary>Automated runs (tests, screenshot tour): never block on a dialog. Messages and errors are recorded instead.</summary>
+    public static bool Headless { get; set; }
+    public static List<string> Messages { get; } = [];
+    public static List<string> Errors { get; } = [];
+
     private static Window? Owner => Application.Current.Windows.OfType<Window>().FirstOrDefault(w => w.IsActive) ?? Application.Current.MainWindow;
 
-    public static void Info(string text, string title = "SiteNotes") =>
+    public static void Info(string text, string title = "SiteNotes")
+    {
+        if (Headless) { Messages.Add($"{title}: {text}"); return; }
         MessageBox.Show(Owner!, text, title, MessageBoxButton.OK, MessageBoxImage.Information);
+    }
 
-    public static bool Confirm(string text, string title = "Please confirm") =>
-        MessageBox.Show(Owner!, text, title, MessageBoxButton.YesNo, MessageBoxImage.Question) == MessageBoxResult.Yes;
+    public static bool Confirm(string text, string title = "Please confirm")
+    {
+        if (Headless) { Messages.Add($"{title}: {text} → Yes"); return true; }
+        return MessageBox.Show(Owner!, text, title, MessageBoxButton.YesNo, MessageBoxImage.Question) == MessageBoxResult.Yes;
+    }
+
+    public static void Error(Exception ex)
+    {
+        if (Headless) { Errors.Add(ex.ToString()); return; }
+        MessageBox.Show(Owner!, ex.Message, "Something went wrong", MessageBoxButton.OK, MessageBoxImage.Warning);
+    }
 
     public static async Task Guard(Func<Task> action)
     {
@@ -177,7 +194,7 @@ public static class Dialogs
             Mouse(true);
             await action();
         }
-        catch (Exception ex) { MessageBox.Show(Owner!, ex.Message, "Something went wrong", MessageBoxButton.OK, MessageBoxImage.Warning); }
+        catch (Exception ex) { Error(ex); }
         finally { Mouse(false); }
     }
 
@@ -186,6 +203,7 @@ public static class Dialogs
     /// <summary>Small input box. Returns null when cancelled.</summary>
     public static string? Prompt(string title, string label, string initial = "")
     {
+        if (Headless) { Messages.Add($"{title}: {label} → {initial}"); return initial; }
         var box = new System.Windows.Controls.TextBox { Text = initial, Margin = new Thickness(0, 6, 0, 10), MinWidth = 320 };
         var ok = new System.Windows.Controls.Button { Content = "OK", IsDefault = true, MinWidth = 80 };
         var cancel = new System.Windows.Controls.Button { Content = "Cancel", IsCancel = true, MinWidth = 80 };
@@ -210,6 +228,7 @@ public static class Dialogs
     /// <summary>Picks one choice from a list (radio-style list box). Returns the index or -1.</summary>
     public static int Choose(string title, string label, IList<string> options)
     {
+        if (Headless) { Messages.Add($"{title}: {label} → {options.FirstOrDefault()}"); return options.Count > 0 ? 0 : -1; }
         var list = new System.Windows.Controls.ListBox { ItemsSource = options, MinWidth = 380, MaxHeight = 420, Margin = new Thickness(0, 6, 0, 10), SelectedIndex = 0 };
         var ok = new System.Windows.Controls.Button { Content = "OK", IsDefault = true, MinWidth = 80 };
         var cancel = new System.Windows.Controls.Button { Content = "Cancel", IsCancel = true, MinWidth = 80 };
@@ -264,12 +283,14 @@ public static class Dialogs
 
     public static void Open(string path)
     {
+        if (Headless) { Messages.Add("Open " + path); return; }
         try { Process.Start(new ProcessStartInfo(path) { UseShellExecute = true }); }
         catch (Exception ex) { Info($"Saved to {path}\n\n(could not open it: {ex.Message})"); }
     }
 
     public static void ShowInFolder(string path)
     {
+        if (Headless) return;
         try { Process.Start("explorer.exe", $"/select,\"{path}\""); } catch { /* ignore */ }
     }
 }

@@ -33,7 +33,9 @@ public class ScreenTour
         if (string.IsNullOrEmpty(dir)) dir = Path.Combine(Path.GetTempPath(), "SiteNotesScreens");
         Directory.CreateDirectory(dir);
 
+        Dialogs.Headless = true;
         var app = Application.Current ?? new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
+        app.DispatcherUnhandledException += (_, e) => { Dialogs.Errors.Add(e.Exception.ToString()); e.Handled = true; };
         Theme.Apply(app);
         await Desk.StartAsync();
         var p = await SampleData.CreateAsync(Desk.Db);
@@ -124,8 +126,14 @@ public class ScreenTour
         Assert.False(editor.IsDirty);
         Assert.True(Shots.Count >= 20, $"only {Shots.Count} screens captured");
 
+        // exercise the main buttons too (all non-blocking in headless mode)
+        await editor.PdfAsync();
+        await new ReportsView().PdfAsync();
+
         BuildPdf(dir);
+        File.WriteAllLines(Path.Combine(dir, "dialogs-and-errors.txt"), Dialogs.Messages.Select(m => "MESSAGE " + m).Concat(Dialogs.Errors.Select(e => "ERROR " + e)));
         main.Close();
+        Assert.True(Dialogs.Errors.Count == 0, "Errors while using the screens:\n" + string.Join("\n---\n", Dialogs.Errors));
     });
 
     /// <summary>A note, a scanned document, photos on a report and report settings with a logo, so screens are not empty.</summary>

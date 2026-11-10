@@ -12,10 +12,17 @@ public static class Tour
 {
     public static bool Enabled { get; set; }
 
-    private static void Log(string text) => Console.WriteLine("SITENOTES_TOUR " + text);
+    private static void Log(string text)
+    {
+        Console.WriteLine("SITENOTES_TOUR " + text);
+#if ANDROID
+        Android.Util.Log.Info("SiteNotesTour", "SITENOTES_TOUR " + text);
+#endif
+    }
 
     public static async Task RunAsync()
     {
+        Log("START 00-start");
         try
         {
             await Task.Delay(1500);

@@ -40,9 +40,9 @@ public static class ProgressReports
             {
                 pdf.Section(group.Key, $"{group.Count()} activities");
                 pdf.Table([
-                        new("Code", 0.8f), new("Activity", 2.4f), new("Method", 1.2f), new("Agency / Dept.", 1.5f), new("Unit", 0.6f),
-                        new("Planned", 0.9f, true), new("Done", 0.9f, true), new("Balance", 0.9f, true), new("Progress", 1.5f, false, true),
-                        new("Plan %", 0.7f, true), new("Start", 1.2f), new("Forecast finish", 1.2f), new("Avg/day", 0.8f, true), new("Status", 1f)
+                        new("Code", 1.5f), new("Activity", 2.1f), new("Method", 1.1f), new("Agency / Dept.", 1.5f), new("Unit", 0.55f),
+                        new("Planned", 0.95f, true), new("Done", 0.95f, true), new("Balance", 0.9f, true), new("Progress", 1.35f, false, true),
+                        new("Plan %", 0.65f, true), new("Start", 1.3f), new("Forecast", 1.3f), new("Avg/day", 0.8f, true), new("Status", 1.2f)
                     ],
                     group.Select(a => new[]
                     {

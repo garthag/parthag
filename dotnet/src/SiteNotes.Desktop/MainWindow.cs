@@ -78,7 +78,7 @@ public class MainWindow : Window
             var dirty = _tabs.Items.OfType<TabItem>().Select(t => t.Content).OfType<ISaveable>().Where(s => s.IsDirty).ToList();
             if (dirty.Count == 0) return;
             e.Cancel = true;
-            var r = MessageBox.Show(this, $"{dirty.Count} open item(s) have unsaved changes. Save them?", "SiteNotes", MessageBoxButton.YesNoCancel, MessageBoxImage.Question);
+            var r = Dialogs.Headless ? MessageBoxResult.Yes : MessageBox.Show(this, $"{dirty.Count} open item(s) have unsaved changes. Save them?", "SiteNotes", MessageBoxButton.YesNoCancel, MessageBoxImage.Question);
             if (r == MessageBoxResult.Cancel) return;
             if (r == MessageBoxResult.Yes) foreach (var s in dirty) await Dialogs.Guard(s.SaveAsync);
             _closingConfirmed = true;
@@ -270,7 +270,7 @@ public class MainWindow : Window
         if (tab == null) return;
         if (!force && tab.Content is ISaveable { IsDirty: true } s)
         {
-            var r = MessageBox.Show(this, "Save changes before closing?", "SiteNotes", MessageBoxButton.YesNoCancel, MessageBoxImage.Question);
+            var r = Dialogs.Headless ? MessageBoxResult.Yes : MessageBox.Show(this, "Save changes before closing?", "SiteNotes", MessageBoxButton.YesNoCancel, MessageBoxImage.Question);
             if (r == MessageBoxResult.Cancel) return;
             if (r == MessageBoxResult.Yes) { _ = SaveThenCloseAsync(tab, s); return; }
         }

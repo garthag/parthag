@@ -300,6 +300,7 @@ public class DprEditorView : ViewBase, ISaveable, IPrintable
     /// <summary>Check-list dialog: tick several items at once.</summary>
     private static List<int> PickMany(string title, string label, List<string> items)
     {
+        if (Dialogs.Headless) return items.Count > 0 ? [0] : [];
         var boxes = items.Select(i => new CheckBox { Content = i, Margin = new Thickness(2, 3, 2, 3) }).ToList();
         var list = new StackPanel();
         foreach (var b in boxes) list.Children.Add(b);

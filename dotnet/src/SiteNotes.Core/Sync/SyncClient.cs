@@ -79,14 +79,14 @@ public sealed class SyncClient : IAsyncDisposable
             if (fromDevice != _settings.DeviceId) FireAndForget();
         });
         _hub.Reconnecting += _ => { SetState(SyncState.Offline, "Connection lost – changes are saved on this device"); return Task.CompletedTask; };
-        _hub.Reconnected += _ => SyncNowAsync();
+        _hub.Reconnected += _ => SyncAsync(waitIfBusy: false);
         _hub.Closed += _ => { SetState(SyncState.Offline, "Offline – will retry"); return Task.CompletedTask; };
 
         // Safety net: retry every 2 minutes (also reconnects after long outages).
         _fallbackTimer = new Timer(_ => _ = TickAsync(), null, TimeSpan.FromMinutes(2), TimeSpan.FromMinutes(2));
 
         await ConnectHubAsync();
-        await SyncNowAsync();
+        await SyncAsync(waitIfBusy: false);
     }
 
     private async Task ConnectHubAsync()
@@ -99,10 +99,10 @@ public sealed class SyncClient : IAsyncDisposable
     private async Task TickAsync()
     {
         await ConnectHubAsync();
-        await SyncNowAsync();
+        await SyncAsync(waitIfBusy: false);
     }
 
-    private void FireAndForget() => _ = SyncNowAsync();
+    private void FireAndForget() => _ = SyncAsync(waitIfBusy: false);
 
     private void OnLocalChange(string entityType)
     {
@@ -113,10 +113,19 @@ public sealed class SyncClient : IAsyncDisposable
     }
 
     /// <summary>Push local changes, upload files, pull remote changes, download files.</summary>
-    public async Task<bool> SyncNowAsync(CancellationToken ct = default)
+    public async Task<bool> SyncNowAsync(CancellationToken ct = default) => await SyncAsync(waitIfBusy: true, ct);
+
+    /// <summary>Automatic syncs (after a local change or a server ping) never queue up behind each other:
+    /// if one is running it simply runs once more at the end. A manual "Sync now" waits its turn.</summary>
+    private async Task<bool> SyncAsync(bool waitIfBusy, CancellationToken ct = default)
     {
         if (!_settings.Enabled) return false;
-        if (!await _gate.WaitAsync(0, ct)) { _pendingAgain = true; return false; }
+        if (!await _gate.WaitAsync(0, ct))
+        {
+            _pendingAgain = true;
+            if (!waitIfBusy) return false;
+            await _gate.WaitAsync(ct);
+        }
         try
         {
             do

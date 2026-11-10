@@ -7,18 +7,21 @@ mkdir -p "$OUT"
 adb wait-for-device
 adb install -r "$APK"
 adb logcat -c
-adb shell am start -n com.sitenotes.dpr/com.sitenotes.dpr.MainActivity --ez tour true
-end=$((SECONDS + 420))
+adb shell am start -W -n com.sitenotes.dpr/com.sitenotes.dpr.MainActivity --ez tour true
+sleep 25
+adb exec-out screencap -p > "$OUT/00-startup.png"
+end=$((SECONDS + 480))
 seen=""
 while [ $SECONDS -lt $end ]; do
   line=$(adb logcat -d 2>/dev/null | grep -o 'SITENOTES_TOUR [A-Z]* [0-9a-z_-]*' | tail -1 || true)
   if [[ "$line" == *DONE* ]]; then echo "tour finished: $line"; break; fi
-  if [[ -n "$line" && "$line" != "$seen" ]]; then
+  if [[ "$line" == *READY* && "$line" != "$seen" ]]; then
     seen="$line"
     name=$(echo "$line" | awk '{print $3}')
     adb exec-out screencap -p > "$OUT/$name.png" && echo "captured $name"
   fi
   sleep 0.5
 done
-adb logcat -d | grep -E "SITENOTES_TOUR|FATAL|AndroidRuntime" | tail -80 > "$OUT/tour-log.txt" || true
+echo "----- app log -----"
+adb logcat -d | grep -E "SITENOTES_TOUR|SiteNotes|FATAL|AndroidRuntime|DOTNET|monodroid|mono-rt" | tail -150 | tee "$OUT/tour-log.txt"
 ls -la "$OUT"

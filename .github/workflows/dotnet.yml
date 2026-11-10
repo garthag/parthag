@@ -28,6 +28,19 @@ jobs:
         run: dotnet build dotnet/tests/SiteNotes.App.CompileCheck -c Release
       - name: Compile WPF desktop app
         run: dotnet build dotnet/src/SiteNotes.Desktop -c Release
+      - name: Heavy demo – 3 projects, 3 devices, 1 year of reports, every report generated and verified
+        run: dotnet run -c Release --project dotnet/tools/SiteNotes.Demo -- demo-output 365
+      - name: Package demo reports
+        if: always()
+        run: |
+          rm -rf demo-output/_devices
+          cd demo-output && zip -qr ../SiteNotes-Demo-Reports.zip .
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: demo-reports
+          path: SiteNotes-Demo-Reports.zip
+          if-no-files-found: ignore
 
   server:
     runs-on: ubuntu-latest
@@ -50,6 +63,7 @@ jobs:
   windows:
     runs-on: windows-latest
     needs: test
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
@@ -105,6 +119,7 @@ jobs:
   android-screens:
     runs-on: ubuntu-latest
     needs: android
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
@@ -165,18 +180,23 @@ jobs:
 
   publish-screens:
     if: github.event_name == 'push' && always() && needs.release.result == 'success'
-    needs: [release, android-screens]
+    needs: [release, android-screens, windows]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
         with:
           pattern: screens-*
           path: screens
+      - uses: actions/download-artifact@v4
+        with:
+          name: demo-reports
+          path: demo
       - name: Collect PDFs and pictures
         run: |
           mkdir -p out
           find screens -name '*.pdf' -exec cp {} out/ \;
-          (cd screens && zip -qr ../out/SiteNotes-Screens.zip . -i '*.png' '*.pdf')
+          (cd screens && zip -qr ../out/SiteNotes-Screens.zip . -i '*.png' '*.pdf' '*.txt') || true
+          cp demo/*.zip out/ || true
           ls -la out
       - uses: softprops/action-gh-release@v2
         with:
