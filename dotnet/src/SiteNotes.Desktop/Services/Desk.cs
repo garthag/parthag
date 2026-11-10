@@ -41,7 +41,12 @@ public static class Desk
     private static Dispatcher UI => Application.Current.Dispatcher;
     private static DispatcherTimer? _debounce;
 
-    public static async Task StartAsync()
+    private static Task? _start;
+
+    /// <summary>Starts once; later callers wait for the same start.</summary>
+    public static Task StartAsync() => _start ??= StartCoreAsync();
+
+    private static async Task StartCoreAsync()
     {
         Db = new LocalDatabase(DataFolder);
         await Db.InitAsync();

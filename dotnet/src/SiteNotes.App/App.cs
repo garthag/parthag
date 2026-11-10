@@ -64,12 +64,23 @@ public class LoadingPage : ContentPage
         };
     }
 
+    private bool _opened;
+
     protected override async void OnAppearing()
     {
         base.OnAppearing();
-        await AppServices.StartAsync();
-        SyncBadge.Attach();
-        if (Window != null) Window.Page = new AppShell();
-        if (Tour.Enabled) _ = Task.Run(Tour.RunAsync);
+        if (_opened) return;      // Android can show this page twice while starting
+        _opened = true;
+        try
+        {
+            await AppServices.StartAsync();
+            SyncBadge.Attach();
+            if (Window != null) Window.Page = new AppShell();
+            if (Tour.Enabled) _ = Task.Run(Tour.RunAsync);
+        }
+        catch (Exception ex)
+        {
+            Content = new Label { Text = "SiteNotes could not start:\n" + ex.Message, TextColor = Colors.White, Margin = 24, VerticalOptions = LayoutOptions.Center };
+        }
     }
 }

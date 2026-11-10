@@ -16,12 +16,13 @@ public static class AppServices
     public static Project? CurrentProject { get; private set; }
     public static event Action? ProjectChanged;
 
-    private static bool _started;
+    private static Task? _start;
 
-    public static async Task StartAsync()
+    /// <summary>Starts once; every caller (the start page can appear more than once on Android) waits for the same start.</summary>
+    public static Task StartAsync() => _start ??= StartCoreAsync();
+
+    private static async Task StartCoreAsync()
     {
-        if (_started) return;
-        _started = true;
         Db = new LocalDatabase(FileSystem.AppDataDirectory);
         await Db.InitAsync();
         Reports = new ReportQueryService(Db);

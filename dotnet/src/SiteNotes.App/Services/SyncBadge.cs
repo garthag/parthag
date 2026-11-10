@@ -7,10 +7,15 @@ public static class SyncBadge
 {
     public static event Action? Changed;
 
+    private static bool _attached;
+
     public static void Attach()
     {
+        if (_attached) return;
+        _attached = true;
         void Hook()
         {
+            if (AppServices.Sync == null) return;
             AppServices.Sync.StatusChanged += () => MainThread.BeginInvokeOnMainThread(() => Changed?.Invoke());
             Changed?.Invoke();
         }
