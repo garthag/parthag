@@ -115,14 +115,13 @@ public class DprEditorPage : ContentPage
         if (_reportId != null) _b = await AppServices.Db.LoadReportAsync(_reportId);
         else
         {
-            var carry = await DisplayAlertAsync("New report", "Copy manpower, machines and running activities from the last report?", "Yes, copy", "Start blank");
-            _b = await AppServices.Db.NewReportAsync(pid, _newDate, carry);
+            _b = await AppServices.Db.NewReportAsync(pid, _newDate);
         }
         await LoadDoneBeforeAsync();
         Title = _b.Report.Title;
         Build();
         Recalc();
-        _dirty = _reportId == null;
+        _dirty = false; // an untouched new report is not saved
     }
 
     private async Task LoadDoneBeforeAsync()
@@ -183,71 +182,35 @@ public class DprEditorPage : ContentPage
                 Ui.Field("Approved by", Ui.Entry(r.ApprovedBy, "", changed: v => { r.ApprovedBy = v; Changed(); })))));
 
         _secActivities.ClearBody();
-        _secActivities.With(new RowList<ReportActivity>(_b.Activities, ActivityRow, Changed,
+        _secActivities.With(new RowList<ReportActivity>(_b.Activities, ActivityRow, ActivitiesChanged,
             "No activities yet. Add from the activity list (progress then sums up automatically).",
-            ("＋ Activity from list", () => null), ("＋ Unplanned work", () => new ReportActivity())));
-        HookAsyncAdd<ReportActivity>(_secActivities, async list =>
-        {
-            var a = await PickActivityAsync();
-            if (a == null) return;
-            if (_b.Activities.Any(x => x.ActivityId == a.Id)) { await DisplayAlertAsync("Already added", a.ToString(), "OK"); return; }
-            list.Add(new ReportActivity
-            {
-                ActivityId = a.Id, ActivityName = a.ToString(), Location = a.Location, Unit = a.Unit, PlannedQty = a.PlannedQty,
-                SubcontractorId = a.SubcontractorId, SubcontractorName = _subs.FirstOrDefault(s => s.Id == a.SubcontractorId)?.Name ?? "",
-                CumulativeQty = _doneBefore.GetValueOrDefault(a.Id),
-            });
-        });
+            ("＋ Activity from list", AddActivityAsync), ("＋ Unplanned work", RowList<ReportActivity>.Now(() => new ReportActivity()))));
         _form.Children.Add(_secActivities);
 
         _secManpower.ClearBody();
         _secManpower.With(new RowList<ReportManpower>(_b.Manpower, ManpowerRow, Changed, "No manpower entered.",
-            ("＋ Subcontractor crew", () => new ReportManpower { Source = ManpowerSource.Subcontractor, Hours = _cal.HoursPerDay, Count = 1 }),
-            ("＋ Department staff", () => new ReportManpower { Source = ManpowerSource.Department, Hours = _cal.HoursPerDay, Count = 1 }),
-            ("＋ From resource list", () => null)));
-        HookAsyncAdd<ReportManpower>(_secManpower, async list =>
-        {
-            var res = await ActivityResourceEditor.PickResourceAsync(ResourceType.Manpower);
-            if (res == null) return;
-            var fromSub = res.SubcontractorId != "";
-            list.Add(new ReportManpower
-            {
-                Source = fromSub ? ManpowerSource.Subcontractor : ManpowerSource.Department,
-                PartyId = fromSub ? res.SubcontractorId : res.DepartmentId,
-                PartyName = fromSub ? _subs.FirstOrDefault(s => s.Id == res.SubcontractorId)?.Name ?? "" : _depts.FirstOrDefault(d => d.Id == res.DepartmentId)?.Name ?? "",
-                Trade = res.Name, ResourceId = res.Id, Rate = res.Rate, Basis = res.Basis, Count = 1, Hours = _cal.HoursPerDay,
-            });
-        }, index: 2);
+            ("＋ Subcontractor crew", RowList<ReportManpower>.Now(() => new ReportManpower { Source = ManpowerSource.Subcontractor, Hours = _cal.HoursPerDay, Count = 1 })),
+            ("＋ Department staff", RowList<ReportManpower>.Now(() => new ReportManpower { Source = ManpowerSource.Department, Hours = _cal.HoursPerDay, Count = 1 })),
+            ("＋ From resource list", ManpowerFromListAsync)));
         _form.Children.Add(_secManpower);
 
         _secMachines.ClearBody();
         _secMachines.With(new RowList<ReportMachine>(_b.Machines, MachineRow, Changed, "No machinery entered.",
-            ("＋ Machine from list", () => null), ("＋ Other machine", () => new ReportMachine { WorkingHours = _cal.HoursPerDay })));
-        HookAsyncAdd<ReportMachine>(_secMachines, async list =>
-        {
-            var res = await ActivityResourceEditor.PickResourceAsync(ResourceType.Machinery);
-            if (res != null)
-                list.Add(new ReportMachine { Name = res.Name, ResourceId = res.Id, Rate = res.Rate, Basis = res.Basis, WorkingHours = _cal.HoursPerDay,
-                    Ownership = res.SubcontractorId == "" ? MachineOwnership.Own : MachineOwnership.Hired });
-        });
+            ("＋ Machine from list", MachineFromListAsync),
+            ("＋ Other machine", RowList<ReportMachine>.Now(() => new ReportMachine { WorkingHours = _cal.HoursPerDay }))));
         _form.Children.Add(_secMachines);
 
         _secMaterials.ClearBody();
         _secMaterials.With(new RowList<ReportMaterial>(_b.Materials, MaterialRow, Changed, "No materials or other resources entered.",
-            ("＋ From resource list", () => null), ("＋ Material", () => new ReportMaterial()), ("＋ Non-material (hire, testing…)", () => new ReportMaterial { Kind = ResourceType.Other, Basis = RateBasis.LumpSum, Unit = "LS" })));
-        HookAsyncAdd<ReportMaterial>(_secMaterials, async list =>
-        {
-            var res = await ActivityResourceEditor.PickResourceAsync();
-            if (res is { Type: ResourceType.Material or ResourceType.Other })
-                list.Add(new ReportMaterial { Material = res.Name, Kind = res.Type, Unit = res.Unit, ResourceId = res.Id, Rate = res.Rate, Basis = res.Basis });
-            else if (res != null) await DisplayAlertAsync("Not a material", "Pick a Material or Other resource here.", "OK");
-        });
+            ("＋ From resource list", MaterialFromListAsync),
+            ("＋ Material", RowList<ReportMaterial>.Now(() => new ReportMaterial())),
+            ("＋ Non-material (hire, testing…)", RowList<ReportMaterial>.Now(() => new ReportMaterial { Kind = ResourceType.Other, Basis = RateBasis.LumpSum, Unit = "LS" }))));
         _form.Children.Add(_secMaterials);
 
         _form.Children.Add(new Section("5. Hindrances", false).With(new RowList<Hindrance>(_b.Hindrances, HindranceRow, Changed, "No hindrance today.",
-            ("＋ Hindrance", () => new Hindrance { ProjectId = r.ProjectId, FromDate = r.Date }))));
+            ("＋ Hindrance", RowList<Hindrance>.Now(() => new Hindrance { ProjectId = r.ProjectId, FromDate = r.Date })))));
         _form.Children.Add(new Section("6. Requirements", false).With(new RowList<Requirement>(_b.Requirements, RequirementRow, Changed, "No new requirement.",
-            ("＋ Requirement", () => new Requirement { ProjectId = r.ProjectId, RaisedDate = r.Date, RaisedBy = r.PreparedBy }))));
+            ("＋ Requirement", RowList<Requirement>.Now(() => new Requirement { ProjectId = r.ProjectId, RaisedDate = r.Date, RaisedBy = r.PreparedBy })))));
 
         _form.Children.Add(new Section("7. Safety & toolbox talk", false).With(
             Ui.Columns(2,
@@ -268,20 +231,70 @@ public class DprEditorPage : ContentPage
         _form.Children.Add(Ui.Button("💾 Save report", () => SaveAsync(true)));
     }
 
-    /// <summary>Gives a RowList's "from list" button (the one whose factory returns null) an async picker.</summary>
-    private static void HookAsyncAdd<T>(Section section, Func<RowList<T>, Task> add, int index = 0) where T : class
+    // ------------------------------------------------------------------ "add from list" pickers
+
+    private async Task<ReportActivity?> AddActivityAsync()
     {
-        var list = FindRowList<T>(section);
-        if (list?.Children.LastOrDefault() is FlexLayout buttons && buttons.Children.ElementAtOrDefault(index) is Button b)
-            b.Clicked += async (_, _) => await Ui.Guard(() => add(list));
+        var a = await PickActivityAsync();
+        if (a == null) return null;
+        if (_b.Activities.Any(x => x.ActivityId == a.Id)) { await DisplayAlertAsync("Already added", a.ToString(), "OK"); return null; }
+        return new ReportActivity
+        {
+            ActivityId = a.Id, ActivityName = a.ToString(), Location = a.Location, Unit = a.Unit, PlannedQty = a.PlannedQty,
+            SubcontractorId = a.SubcontractorId, SubcontractorName = _subs.FirstOrDefault(s => s.Id == a.SubcontractorId)?.Name ?? "",
+            CumulativeQty = _doneBefore.GetValueOrDefault(a.Id),
+        };
     }
 
-    private static RowList<T>? FindRowList<T>(Element e) where T : class
+    /// <summary>Activities changed: the "worked on activity" pickers in other rows need the new list.</summary>
+    private void ActivitiesChanged()
     {
-        if (e is RowList<T> r) return r;
+        Changed();
+        foreach (var list in new View[] { _secManpower, _secMachines, _secMaterials }) RebuildRows(list);
+    }
+
+    private static void RebuildRows(Element e)
+    {
+        switch (e)
+        {
+            case RowList<ReportManpower> a: a.Rebuild(); return;
+            case RowList<ReportMachine> b: b.Rebuild(); return;
+            case RowList<ReportMaterial> c: c.Rebuild(); return;
+        }
         if (e is IVisualTreeElement v)
-            foreach (var c in v.GetVisualChildren())
-                if (c is Element ce && FindRowList<T>(ce) is { } found) return found;
+            foreach (var child in v.GetVisualChildren().OfType<Element>()) RebuildRows(child);
+    }
+
+    private async Task<ReportManpower?> ManpowerFromListAsync()
+    {
+        var res = await ActivityResourceEditor.PickResourceAsync(ResourceType.Manpower);
+        if (res == null) return null;
+        var fromSub = res.SubcontractorId != "";
+        return new ReportManpower
+        {
+            Source = fromSub ? ManpowerSource.Subcontractor : ManpowerSource.Department,
+            PartyId = fromSub ? res.SubcontractorId : res.DepartmentId,
+            PartyName = fromSub ? _subs.FirstOrDefault(s => s.Id == res.SubcontractorId)?.Name ?? "" : _depts.FirstOrDefault(d => d.Id == res.DepartmentId)?.Name ?? "",
+            Trade = res.Name, ResourceId = res.Id, Rate = res.Rate, Basis = res.Basis, Count = 1, Hours = _cal.HoursPerDay,
+        };
+    }
+
+    private async Task<ReportMachine?> MachineFromListAsync()
+    {
+        var res = await ActivityResourceEditor.PickResourceAsync(ResourceType.Machinery);
+        return res == null ? null : new ReportMachine
+        {
+            Name = res.Name, ResourceId = res.Id, Rate = res.Rate, Basis = res.Basis, WorkingHours = _cal.HoursPerDay,
+            Ownership = res.SubcontractorId == "" ? MachineOwnership.Own : MachineOwnership.Hired,
+        };
+    }
+
+    private async Task<ReportMaterial?> MaterialFromListAsync()
+    {
+        var res = await ActivityResourceEditor.PickResourceAsync();
+        if (res is { Type: ResourceType.Material or ResourceType.Other })
+            return new ReportMaterial { Material = res.Name, Kind = res.Type, Unit = res.Unit, ResourceId = res.Id, Rate = res.Rate, Basis = res.Basis };
+        if (res != null) await DisplayAlertAsync("Not a material", "Pick a Material or Other resource here.", "OK");
         return null;
     }
 
@@ -509,8 +522,9 @@ public class DprEditorPage : ContentPage
     {
         if (_dirty && _b.Report.Status != ReportStatus.Approved) await SaveAsync(false);
         var b = await AppServices.Db.LoadReportAsync(_b.Report.Id);
-        var path = await FileExport.CreateAsync($"DPR_{b.Report.ReportNo}_{b.Report.Date:yyyy-MM-dd}.pdf",
-            s => PdfReports.DailyReport(s, b, AppServices.Db.MediaPath, _cal));
+        var opt = await ReportProfiles.CurrentAsync();
+        var path = await FileExport.CreateAsync($"{PdfReports.ReportLabel(b)}_{b.Report.Date:yyyy-MM-dd}.pdf",
+            s => PdfReports.DailyReport(s, b, AppServices.Db.MediaPath, _cal, opt));
         await FileExport.OfferAsync(this, path);
     }
 

@@ -30,6 +30,12 @@ public class Project : SyncEntity
     public DateTime StartDate { get; set; } = DateTime.Today;
     public DateTime? EndDate { get; set; }
     public string Description { get; set; } = "";
+    /// <summary>Printed before report numbers, e.g. "DPR-" → DPR-001.</summary>
+    public string ReportPrefix { get; set; } = "DPR-";
+    /// <summary>Number of the first report (asked once, when the first report is created). 0 = not set yet.</summary>
+    public int FirstReportNo { get; set; }
+    /// <summary>Copy manpower, machines and running activities from the previous report into a new one.</summary>
+    public bool CarryForward { get; set; } = true;
     public override string ToString() => string.IsNullOrWhiteSpace(Code) ? Name : $"{Code} – {Name}";
 }
 
@@ -103,7 +109,7 @@ public class DailyReport : SyncEntity
     public int HindranceCount { get; set; }
     public decimal TotalCost { get; set; }
 
-    [JsonIgnore, Ignore] public string Title => $"DPR #{ReportNo} · {Date:dd-MMM-yyyy}";
+    [JsonIgnore, Ignore] public string Title => $"DPR {ReportNo:000} · {Date:ddd dd-MMM-yyyy}";
 }
 
 public class ReportActivity : SyncEntity

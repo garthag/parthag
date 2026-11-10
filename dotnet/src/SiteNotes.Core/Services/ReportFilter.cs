@@ -12,6 +12,8 @@ public class ReportFilter
     public DateTime? From { get; set; }
     public DateTime? To { get; set; }
     public ReportStatus? Status { get; set; }
+    /// <summary>Any of these statuses (empty = all).</summary>
+    public List<ReportStatus> Statuses { get; set; } = [];
     /// <summary>Only reports where this subcontractor had manpower or activities.</summary>
     public string SubcontractorId { get; set; } = "";
     public string Search { get; set; } = "";
@@ -22,6 +24,7 @@ public class ReportFilter
         var parts = new List<string>();
         if (From != null || To != null) parts.Add($"{From:dd-MMM-yyyy} → {To:dd-MMM-yyyy}".Trim());
         if (Status != null) parts.Add(Status.ToString()!);
+        if (Statuses.Count is > 0 and < 3) parts.Add(string.Join(" + ", Statuses));
         if (!string.IsNullOrWhiteSpace(Search)) parts.Add($"“{Search}”");
         return parts.Count == 0 ? "All reports" : string.Join(" · ", parts);
     }
@@ -48,6 +51,7 @@ public class ReportQueryService(LocalDatabase db)
         var reports = await db.ListForProjectAsync<DailyReport>(f.ProjectId);
         IEnumerable<DailyReport> q = reports.Where(r => f.InRange(r.Date));
         if (f.Status != null) q = q.Where(r => r.Status == f.Status);
+        if (f.Statuses.Count > 0) q = q.Where(r => f.Statuses.Contains(r.Status));
 
         if (!string.IsNullOrWhiteSpace(f.SubcontractorId))
         {
@@ -72,9 +76,8 @@ public class ReportQueryService(LocalDatabase db)
 
     public async Task<List<DprBundle>> LoadBundlesAsync(ReportFilter f)
     {
-        var list = new List<DprBundle>();
-        foreach (var r in await FindAsync(f)) list.Add(await db.LoadReportAsync(r.Id));
-        return list;
+        var reports = await FindAsync(f);
+        return reports.Count == 0 ? [] : await db.LoadReportsAsync(f.ProjectId, reports);
     }
 
     private static bool Has(string? text, string s) =>

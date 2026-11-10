@@ -29,26 +29,23 @@ public class ActivityResourceEditor : VerticalStackLayout
         _rows = [.. _original];
         Children.Clear();
         Children.Add(new RowList<ActivityResource>(_rows, Row, UpdateTotal, "No resources assigned. Add manpower, machines, materials or other costs.",
-            ("＋ From resource list", () => null), ("＋ Blank row", () => new ActivityResource { Type = ResourceType.Manpower })));
-        // "From resource list" needs an async picker, so swap its handler.
-        if (Children[0] is RowList<ActivityResource> list && list.Children.LastOrDefault() is FlexLayout buttons && buttons.Children.FirstOrDefault() is Button pick)
-            pick.Clicked += async (_, _) =>
+            ("＋ From resource list", async () =>
             {
                 var res = await PickResourceAsync();
-                if (res != null)
-                    list.Add(new ActivityResource
-                    {
-                        ResourceId = res.Id, ResourceName = res.ToString(), Type = res.Type, Rate = res.Rate, Basis = res.Basis,
-                        PlannedQty = res.Type is ResourceType.Manpower or ResourceType.Machinery ? 1 : _activity.PlannedQty,
-                    });
-            };
+                return res == null ? null : new ActivityResource
+                {
+                    ResourceId = res.Id, ResourceName = res.ToString(), Type = res.Type, Rate = res.Rate, Basis = res.Basis,
+                    PlannedQty = res.Type is ResourceType.Manpower or ResourceType.Machinery ? 1 : _activity.PlannedQty,
+                };
+            }),
+            ("＋ Blank row", RowList<ActivityResource>.Now(() => new ActivityResource { Type = ResourceType.Manpower }))));
         Children.Add(_total);
         UpdateTotal();
     }
 
-    public static async Task<Resource?> PickResourceAsync(ResourceType? type = null)
+    public static async Task<SiteResource?> PickResourceAsync(ResourceType? type = null)
     {
-        var all = (await AppServices.Db.ListForProjectAsync<Resource>(AppServices.ProjectId))
+        var all = (await AppServices.Db.ListForProjectAsync<SiteResource>(AppServices.ProjectId))
             .Where(r => type == null || r.Type == type).OrderBy(r => r.Type).ThenBy(r => r.Name).ToList();
         if (all.Count == 0)
         {
@@ -76,7 +73,7 @@ public class ActivityResourceEditor : VerticalStackLayout
             Children =
             {
                 Ui.Columns(3,
-                    Ui.Field("Resource", Ui.Entry(r.ResourceName, "Name", changed: v => r.ResourceName = v)),
+                    Ui.Field("SiteResource", Ui.Entry(r.ResourceName, "Name", changed: v => r.ResourceName = v)),
                     Ui.Field("Type", Ui.EnumPicker(r.Type, v => { r.Type = v; Refresh(); })),
                     Ui.Field(timeBased ? "Nos (people / machines)" : "Quantity", Ui.Number(r.PlannedQty, v => { r.PlannedQty = v; Refresh(); })),
                     Ui.Field("Hours each (blank = full duration)", Ui.Number(r.PlannedHours, v => { r.PlannedHours = v; Refresh(); }, "auto")),
@@ -298,10 +295,11 @@ public class ProgressPage : ContentPage
     {
         if (_pp == null) return;
         var period = $"As of {DateTime.Today:dd-MMM-yyyy}";
+        var opt = await ReportProfiles.CurrentAsync();
         var path = await FileExport.CreateAsync($"Progress_cost_{DateTime.Now:yyyyMMdd_HHmm}.{(excel ? "xlsx" : "pdf")}", s =>
         {
             if (excel) ProgressReports.Excel(s, AppServices.CurrentProject, _pp, period);
-            else ProgressReports.Pdf(s, AppServices.CurrentProject, _pp, period);
+            else ProgressReports.Pdf(s, AppServices.CurrentProject, _pp, period, true, opt);
         });
         await FileExport.OfferAsync(this, path);
     }

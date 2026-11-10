@@ -29,7 +29,7 @@ public sealed class LocalDatabase
         MediaFolder = Path.Combine(dataFolder, "media");
         Directory.CreateDirectory(MediaFolder);
         _db = new SQLiteAsyncConnection(Path.Combine(dataFolder, "sitenotes.db3"),
-            SQLiteOpenFlags.ReadWrite | SQLiteOpenFlags.Create | SQLiteOpenFlags.SharedCache);
+            SQLiteOpenFlags.ReadWrite | SQLiteOpenFlags.Create | SQLiteOpenFlags.FullMutex);
     }
 
     public SQLiteAsyncConnection Connection => _db;
@@ -107,12 +107,93 @@ public sealed class LocalDatabase
 
     // ---------- daily reports ----------
 
+    /// <summary>Next report number: last number + 1, or the project's first number (asked once) for the first report.</summary>
     public async Task<int> NextReportNoAsync(string projectId)
     {
         var last = await _db.Table<DailyReport>()
             .Where(r => r.ProjectId == projectId && !r.IsDeleted)
             .OrderByDescending(r => r.ReportNo).FirstOrDefaultAsync();
-        return (last?.ReportNo ?? 0) + 1;
+        if (last != null) return last.ReportNo + 1;
+        var p = await _db.FindAsync<Project>(projectId);
+        return p is { FirstReportNo: > 0 } ? p.FirstReportNo : 1;
+    }
+
+    /// <summary>True when the project has no reports and no starting number yet: the app asks once.</summary>
+    public async Task<bool> NeedsFirstReportNoAsync(string projectId)
+    {
+        var p = await _db.FindAsync<Project>(projectId);
+        if (p == null || p.FirstReportNo > 0) return false;
+        return await _db.Table<DailyReport>().Where(r => r.ProjectId == projectId && !r.IsDeleted).CountAsync() == 0;
+    }
+
+    /// <summary>Date for the next report: the working day after the latest report, but never later than today.</summary>
+    public async Task<DateTime> NextReportDateAsync(string projectId)
+    {
+        var today = DateTime.Today;
+        var last = await _db.Table<DailyReport>()
+            .Where(r => r.ProjectId == projectId && !r.IsDeleted)
+            .OrderByDescending(r => r.Date).FirstOrDefaultAsync();
+        if (last == null || last.Date.Date >= today) return today;
+        var cal = await CalendarAsync(projectId);
+        var hol = cal.HolidaySet;
+        var d = last.Date.Date.AddDays(1);
+        while (d < today && !cal.IsWorkingDay(d, hol)) d = d.AddDays(1);
+        return d;
+    }
+
+    /// <summary>Loads many reports with all rows using one query per table (fast for registers and Excel).</summary>
+    public async Task<List<DprBundle>> LoadReportsAsync(string projectId, IReadOnlyList<DailyReport> reports)
+    {
+        var ids = reports.Select(r => r.Id).ToHashSet();
+        var project = await _db.FindAsync<Project>(projectId);
+        async Task<ILookup<string, T>> Rows<T>(Func<T, string> key) where T : SyncEntity, new() =>
+            (await ListForProjectAsync<T>(projectId)).Where(x => ids.Contains(key(x))).ToLookup(key);
+        var allActs = await ListForProjectAsync<ReportActivity>(projectId);
+        var acts = allActs.Where(a => ids.Contains(a.ReportId)).ToLookup(a => a.ReportId);
+        var mp = await Rows<ReportManpower>(x => x.ReportId);
+        var mc = await Rows<ReportMachine>(x => x.ReportId);
+        var mt = await Rows<ReportMaterial>(x => x.ReportId);
+        var hi = await Rows<Hindrance>(x => x.ReportId);
+        var rq = await Rows<Requirement>(x => x.ReportId);
+        var md = await Rows<MediaItem>(x => x.OwnerId);
+        var master = (await ListForProjectAsync<Activity>(projectId)).ToDictionary(a => a.Id);
+
+        // Cumulative quantities: running sum over every report in date order.
+        var order = (await ListForProjectAsync<DailyReport>(projectId))
+            .OrderBy(r => r.Date.Date).ThenBy(r => r.ReportNo).Select(r => r.Id).ToList();
+        var rank = order.Select((id, i) => (id, i)).ToDictionary(x => x.id, x => x.i);
+        var running = new Dictionary<string, double>();
+        var cumulative = new Dictionary<string, double>(); // row id -> cumulative
+        foreach (var row in allActs.Where(a => a.ActivityId != "" && rank.ContainsKey(a.ReportId))
+                     .GroupBy(a => a.ReportId).OrderBy(g => rank[g.Key]).SelectMany(g => g))
+        {
+            running[row.ActivityId] = running.GetValueOrDefault(row.ActivityId) + row.TodayQty;
+            cumulative[row.Id] = running[row.ActivityId];
+        }
+
+        var list = new List<DprBundle>(reports.Count);
+        foreach (var r in reports)
+        {
+            var b = new DprBundle
+            {
+                Report = r, Project = project,
+                Activities = acts[r.Id].OrderBy(x => x.SortOrder).ToList(),
+                Manpower = mp[r.Id].OrderBy(x => x.SortOrder).ToList(),
+                Machines = mc[r.Id].OrderBy(x => x.SortOrder).ToList(),
+                Materials = mt[r.Id].OrderBy(x => x.SortOrder).ToList(),
+                Hindrances = hi[r.Id].ToList(),
+                Requirements = rq[r.Id].ToList(),
+                Media = md[r.Id].OrderBy(x => x.CapturedAtUtc).ToList(),
+            };
+            // all rows of the same activity in one report share the report's final cumulative
+            foreach (var a in b.Activities.Where(a => a.ActivityId != ""))
+            {
+                a.CumulativeQty = Math.Round(b.Activities.Where(x => x.ActivityId == a.ActivityId).Select(x => cumulative.GetValueOrDefault(x.Id)).Max(), 4);
+                if (master.TryGetValue(a.ActivityId, out var m)) { a.PlannedQty = m.PlannedQty; a.Unit = m.Unit; }
+            }
+            list.Add(b);
+        }
+        return list;
     }
 
     public async Task<DprBundle> LoadReportAsync(string reportId)
@@ -241,8 +322,9 @@ public sealed class LocalDatabase
 
     /// <summary>Starts a new report pre-filled from the latest one: manpower, machinery and
     /// activities are copied (today's quantity cleared, cumulative carried forward).</summary>
-    public async Task<DprBundle> NewReportAsync(string projectId, DateTime date, bool carryForward)
+    public async Task<DprBundle> NewReportAsync(string projectId, DateTime date, bool? carryForwardOverride = null)
     {
+        var carryForward = carryForwardOverride ?? (await _db.FindAsync<Project>(projectId))?.CarryForward ?? true;
         var b = new DprBundle
         {
             Report = new DailyReport

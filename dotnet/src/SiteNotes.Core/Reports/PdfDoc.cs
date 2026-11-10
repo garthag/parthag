@@ -36,12 +36,27 @@ public sealed class PdfDoc : IDisposable
     private readonly Dictionary<(string, bool, bool), SKTypeface> _faces = new();
     private readonly string _generated = DateTime.Now.ToString("dd-MMM-yyyy HH:mm");
 
-    public PdfDoc(Stream output, string title, string subtitle = "", bool landscape = false)
+    public PdfLayout Layout { get; }
+    public int TotalPages { get; }
+    /// <summary>Layout-only pass used to count pages: images are not decoded.</summary>
+    public bool DryRun { get; }
+    private SKImage? _logo, _clientLogo;
+
+    public PdfDoc(Stream output, string title, string subtitle = "", bool landscape = false, PdfLayout? layout = null,
+        int totalPages = 0, bool dryRun = false)
     {
         PageWidth = landscape ? 842 : 595;
         PageHeight = landscape ? 595 : 842;
         HeaderTitle = title;
         HeaderSubtitle = subtitle;
+        Layout = layout ?? new PdfLayout();
+        TotalPages = totalPages;
+        DryRun = dryRun;
+        if (!dryRun)
+        {
+            if (Layout.LogoPath != "") _logo = ImageTools.LoadForPdf(Layout.LogoPath, 400, 90);
+            if (Layout.ClientLogoPath != "") _clientLogo = ImageTools.LoadForPdf(Layout.ClientLogoPath, 400, 90);
+        }
         _doc = SKDocument.CreatePdf(output, new SKDocumentPdfMetadata
         {
             Title = title,
@@ -52,6 +67,24 @@ public sealed class PdfDoc : IDisposable
             Modified = DateTime.Now,
             RasterDpi = 150,
         });
+    }
+
+    /// <summary>
+    /// Writes a report. When the footer shows "Page n of N" the report is laid out twice: a fast
+    /// dry run (no images) counts the pages, then the real pass prints the totals.
+    /// </summary>
+    public static void Render(Stream output, string title, string subtitle, bool landscape, PdfLayout? layout, Action<PdfDoc> body)
+    {
+        var total = 0;
+        if (layout?.NeedsTotal == true)
+        {
+            using var count = new PdfDoc(Stream.Null, title, subtitle, landscape, layout, 0, dryRun: true);
+            body(count);
+            count.Finish();
+            total = count.PageNumber;
+        }
+        using var pdf = new PdfDoc(output, title, subtitle, landscape, layout, total);
+        body(pdf);
     }
 
     public float ContentWidth => PageWidth - 2 * Margin;
@@ -114,15 +147,62 @@ public sealed class PdfDoc : IDisposable
     private void DrawPageHeader()
     {
         var c = _c!;
-        using var band = Fill(Accent);
-        c.DrawRect(Margin, _y, ContentWidth, 26, band);
-        using var f = Font(12, bold: true);
-        using var white = Fill(SKColors.White);
-        c.DrawText(Ellipsize(HeaderTitle, f, ContentWidth * 0.62f), Margin + 8, _y + 17.5f, SKTextAlign.Left, f, white);
-        using var fs = Font(8.5f);
-        c.DrawText(Ellipsize(HeaderSubtitle, fs, ContentWidth * 0.36f), Margin + ContentWidth - 8, _y + 16.5f, SKTextAlign.Right, fs, white);
-        _y += 34;
+        if (!Layout.IsRich)
+        {
+            using var band = Fill(Accent);
+            c.DrawRect(Margin, _y, ContentWidth, 26, band);
+            using var f = Font(12, bold: true);
+            using var white = Fill(SKColors.White);
+            c.DrawText(Ellipsize(HeaderTitle, f, ContentWidth * 0.62f), Margin + 8, _y + 17.5f, SKTextAlign.Left, f, white);
+            using var fs = Font(8.5f);
+            c.DrawText(Ellipsize(HeaderSubtitle, fs, ContentWidth * 0.36f), Margin + ContentWidth - 8, _y + 16.5f, SKTextAlign.Right, fs, white);
+            _y += 34;
+            return;
+        }
+
+        // Rich header: [company logo]  company / title / reference lines  [client logo]
+        const float logoW = 90, logoH = 40;
+        var hasLeft = Layout.LogoPath != "";
+        var hasRight = Layout.ClientLogoPath != "";
+        if (hasLeft && _logo != null) c.DrawImage(_logo, Fit(_logo.Width, _logo.Height, new SKRect(Margin, _y, Margin + logoW, _y + logoH)), new SKSamplingOptions(SKFilterMode.Linear));
+        if (hasRight && _clientLogo != null)
+            c.DrawImage(_clientLogo, Fit(_clientLogo.Width, _clientLogo.Height, new SKRect(Margin + ContentWidth - logoW, _y, Margin + ContentWidth, _y + logoH)), new SKSamplingOptions(SKFilterMode.Linear));
+        var x0 = Margin + (hasLeft ? logoW + 10 : 0);
+        var x1 = Margin + ContentWidth - (hasRight ? logoW + 10 : 0);
+        var lines = new List<(string Text, float Size, bool Bold, SKColor Color)>();
+        if (Layout.CompanyName != "") lines.Add((Layout.CompanyName, 11.5f, true, Ink));
+        lines.Add((HeaderTitle, 10, true, Accent));
+        if (HeaderSubtitle != "") lines.Add((HeaderSubtitle, 8, false, Muted));
+        foreach (var l in Layout.HeaderLines.Replace("\r", "").Split('\n', StringSplitOptions.RemoveEmptyEntries))
+            lines.Add((l.Trim(), 7.5f, false, Ink));
+        var y = _y;
+        foreach (var (text, size, bold, color) in lines)
+        {
+            using var f = Font(size, bold);
+            using var p = Fill(color);
+            var t = Ellipsize(text, f, x1 - x0);
+            var (x, align) = Layout.HeaderAlign switch
+            {
+                TextAlign.Center => ((x0 + x1) / 2, SKTextAlign.Center),
+                TextAlign.Right => (x1, SKTextAlign.Right),
+                _ => (x0, SKTextAlign.Left),
+            };
+            c.DrawText(t, x, y + size, align, f, p);
+            y += size * 1.3f;
+        }
+        var bottom = Math.Max(_y + logoH, y) + 4;
+        using var rule = Stroke(Accent, 1.5f);
+        c.DrawLine(Margin, bottom, Margin + ContentWidth, bottom, rule);
+        _y = bottom + 8;
     }
+
+    private string PageNumberText() => Layout.PageNumbers switch
+    {
+        PageNumberStyle.PageN => $"Page {PageNumber}",
+        PageNumberStyle.PageNofTotal => TotalPages > 0 ? $"Page {PageNumber} of {TotalPages}" : $"Page {PageNumber}",
+        PageNumberStyle.NSlashTotal => TotalPages > 0 ? $"{PageNumber} / {TotalPages}" : $"{PageNumber}",
+        _ => "",
+    };
 
     private void DrawFooter()
     {
@@ -132,8 +212,26 @@ public sealed class PdfDoc : IDisposable
         c.DrawLine(Margin, y - 10, Margin + ContentWidth, y - 10, line);
         using var f = Font(7.5f);
         using var p = Fill(Muted);
-        c.DrawText($"SiteNotes DPR · generated {_generated}", Margin, y, SKTextAlign.Left, f, p);
-        c.DrawText($"Page {PageNumber}", Margin + ContentWidth, y, SKTextAlign.Right, f, p);
+        var left = string.Join(" · ", new[]
+        {
+            Layout.FooterText,
+            Layout.ShowGeneratedStamp ? $"Generated {_generated}" : "",
+        }.Where(t => !string.IsNullOrWhiteSpace(t)));
+        var page = PageNumberText();
+        var pageAlign = Layout.PageNumberAlign;
+        // keep the footer text out of the page number's corner
+        if (left != "")
+        {
+            if (pageAlign == TextAlign.Left) c.DrawText(Ellipsize(left, f, ContentWidth * 0.7f), Margin + ContentWidth, y, SKTextAlign.Right, f, p);
+            else c.DrawText(Ellipsize(left, f, ContentWidth * (pageAlign == TextAlign.Center ? 0.38f : 0.75f)), Margin, y, SKTextAlign.Left, f, p);
+        }
+        if (page == "") return;
+        switch (pageAlign)
+        {
+            case TextAlign.Left: c.DrawText(page, Margin, y, SKTextAlign.Left, f, p); break;
+            case TextAlign.Center: c.DrawText(page, Margin + ContentWidth / 2, y, SKTextAlign.Center, f, p); break;
+            default: c.DrawText(page, Margin + ContentWidth, y, SKTextAlign.Right, f, p); break;
+        }
     }
 
     public void EnsureSpace(float height)
@@ -304,7 +402,10 @@ public sealed class PdfDoc : IDisposable
         {
             var x = Margin + i * (w + gap);
             C.DrawRoundRect(x, _y, w, h, 4, 4, bg);
+            var size = 15f;
+            while (size > 8 && vf.MeasureText(list[i].Value) > w - 8) vf.Size = size -= 0.5f;
             C.DrawText(list[i].Value, x + w / 2, _y + 21, SKTextAlign.Center, vf, white);
+            vf.Size = 15;
             C.DrawText(Ellipsize(list[i].Label.ToUpperInvariant(), lf, w - 6), x + w / 2, _y + 34, SKTextAlign.Center, lf, white);
         }
         _y += h + 10;
@@ -428,7 +529,7 @@ public sealed class PdfDoc : IDisposable
             {
                 var x = Margin + j * (w + gap);
                 var rect = new SKRect(x, _y, x + w, _y + imageHeight);
-                using var img = ImageTools.LoadForPdf(row[j].Path, 1200);
+                using var img = DryRun ? null : ImageTools.LoadForPdf(row[j].Path, 1200);
                 if (img != null) C.DrawImage(img, Fit(img.Width, img.Height, rect), new SKSamplingOptions(SKFilterMode.Linear));
                 else
                 {
@@ -450,6 +551,18 @@ public sealed class PdfDoc : IDisposable
     /// <summary>A single image across the content width (note images).</summary>
     public void Image(string path, float maxHeight = 320, string? caption = null)
     {
+        if (DryRun)
+        {
+            // same height as the real pass so the page count matches
+            var (iw, ih) = ImageSize(path);
+            if (iw == 0) { Paragraph($"[image missing: {Path.GetFileName(path)}]", 8, Muted); return; }
+            var dh = Math.Min(maxHeight, ContentWidth * ih / iw);
+            EnsureSpace(dh + 16);
+            _y += dh + 4;
+            if (!string.IsNullOrWhiteSpace(caption)) Text(caption, 8, italic: true, color: Muted, align: TextAlign.Center);
+            else _y += 4;
+            return;
+        }
         using var img = ImageTools.LoadForPdf(path, 1600);
         if (img == null) { Paragraph($"[image missing: {Path.GetFileName(path)}]", 8, Muted); return; }
         var w = ContentWidth;
@@ -471,7 +584,7 @@ public sealed class PdfDoc : IDisposable
         _c = _doc.BeginPage(PageWidth, PageHeight);
         PageNumber++;
         ShowHeader = keep;
-        using var img = ImageTools.LoadForPdf(path, 2200, 82);
+        using var img = DryRun ? null : ImageTools.LoadForPdf(path, 2200, 82);
         if (img != null)
             _c.DrawImage(img, Fit(img.Width, img.Height, new SKRect(margin, margin, PageWidth - margin, PageHeight - margin)),
                 new SKSamplingOptions(SKFilterMode.Linear));
@@ -512,6 +625,16 @@ public sealed class PdfDoc : IDisposable
         _y += h + 6;
     }
 
+    /// <summary>Upright pixel size of an image without decoding it.</summary>
+    private static (float W, float H) ImageSize(string path)
+    {
+        if (!File.Exists(path)) return (0, 0);
+        using var codec = SKCodec.Create(path);
+        if (codec == null) return (0, 0);
+        var sideways = codec.EncodedOrigin is SKEncodedOrigin.RightTop or SKEncodedOrigin.LeftBottom or SKEncodedOrigin.LeftTop or SKEncodedOrigin.RightBottom;
+        return sideways ? (codec.Info.Height, codec.Info.Width) : (codec.Info.Width, codec.Info.Height);
+    }
+
     private static SKRect Fit(float w, float h, SKRect box)
     {
         var s = Math.Min(box.Width / w, box.Height / h);
@@ -522,11 +645,23 @@ public sealed class PdfDoc : IDisposable
         return new SKRect(x, y, x + dw, y + dh);
     }
 
-    public void Dispose()
+    /// <summary>Closes the document (also called by Dispose).</summary>
+    public void Finish()
     {
+        if (_finished) return;
+        _finished = true;
         if (_c == null && PageNumber == 0) NewPage();
         if (_c != null) EndPage();
         _doc.Close();
+    }
+
+    private bool _finished;
+
+    public void Dispose()
+    {
+        Finish();
         _doc.Dispose();
+        _logo?.Dispose();
+        _clientLogo?.Dispose();
     }
 }

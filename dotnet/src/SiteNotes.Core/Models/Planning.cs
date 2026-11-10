@@ -11,10 +11,10 @@ public enum RateBasis { PerHour, PerDay, PerUnit, LumpSum }
 public enum WbsLevel { Project, Plant, Unit, Area, System, WorkPackage }
 
 /// <summary>
-/// Resource master: a trade/crew (manpower), a material, a machine or any other non-material
+/// SiteResource master: a trade/crew (manpower), a material, a machine or any other non-material
 /// cost (scaffolding hire, testing, transport…), with its rate. Money is decimal so totals are exact.
 /// </summary>
-public class Resource : SyncEntity
+public class SiteResource : SyncEntity
 {
     public string Code { get; set; } = "";
     public string Name { get; set; } = "";
@@ -101,4 +101,11 @@ public class WorkCalendar : SyncEntity
         }
         return d;
     }
+}
+
+/// <summary>Saved report-manager choices (logos, header, footer, sections, sorting) for a project.</summary>
+public class ReportProfile : SyncEntity
+{
+    public string Name { get; set; } = "Default";
+    public string OptionsJson { get; set; } = "";
 }

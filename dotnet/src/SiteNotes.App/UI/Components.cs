@@ -79,7 +79,10 @@ public class RowList<T> : VerticalStackLayout where T : class
     private readonly VerticalStackLayout _rows = new() { Spacing = 6 };
     private readonly string _emptyText;
 
-    public RowList(List<T> items, Func<T, View> buildRow, Action changed, string emptyText, params (string Text, Func<T?> Factory)[] addButtons)
+    /// <summary>Wraps a plain factory for an add button.</summary>
+    public static Func<Task<T?>> Now(Func<T?> f) => () => Task.FromResult(f());
+
+    public RowList(List<T> items, Func<T, View> buildRow, Action changed, string emptyText, params (string Text, Func<Task<T?>> Factory)[] addButtons)
     {
         _items = items;
         _buildRow = buildRow;
@@ -90,9 +93,9 @@ public class RowList<T> : VerticalStackLayout where T : class
         var buttons = new FlexLayout { Wrap = Microsoft.Maui.Layouts.FlexWrap.Wrap };
         foreach (var (text, factory) in addButtons)
         {
-            var b = Ui.Button(text, () =>
+            var b = Ui.Button(text, async () =>
             {
-                var item = factory();
+                var item = await factory();
                 if (item == null) return;
                 _items.Add(item);
                 Rebuild();
@@ -172,16 +175,22 @@ public class MediaStrip : VerticalStackLayout
         Render();
     }
 
-    private async Task AddAsync(MediaItem m)
+    private Task AddAsync(MediaItem m)
     {
-        var caption = await Shell.Current.DisplayPromptAsync("Caption", "Describe this photo/video (optional)", "Save", "Skip", "e.g. Slab L5 – grid C/4");
-        if (!string.IsNullOrWhiteSpace(caption))
-        {
-            m.Caption = caption;
-            await AppServices.Db.SaveAsync(m);
-        }
+        // No caption prompt: capture stays one tap. Tap a thumbnail to add a caption later.
         _items.Add(m);
         Render();
+        return Task.CompletedTask;
+    }
+
+    private static Image ThumbImage(MediaItem m)
+    {
+        var img = new Image { Aspect = Aspect.AspectFill };
+        _ = Task.Run(() => MediaService.Thumbnail(m)).ContinueWith(t =>
+        {
+            if (t.Result is { } path) MainThread.BeginInvokeOnMainThread(() => img.Source = ImageSource.FromFile(path));
+        }, TaskScheduler.Default);
+        return img;
     }
 
     private void Render()
@@ -191,7 +200,7 @@ public class MediaStrip : VerticalStackLayout
         {
             View content = m.Kind == MediaKind.Video
                 ? new Label { Text = "▶\nVideo", HorizontalTextAlignment = TextAlignment.Center, VerticalTextAlignment = TextAlignment.Center, TextColor = Colors.White, FontSize = 14 }
-                : new Image { Source = MediaService.Thumbnail(m), Aspect = Aspect.AspectFill };
+                : ThumbImage(m);
             var tile = new Border
             {
                 WidthRequest = 104, HeightRequest = 104, Margin = new Thickness(0, 0, 6, 6), StrokeThickness = 0,

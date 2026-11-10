@@ -64,7 +64,7 @@ public class PlanningTests : IDisposable
 
         async Task Day(int day, double qty, int masons)
         {
-            var b = await _db.NewReportAsync(p.Id, new DateTime(2026, 11, day), carryForward: true);
+            var b = await _db.NewReportAsync(p.Id, new DateTime(2026, 11, day), carryForwardOverride: true);
             var row = b.Activities.SingleOrDefault(a => a.ActivityId == act.Id);
             if (row == null) { row = new ReportActivity { ActivityId = act.Id }; b.Activities.Add(row); }
             row.TodayQty = qty;
@@ -143,10 +143,84 @@ public class SampleDataTests
         Assert.Contains(pp.BySubcontractor, s => s.Name == "Om Rebar Works" && s.ManDays > 0);
         Assert.True(pp.Activities.Single(a => a.Activity.Code == "C-100").DoneQty > 0);
         // The next report automatically lists running activities.
-        var next = await db.NewReportAsync(p.Id, new DateTime(2026, 11, 10), carryForward: true);
+        var next = await db.NewReportAsync(p.Id, new DateTime(2026, 11, 10), carryForwardOverride: true);
         Assert.Contains(next.Activities, a => a.ActivityName.Contains("Excavation"));
         using var ms = new MemoryStream();
         PdfReports.ReportRegister(ms, p, await new ReportQueryService(db).LoadBundlesAsync(new ReportFilter { ProjectId = p.Id }), "All", true, db.MediaPath, await db.CalendarAsync(p.Id));
         Assert.True(ms.Length > 5000);
+    }
+}
+
+public class ReportOptionsTests
+{
+    [Fact]
+    public async Task Auto_numbering_dates_bulk_load_and_report_options()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "sitenotes-opt-" + Guid.NewGuid().ToString("N"));
+        var db = new LocalDatabase(dir);
+        await db.InitAsync();
+        var p = await SampleData.CreateAsync(db, DateTime.Today);
+
+        // numbering: first number asked once, then automatic
+        var fresh = new Project { Name = "Fresh" };
+        await db.SaveAsync(fresh);
+        Assert.True(await db.NeedsFirstReportNoAsync(fresh.Id));
+        fresh.FirstReportNo = 120;
+        await db.SaveAsync(fresh);
+        Assert.False(await db.NeedsFirstReportNoAsync(fresh.Id));
+        Assert.Equal(120, await db.NextReportNoAsync(fresh.Id));
+        var b = await db.NewReportAsync(fresh.Id, DateTime.Today);
+        await db.SaveReportAsync(b);
+        Assert.Equal(121, await db.NextReportNoAsync(fresh.Id));
+        Assert.Equal(DateTime.Today, await db.NextReportDateAsync(fresh.Id));
+
+        // auto date for the sample: day after the latest report, not later than today
+        var next = await db.NextReportDateAsync(p.Id);
+        Assert.True(next <= DateTime.Today);
+        var latest = (await db.ListForProjectAsync<DailyReport>(p.Id)).Max(r => r.Date);
+        Assert.True(next > latest);
+
+        // bulk loader gives the same cumulative figures as the single loader
+        var q = new ReportQueryService(db);
+        var bulk = await q.LoadBundlesAsync(new ReportFilter { ProjectId = p.Id });
+        foreach (var bb in bulk)
+        {
+            var single = await db.LoadReportAsync(bb.Report.Id);
+            foreach (var a in bb.Activities)
+                Assert.Equal(single.Activities.Single(x => x.Id == a.Id).CumulativeQty, a.CumulativeQty, 3);
+            Assert.Equal(single.Manpower.Count, bb.Manpower.Count);
+        }
+
+        // options round-trip and render with logo, header lines, page X of Y, chosen sections
+        var logo = Path.Combine(dir, "logo.jpg");
+        using (var bmp = new SkiaSharp.SKBitmap(200, 80))
+        {
+            using var c = new SkiaSharp.SKCanvas(bmp);
+            c.Clear(SkiaSharp.SKColors.OrangeRed);
+            Imaging.ImageTools.SaveJpeg(bmp, logo);
+        }
+        var opt = new ReportOptions
+        {
+            Sections = [DprSection.Summary, DprSection.Manpower, DprSection.Activities, DprSection.Signatures],
+            ActivitySort = ActivityRowSort.ProgressHigh,
+            ExtraRemarks = "Issued for client review",
+            Layout = new PdfLayout { LogoPath = logo, CompanyName = "BuildRight Infra", HeaderLines = "Project ref: WTP/2026/014\nContract: 45/2026", HeaderAlign = TextAlign.Center, FooterText = "Confidential", PageNumbers = PageNumberStyle.PageNofTotal },
+        };
+        var back = ReportOptions.FromJson(opt.ToJson());
+        Assert.Equal(4, back.Sections.Count);
+        Assert.Equal(DprSection.Manpower, back.Sections[1]);
+        Assert.Equal("BuildRight Infra", back.Layout.CompanyName);
+
+        using var ms = new MemoryStream();
+        PdfReports.ReportRegister(ms, p, bulk, "All", true, db.MediaPath, await db.CalendarAsync(p.Id), opt);
+        Assert.True(ms.Length > 5000);
+        var outDir = Environment.GetEnvironmentVariable("SITENOTES_SAMPLE_DIR");
+        if (!string.IsNullOrEmpty(outDir))
+        {
+            Directory.CreateDirectory(outDir);
+            await using var fs = File.Create(Path.Combine(outDir, "dpr-options.pdf"));
+            opt.Sections = [.. Enum.GetValues<DprSection>()];
+            PdfReports.DailyReport(fs, bulk[0], db.MediaPath, await db.CalendarAsync(p.Id), opt);
+        }
     }
 }

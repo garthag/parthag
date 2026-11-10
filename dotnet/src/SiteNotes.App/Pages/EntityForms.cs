@@ -2,6 +2,7 @@ using SiteNotes.App.Services;
 using SiteNotes.App.UI;
 using SiteNotes.Core;
 using SiteNotes.Core.Models;
+using SiteNotes.Core.Reports;
 
 namespace SiteNotes.App.Pages;
 
@@ -48,6 +49,44 @@ public static class EntityForms
 {
     private static View F(string label, View input) => Ui.Field(label, input);
 
+    private static Switch Switch(bool value, Action<bool> changed)
+    {
+        var sw = new Switch { IsToggled = value, OnColor = Ui.Primary, HorizontalOptions = LayoutOptions.Start };
+        sw.Toggled += (_, a) => changed(a.Value);
+        return sw;
+    }
+
+    /// <summary>Read-only panel showing what the app calculated for an activity from the daily reports.</summary>
+    private static View ProgressPanel(Activity a)
+    {
+        var body = new VerticalStackLayout { Spacing = 4, Children = { Ui.Caption("Calculating…") } };
+        if (string.IsNullOrEmpty(a.ProjectId)) return body;
+        _ = Task.Run(async () =>
+        {
+            var pp = await new ProgressService(AppServices.Db).ComputeAsync(a.ProjectId);
+            var p = pp.Activities.FirstOrDefault(x => x.Activity.Id == a.Id);
+            MainThread.BeginInvokeOnMainThread(() =>
+            {
+                body.Children.Clear();
+                if (p == null) { body.Children.Add(Ui.Caption("Not reported yet. Progress appears after the first daily report.")); return; }
+                var cur = pp.Calendar.Currency;
+                body.Children.Add(new ProgressBar { Progress = p.Percent / 100, ProgressColor = p.Percent >= 100 ? Ui.Success : Ui.Primary, HeightRequest = 10 });
+                body.Children.Add(Ui.Columns(4,
+                    Ui.Stat("Done", $"{PdfReports.N(p.DoneQty)} {a.Unit}"),
+                    Ui.Stat("Progress", $"{p.Percent:0.##} %", p.Percent >= 100 ? Ui.Success : Ui.Primary),
+                    Ui.Stat("Balance", $"{PdfReports.N(p.RemainingQty)} {a.Unit}", Ui.Muted),
+                    Ui.Stat("Status", ProgressReports.StateText(p.State), p.State == ActivityState.Delayed ? Ui.Danger : Ui.Primary),
+                    Ui.Stat("Days worked", p.DaysWorked.ToString(), Ui.Muted),
+                    Ui.Stat("Average / day", $"{PdfReports.N(p.AvgPerDay)} {a.Unit}", Ui.Muted),
+                    Ui.Stat("Forecast finish", PdfReports.D(p.ForecastFinish), p.State == ActivityState.Delayed ? Ui.Danger : Ui.Muted),
+                    Ui.Stat($"Cost ({cur})", PdfReports.M(p.Actual.Total), Ui.Accent)));
+                body.Children.Add(Ui.Caption($"Done = sum of 'today' quantities in all daily reports. % = done ÷ planned × 100 (max 100). " +
+                                             $"Forecast = balance ÷ average per day, on the work calendar. Cost/unit {PdfReports.M(p.CostPerUnit)} · cost/day {PdfReports.M(p.CostPerDay)}."));
+            });
+        });
+        return body;
+    }
+
     public static Page ProjectForm(Project p) => new FormPage<Project>(string.IsNullOrEmpty(p.Name) ? "New project" : p.Name, p,
         x => string.IsNullOrWhiteSpace(x.Name) ? "Enter the project name." : null,
         async x =>
@@ -67,6 +106,12 @@ public static class EntityForms
             F("Location", Ui.Entry(p.Location, "", changed: v => p.Location = v)),
             F("Start date", Ui.Date(p.StartDate, v => p.StartDate = v)),
             F("Completion date", Ui.OptionalDate(p.EndDate, v => p.EndDate = v))),
+        Ui.SectionHeader("Daily reports"),
+        Ui.Columns(3,
+            F("Report number prefix", Ui.Entry(p.ReportPrefix, "DPR-", changed: v => p.ReportPrefix = v)),
+            F("First report number", Ui.Number(p.FirstReportNo, v => p.FirstReportNo = (int)Math.Max(0, v), "asked once")),
+            F("New report copies yesterday's crew & activities", Switch(p.CarryForward, v => p.CarryForward = v))),
+        Ui.Caption("Numbers and dates are automatic: each new report takes the next number and the next working day."),
         F("Description / scope", Ui.Memo(p.Description, "Scope of work, contract value, notes…", v => p.Description = v)),
         Ui.Button("✔ Make this the current project", async () => { await AppServices.SetProjectAsync(p); await Ui.Toast($"{p.Name} is now the current project."); }, false));
 
@@ -119,7 +164,8 @@ public static class EntityForms
                 F("Planned output per day", Ui.Number(a.PlannedRatePerDay, v => a.PlannedRatePerDay = v, "optional")),
                 F("Planned start", Ui.OptionalDate(a.PlannedStart, v => a.PlannedStart = v)),
                 F("Planned finish", Ui.OptionalDate(a.PlannedFinish, v => a.PlannedFinish = v))),
-            Ui.Caption("Progress is not typed here: it is the sum of 'today' quantities in the daily reports and stops at 100 %."),
+            Ui.SectionHeader("Progress (calculated automatically)"),
+            ProgressPanel(a),
             Ui.SectionHeader("Assigned resources (planned)"), resources,
             F("Remarks", Ui.Memo(a.Remarks, "", v => a.Remarks = v, 50)));
     }
@@ -146,13 +192,13 @@ public static class EntityForms
         picker.SelectedIndexChanged += (_, _) => { if (picker.SelectedItem is PickItem p) changed(p.Id); };
     }
 
-    public static Page ResourceForm(Resource r)
+    public static Page ResourceForm(SiteResource r)
     {
         var subPicker = new Picker { Title = "Agency" };
         _ = FillSubcontractorsAsync(subPicker, r.SubcontractorId, id => r.SubcontractorId = id);
         var deptPicker = new Picker { Title = "Department" };
         _ = FillAsync<Department>(deptPicker, r.DepartmentId, id => r.DepartmentId = id, "(none)");
-        return new FormPage<Resource>(string.IsNullOrEmpty(r.Name) ? "New resource" : r.Name, r,
+        return new FormPage<SiteResource>(string.IsNullOrEmpty(r.Name) ? "New resource" : r.Name, r,
             x => string.IsNullOrWhiteSpace(x.Name) ? "Enter the resource name." : x.Rate < 0 ? "Rate cannot be negative." : null, null,
             Ui.Columns(2,
                 F("Type", Ui.EnumPicker(r.Type, v => r.Type = v)),

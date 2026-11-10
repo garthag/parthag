@@ -63,7 +63,7 @@ public class NoteEditorPage : ContentPage
         _title.Text = _note.Title;
         _tags.Text = _note.Tags;
         _status.Text = _noteId == null ? "New note" : $"Last edited {_note.UpdatedAtUtc.ToLocalTime():dd-MMM-yyyy HH:mm}" + (_note.UpdatedBy != "" ? $" by {_note.UpdatedBy}" : "");
-        Render();
+        Render(_blocks[0]); // first line selected so the toolbox works straight away
         _dirty = false;
         if (_noteId == null) _title.Focus();
     }
@@ -371,8 +371,9 @@ public class NoteEditorPage : ContentPage
                     ?? (await AppServices.Db.ListAsync<MediaItem>(x => x.OwnerId == id)).OrderBy(x => x.PageNo).FirstOrDefault();
             if (m != null) media[id] = m;
         }
+        var opt = await ReportProfiles.CurrentAsync();
         var path = await FileExport.CreateAsync($"Note_{FileExport.SafeName(note.Title)}_{DateTime.Now:yyyyMMdd_HHmm}.pdf",
-            s => PdfReports.Note(s, note, blocks, folderName, id => media.GetValueOrDefault(id), AppServices.Db.MediaPath));
+            s => PdfReports.Note(s, note, blocks, folderName, id => media.GetValueOrDefault(id), AppServices.Db.MediaPath, opt));
         if (share && Shell.Current?.CurrentPage is { } page) await FileExport.OfferAsync(page, path);
     }
 }

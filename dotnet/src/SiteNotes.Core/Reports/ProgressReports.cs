@@ -15,69 +15,72 @@ public static class ProgressReports
         _ => "Delayed",
     };
 
-    public static void Pdf(Stream output, Project? project, ProjectProgress pp, string periodText, bool includeCost = true)
+    public static void Pdf(Stream output, Project? project, ProjectProgress pp, string periodText, bool includeCost = true, ReportOptions? opt = null)
     {
         var cur = pp.Calendar.Currency;
-        using var pdf = new PdfDoc(output, project?.Name ?? "Progress", $"Progress & cost · {periodText}", landscape: true);
-        pdf.NewPage();
-        pdf.Text("ACTIVITY PROGRESS & COST REPORT", 14, bold: true, color: PdfDoc.Accent, spacingAfter: 2);
-        pdf.Text($"{periodText} · calendar {pp.Calendar.HoursPerDay:0.#} h/day", 9, color: PdfDoc.Muted, spacingAfter: 8);
-
-        var acts = pp.Activities;
-        pdf.Tiles([
-            ("Overall progress", P(pp.OverallPercent) + " %"),
-            ("Planned to date", P(pp.PlannedPercent) + " %"),
-            ("Completed", $"{acts.Count(a => a.State == ActivityState.Completed)} / {acts.Count}"),
-            ("In progress", acts.Count(a => a.State == ActivityState.InProgress).ToString()),
-            ("Delayed", acts.Count(a => a.State == ActivityState.Delayed).ToString()),
-            ("Man-hours", N(pp.Actual.ManHours)),
-        ]);
-
-        // Progress grouped by WBS (plant / unit / area…)
-        foreach (var group in acts.GroupBy(a => string.IsNullOrWhiteSpace(a.WbsPath) ? "Activities without WBS" : a.WbsPath))
+        includeCost = includeCost && (opt?.ShowCost ?? true);
+        PdfDoc.Render(output, project?.Name ?? "Progress", $"Progress & cost · {periodText}", true, opt?.Layout, pdf =>
         {
-            pdf.Section(group.Key, $"{group.Count()} activities");
-            pdf.Table([
-                    new("Code", 0.8f), new("Activity", 2.4f), new("Method", 1.2f), new("Agency / Dept.", 1.5f), new("Unit", 0.6f),
-                    new("Planned", 0.9f, true), new("Done", 0.9f, true), new("Balance", 0.9f, true), new("Progress", 1.5f, false, true),
-                    new("Plan %", 0.7f, true), new("Start", 1.2f), new("Forecast finish", 1.2f), new("Avg/day", 0.8f, true), new("Status", 1f)
-                ],
-                group.Select(a => new[]
-                {
-                    a.Activity.Code, a.Activity.Name, a.Activity.Method, Join(a.Agency, a.Department), a.Activity.Unit,
-                    N(a.Activity.PlannedQty), N(a.DoneQty), N(a.RemainingQty), P(a.Percent), P(a.PlannedPercentToday),
-                    D(a.ActualStart), D(a.ForecastFinish), N(a.AvgPerDay), StateText(a.State)
-                }));
-        }
+            pdf.NewPage();
+            pdf.Text("ACTIVITY PROGRESS & COST REPORT", 14, bold: true, color: PdfDoc.Accent, spacingAfter: 2);
+            pdf.Text($"{periodText} · calendar {pp.Calendar.HoursPerDay:0.#} h/day", 9, color: PdfDoc.Muted, spacingAfter: 8);
 
-        if (includeCost)
-        {
-            pdf.Section("Cost by activity", $"{cur} {M(pp.Actual.Total)}");
+            var acts = pp.Activities;
             pdf.Tiles([
-                ($"Manpower ({cur})", M(pp.Actual.Manpower)), ($"Machinery ({cur})", M(pp.Actual.Machinery)),
-                ($"Material ({cur})", M(pp.Actual.Material)), ($"Non-material ({cur})", M(pp.Actual.Other)),
-                ($"Actual total ({cur})", M(pp.Actual.Total)), ($"Planned budget ({cur})", M(pp.PlannedCost)),
+                ("Overall progress", P(pp.OverallPercent) + " %"),
+                ("Planned to date", P(pp.PlannedPercent) + " %"),
+                ("Completed", $"{acts.Count(a => a.State == ActivityState.Completed)} / {acts.Count}"),
+                ("In progress", acts.Count(a => a.State == ActivityState.InProgress).ToString()),
+                ("Delayed", acts.Count(a => a.State == ActivityState.Delayed).ToString()),
+                ("Man-hours", N(pp.Actual.ManHours)),
             ]);
-            var rows = acts.Where(a => a.Actual.Total > 0 || a.PlannedCost > 0).Select(a => new[]
-            {
-                a.Activity.ToString(), M(a.Actual.Manpower), M(a.Actual.Machinery), M(a.Actual.Material), M(a.Actual.Other),
-                M(a.Actual.Total), a.DoneQty > 0 ? $"{M(a.CostPerUnit)}/{a.Activity.Unit}" : "-", M(a.CostPerDay),
-                M(a.CostPerManHour), N(a.Actual.ManHours), M(a.PlannedCost), M(a.EarnedValue)
-            }).ToList();
-            if (pp.Unallocated.Total > 0)
-                rows.Add(["General / overheads", M(pp.Unallocated.Manpower), M(pp.Unallocated.Machinery), M(pp.Unallocated.Material),
-                    M(pp.Unallocated.Other), M(pp.Unallocated.Total), "-", "-", "-", N(pp.Unallocated.ManHours), "-", "-"]);
-            pdf.Table([
-                    new("Activity", 2.6f), new("Manpower", 1, true), new("Machinery", 1, true), new("Material", 1, true),
-                    new("Non-material", 1, true), new("Total", 1.1f, true), new("Cost / unit", 1.1f, true), new("Cost / day", 1, true),
-                    new("Labour / man-hr", 0.9f, true), new("Man-hrs", 0.8f, true), new("Budget", 1, true), new("Earned value", 1, true)
-                ], rows,
-                ["TOTAL", M(pp.Actual.Manpower), M(pp.Actual.Machinery), M(pp.Actual.Material), M(pp.Actual.Other), M(pp.Actual.Total),
-                 "", "", "", N(pp.Actual.ManHours), M(pp.PlannedCost), M(acts.Sum(a => a.EarnedValue))]);
-        }
 
-        Parties(pdf, "Subcontractor-wise manpower & work done", "Subcontractor", pp.BySubcontractor, cur, includeCost);
-        Parties(pdf, "Department-wise manpower & activities", "Department", pp.ByDepartment, cur, includeCost);
+            // Progress grouped by WBS (plant / unit / area…)
+            foreach (var group in acts.GroupBy(a => string.IsNullOrWhiteSpace(a.WbsPath) ? "Activities without WBS" : a.WbsPath))
+            {
+                pdf.Section(group.Key, $"{group.Count()} activities");
+                pdf.Table([
+                        new("Code", 0.8f), new("Activity", 2.4f), new("Method", 1.2f), new("Agency / Dept.", 1.5f), new("Unit", 0.6f),
+                        new("Planned", 0.9f, true), new("Done", 0.9f, true), new("Balance", 0.9f, true), new("Progress", 1.5f, false, true),
+                        new("Plan %", 0.7f, true), new("Start", 1.2f), new("Forecast finish", 1.2f), new("Avg/day", 0.8f, true), new("Status", 1f)
+                    ],
+                    group.Select(a => new[]
+                    {
+                        a.Activity.Code, a.Activity.Name, a.Activity.Method, Join(a.Agency, a.Department), a.Activity.Unit,
+                        N(a.Activity.PlannedQty), N(a.DoneQty), N(a.RemainingQty), P(a.Percent), P(a.PlannedPercentToday),
+                        D(a.ActualStart), D(a.ForecastFinish), N(a.AvgPerDay), StateText(a.State)
+                    }));
+            }
+
+            if (includeCost)
+            {
+                pdf.Section("Cost by activity", $"{cur} {M(pp.Actual.Total)}");
+                pdf.Tiles([
+                    ($"Manpower ({cur})", M(pp.Actual.Manpower)), ($"Machinery ({cur})", M(pp.Actual.Machinery)),
+                    ($"Material ({cur})", M(pp.Actual.Material)), ($"Non-material ({cur})", M(pp.Actual.Other)),
+                    ($"Actual total ({cur})", M(pp.Actual.Total)), ($"Planned budget ({cur})", M(pp.PlannedCost)),
+                ]);
+                var rows = acts.Where(a => a.Actual.Total > 0 || a.PlannedCost > 0).Select(a => new[]
+                {
+                    a.Activity.ToString(), M(a.Actual.Manpower), M(a.Actual.Machinery), M(a.Actual.Material), M(a.Actual.Other),
+                    M(a.Actual.Total), a.DoneQty > 0 ? $"{M(a.CostPerUnit)}/{a.Activity.Unit}" : "-", M(a.CostPerDay),
+                    M(a.CostPerManHour), N(a.Actual.ManHours), M(a.PlannedCost), M(a.EarnedValue)
+                }).ToList();
+                if (pp.Unallocated.Total > 0)
+                    rows.Add(["General / overheads", M(pp.Unallocated.Manpower), M(pp.Unallocated.Machinery), M(pp.Unallocated.Material),
+                        M(pp.Unallocated.Other), M(pp.Unallocated.Total), "-", "-", "-", N(pp.Unallocated.ManHours), "-", "-"]);
+                pdf.Table([
+                        new("Activity", 2.6f), new("Manpower", 1, true), new("Machinery", 1, true), new("Material", 1, true),
+                        new("Non-material", 1, true), new("Total", 1.1f, true), new("Cost / unit", 1.1f, true), new("Cost / day", 1, true),
+                        new("Labour / man-hr", 0.9f, true), new("Man-hrs", 0.8f, true), new("Budget", 1, true), new("Earned value", 1, true)
+                    ], rows,
+                    ["TOTAL", M(pp.Actual.Manpower), M(pp.Actual.Machinery), M(pp.Actual.Material), M(pp.Actual.Other), M(pp.Actual.Total),
+                     "", "", "", N(pp.Actual.ManHours), M(pp.PlannedCost), M(acts.Sum(a => a.EarnedValue))]);
+            }
+
+            Parties(pdf, "Subcontractor-wise manpower & work done", "Subcontractor", pp.BySubcontractor, cur, includeCost);
+            Parties(pdf, "Department-wise manpower & activities", "Department", pp.ByDepartment, cur, includeCost);
+        });
     }
 
     private static string Join(string a, string b) => string.Join(" / ", new[] { a, b }.Where(x => !string.IsNullOrWhiteSpace(x)));

@@ -30,7 +30,7 @@ public static class SampleData
         var filter = new WbsNode { ProjectId = pid, Code = "U2", Name = "Filter house", Level = WbsLevel.Unit, ParentId = plant.Id };
         await db.SaveAllAsync([plant, clarifier, filter]);
 
-        Resource R(string code, string name, ResourceType type, decimal rate, RateBasis basis, string unit = "Nos", string sub = "", string dept = "") =>
+        SiteResource R(string code, string name, ResourceType type, decimal rate, RateBasis basis, string unit = "Nos", string sub = "", string dept = "") =>
             new() { ProjectId = pid, Code = code, Name = name, Type = type, Rate = rate, Basis = basis, Unit = unit, SubcontractorId = sub, DepartmentId = dept };
         var carpenter = R("L-CAR", "Carpenter", ResourceType.Manpower, 950, RateBasis.PerDay, sub: formwork.Id);
         var helper = R("L-HLP", "Helper", ResourceType.Manpower, 650, RateBasis.PerDay, sub: formwork.Id);
@@ -69,7 +69,7 @@ public static class SampleData
         {
             var date = t.AddDays(d);
             if (date.DayOfWeek == DayOfWeek.Sunday) continue;
-            var b = await db.NewReportAsync(pid, date, carryForward: false);
+            var b = await db.NewReportAsync(pid, date, carryForwardOverride: false);
             b.Report.WeatherMorning = d == -3 ? "Light rain" : "Sunny";
             b.Report.ToolboxTalkTopic = "Working at height";
             b.Report.ToolboxTalkAttendees = 30 + rnd.Next(10);

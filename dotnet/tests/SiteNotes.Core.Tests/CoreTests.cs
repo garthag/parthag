@@ -73,7 +73,7 @@ public class DatabaseAndReportTests : IDisposable
         var sub = new Subcontractor { ProjectId = p.Id, Name = "Shree Formwork" };
         await db.SaveAsync(sub);
 
-        var b = await db.NewReportAsync(p.Id, new DateTime(2026, 11, 9), carryForward: true);
+        var b = await db.NewReportAsync(p.Id, new DateTime(2026, 11, 9), carryForwardOverride: true);
         b.Activities.Add(new ReportActivity { ActivityName = "Slab casting L5", Unit = "m³", PlannedQty = 120, TodayQty = 45, CumulativeQty = 45, SubcontractorId = sub.Id, SubcontractorName = sub.Name });
         b.Manpower.Add(new ReportManpower { Source = ManpowerSource.Subcontractor, PartyId = sub.Id, PartyName = sub.Name, Trade = "Carpenter", Count = 12 });
         b.Manpower.Add(new ReportManpower { Source = ManpowerSource.Subcontractor, PartyId = sub.Id, PartyName = sub.Name, Trade = "Helper", Count = 20 });
@@ -109,7 +109,7 @@ public class DatabaseAndReportTests : IDisposable
         Assert.Equal(1, loaded.Hindrances[0].SerialNo);
         Assert.Single(loaded.Media);
 
-        var next = await _db.NewReportAsync(p.Id, new DateTime(2026, 11, 10), carryForward: true);
+        var next = await _db.NewReportAsync(p.Id, new DateTime(2026, 11, 10), carryForwardOverride: true);
         Assert.Equal(2, next.Report.ReportNo);
         Assert.Equal(3, next.Manpower.Count);
         Assert.Equal(45, next.Activities[0].CumulativeQty);
@@ -125,7 +125,7 @@ public class DatabaseAndReportTests : IDisposable
     public async Task Filter_and_sort()
     {
         var (p, _) = await SeedAsync(_db, _db.MediaFolder);
-        var b2 = await _db.NewReportAsync(p.Id, new DateTime(2026, 11, 10), carryForward: false);
+        var b2 = await _db.NewReportAsync(p.Id, new DateTime(2026, 11, 10), carryForwardOverride: false);
         b2.Report.Status = ReportStatus.Approved;
         b2.Manpower.Add(new ReportManpower { PartyName = "X", Count = 99 });
         await _db.SaveReportAsync(b2);

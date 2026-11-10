@@ -72,11 +72,12 @@ public class DashboardPage : ContentPage
 
         var pid = AppServices.ProjectId;
         _body.Children.Add(Ui.SectionHeader("Quick actions"));
-        _body.Children.Add(Ui.Columns(6,
-            Quick("📅", "Today's DPR", OpenTodayAsync),
+        _body.Children.Add(Ui.Columns(7,
+            Quick("📅", "Today's DPR", DprFlow.TodayAsync),
             Quick("📝", "New note", async () => await AppShell.Push(new NoteEditorPage(null, ""))),
             Quick("📄", "Scan", async () => await AppShell.Push(new ScannerPage(null, ""))),
             Quick("📈", "Progress", async () => await AppShell.Push(new ProgressPage())),
+            Quick("🖨", "Reports", async () => await AppShell.Push(new ReportCenterPage())),
             Quick("⚠️", "Hindrance", async () => await AppShell.Push(EntityForms.HindranceForm(new Hindrance { ProjectId = pid }))),
             Quick("📦", "Requirement", async () => await AppShell.Push(EntityForms.RequirementForm(new Requirement { ProjectId = pid, RaisedBy = AppServices.Db.UserName })))));
 
@@ -150,12 +151,6 @@ public class DashboardPage : ContentPage
         tap.Tapped += async (_, _) => await Ui.Guard(async () => { if (await AppShell.RequireProjectAsync()) await action(); });
         card.GestureRecognizers.Add(tap);
         return card;
-    }
-
-    private static async Task OpenTodayAsync()
-    {
-        var today = (await AppServices.Db.ListForProjectAsync<DailyReport>(AppServices.ProjectId)).FirstOrDefault(r => r.Date.Date == DateTime.Today);
-        await AppShell.Push(new DprEditorPage(today?.Id));
     }
 
     /// <summary>Simple bar chart drawn with boxes (no chart library needed).</summary>

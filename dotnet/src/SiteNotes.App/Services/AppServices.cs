@@ -47,15 +47,26 @@ public static class AppServices
                 var first = (await Db.ListAsync<Project>()).FirstOrDefault();
                 if (first != null) await SetProjectAsync(first);
             }
-            DataChanged?.Invoke();
+            RaiseDataChanged();
         });
-        Db.Changed += _ => MainThread.BeginInvokeOnMainThread(() => DataChanged?.Invoke());
+        Db.Changed += _ => RaiseDataChanged();
 
         _ = Task.Run(Sync.StartAsync);
     }
 
-    /// <summary>Raised on the UI thread whenever local or synced data changed.</summary>
+    /// <summary>Raised on the UI thread whenever local or synced data changed (bursts are merged: at most ~3 per second).</summary>
     public static event Action? DataChanged;
+    private static CancellationTokenSource? _dataDebounce;
+
+    private static void RaiseDataChanged()
+    {
+        _dataDebounce?.Cancel();
+        var cts = _dataDebounce = new CancellationTokenSource();
+        Task.Delay(300, cts.Token).ContinueWith(t =>
+        {
+            if (!t.IsCanceled) MainThread.BeginInvokeOnMainThread(() => DataChanged?.Invoke());
+        }, TaskScheduler.Default);
+    }
 
     public static async Task SetProjectAsync(Project? p)
     {

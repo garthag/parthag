@@ -45,6 +45,23 @@ A construction site notebook and **Daily Progress Report (DPR)** app with planni
 - The block editor supports headings and sub-headings, bullets, numbering, **arrows**, **checklists (checked items are struck through)**, quotes, dividers, indents, bold/italic/underline/strike, 6 font styles, 14 sizes, text colour, highlight and alignment. It also inserts **camera photos, gallery photos, videos and scans**.
 - **PDF scanner:** capture pages one after another (each photo becomes a separate page), with Enhanced, Grayscale or adaptive Black & White clean-up (shadow removal). You can rotate, reorder and add remarks per page. Saving stores every page as an image plus one combined PDF, filed **automatically in Scans › yyyy-MM-dd**.
 
+### Report numbers and dates
+- **Automatic:** the app asks for the first report number **once per project**. Every new report then takes the next number (shown with a prefix such as `DPR-012`) and the **next working day** after the last report, never later than today.
+- One tap on **＋ New DPR** opens it ready to fill. If a report already exists for that date, you can open it or start another shift.
+- Prefix, first number and "copy yesterday's crew & activities" are set in the project form.
+
+### Report manager (all choices by tapping)
+- **Report:** daily report, all reports in one PDF, register summary, Excel workbook, progress & cost, manpower summary, hindrance and requirement registers.
+- **Days, filter & sort:** period chips (Today, This week, This month, Last month, Custom…), status (multi-select), agency, search, sort.
+- **What to include & order:** tick sections and move them up or down. Numbering follows automatically. You can also set activity row sort (name, most progress, most done today, agency, location), manpower row sort, show/hide costs, leave out empty sections, photos per row (1–4) and photos per report.
+- **Header, footer & page numbers:** company logo (left), client logo (right), company name, header lines (project ref, contract no.…), header alignment (left, centre, right), footer text, generated stamp, page numbers (`Page 3`, `Page 3 of 9`, `3 / 9` or none) and their position, portrait or landscape.
+- **Remarks:** custom report title and a note printed on the report.
+- **Save as default:** saved per project, synced, and used by every PDF the app makes.
+
+### Faster work with lists
+- **☑ Select** on every list lets you select items (or All) and then apply an action: PDF, Excel, mark submitted / approved / draft, mark resolved, change requirement status, activate / deactivate agencies, or delete.
+- Filters and sorting are chips: one tap and the list updates.
+
 ### Registers, filters and reports
 - Hindrance register and requirement register (with an overdue flag). Both can be searched, sorted and filtered, and exported to PDF or Excel.
 - **Report centre:** choose a period preset or custom dates, status, subcontractor, search text and sort order, then generate:

@@ -33,6 +33,11 @@ public abstract class ListPage<T> : ContentPage where T : SyncEntity, new()
     protected virtual Task ExportPdfAsync(List<T> items, string filterText) => Task.CompletedTask;
     protected virtual Task ExportExcelAsync(List<T> items, string filterText) => Task.CompletedTask;
     protected virtual bool CanExport => false;
+    /// <summary>Extra bulk actions for selected items (name → action).</summary>
+    protected virtual IEnumerable<(string Name, Func<List<T>, Task> Run)> BulkActions => [];
+    private bool _selecting;
+    private readonly Grid _bulkBar = new() { IsVisible = false, Padding = new Thickness(12, 6), ColumnSpacing = 6, BackgroundColor = Ui.PrimaryDark };
+    private readonly Label _bulkCount = new() { TextColor = Colors.White, FontAttributes = FontAttributes.Bold, VerticalOptions = LayoutOptions.Center };
     protected string SortChoice => _sort.SelectedItem as string ?? SortOptions[0];
     protected string FilterChoice => _filter.SelectedItem as string ?? "All";
 
@@ -59,6 +64,7 @@ public abstract class ListPage<T> : ContentPage where T : SyncEntity, new()
         });
         _list.SelectionChanged += async (_, e) =>
         {
+            if (_selecting) { _bulkCount.Text = $"{e.CurrentSelection.Count} selected"; return; }
             if (e.CurrentSelection.FirstOrDefault() is ListRow row)
             {
                 _list.SelectedItem = null;
@@ -71,6 +77,12 @@ public abstract class ListPage<T> : ContentPage where T : SyncEntity, new()
             if (ProjectScoped && !await AppShell.RequireProjectAsync()) return;
             await AppShell.Push(EditPage(Create()));
         }));
+        ToolbarItems.Add(new ToolbarItem("☑ Select", null, () => SetSelecting(!_selecting)));
+        _bulkBar.ColumnDefinitions = [new(GridLength.Star), new(GridLength.Auto), new(GridLength.Auto), new(GridLength.Auto)];
+        _bulkBar.Add(_bulkCount, 0);
+        _bulkBar.Add(BarButton("Actions…", BulkAsync), 1);
+        _bulkBar.Add(BarButton("All", () => { _list.SelectedItems = [.. (IEnumerable<ListRow>)_list.ItemsSource]; return Task.CompletedTask; }), 2);
+        _bulkBar.Add(BarButton("Done", () => { SetSelecting(false); return Task.CompletedTask; }), 3);
 
         _search.TextChanged += (_, _) => Render();
         _sort.ItemsSource = SortOptions;
@@ -90,21 +102,64 @@ public abstract class ListPage<T> : ContentPage where T : SyncEntity, new()
         bar.Add(_sort, 1);
         bar.Add(_filter, 2);
 
-        var grid = new Grid { RowDefinitions = [new RowDefinition(GridLength.Auto), new RowDefinition(GridLength.Auto), new RowDefinition(GridLength.Star)] };
+        var grid = new Grid { RowDefinitions = [new RowDefinition(GridLength.Auto), new RowDefinition(GridLength.Auto), new RowDefinition(GridLength.Auto), new RowDefinition(GridLength.Star)] };
         grid.Add(bar, 0, 0);
         _count.Margin = new Thickness(16, 2);
         grid.Add(_count, 0, 1);
-        grid.Add(_list, 0, 2);
+        grid.Add(_bulkBar, 0, 2);
+        grid.Add(_list, 0, 3);
         Content = grid;
     }
+
+    private static Button BarButton(string text, Func<Task> action)
+    {
+        var b = new Button { Text = text, BackgroundColor = Colors.White, TextColor = Ui.Primary, Padding = new Thickness(10, 4), CornerRadius = 6, FontSize = 13 };
+        b.Clicked += async (_, _) => await Ui.Guard(action);
+        return b;
+    }
+
+    private void SetSelecting(bool on)
+    {
+        _selecting = on;
+        _list.SelectionMode = on ? SelectionMode.Multiple : SelectionMode.Single;
+        _list.SelectedItems?.Clear();
+        _list.SelectedItem = null;
+        _bulkBar.IsVisible = on;
+        _bulkCount.Text = "Tap items to select";
+    }
+
+    private async Task BulkAsync()
+    {
+        var sel = _list.SelectedItems?.OfType<ListRow>().Select(r => (T)r.Item).ToList() ?? [];
+        if (sel.Count == 0) { await DisplayAlertAsync("Nothing selected", "Tap items to select them first.", "OK"); return; }
+        var extra = BulkActions.ToList();
+        var names = extra.Select(x => x.Name).ToList();
+        if (CanExport) { names.Add("Export PDF"); names.Add("Export Excel"); }
+        var c = await DisplayActionSheetAsync($"{sel.Count} selected", "Cancel", "Delete", names.ToArray());
+        if (c == "Delete")
+        {
+            if (!await DisplayAlertAsync($"Delete {sel.Count} item(s)?", "They are removed on every synced device.", "Delete", "Cancel")) return;
+            foreach (var x in sel) x.IsDeleted = true;
+            await AppServices.Db.SaveAllAsync(sel);
+        }
+        else if (c == "Export PDF") await ExportPdfAsync(sel, $"{sel.Count} selected");
+        else if (c == "Export Excel") await ExportExcelAsync(sel, $"{sel.Count} selected");
+        else if (extra.FirstOrDefault(x => x.Name == c) is { Run: not null } act) { await act.Run(sel); await AppServices.Db.SaveAllAsync(sel); }
+        else return;
+        SetSelecting(false);
+        await ReloadAsync();
+    }
+
+    private bool _exportAdded;
 
     protected override async void OnAppearing()
     {
         base.OnAppearing();
-        if (CanExport && ToolbarItems.Count == 1)
+        if (CanExport && !_exportAdded)
         {
             ToolbarItems.Add(new ToolbarItem("PDF", null, () => _ = Ui.Guard(() => ExportPdfAsync(Visible().ToList(), DescribeFilter()))));
             ToolbarItems.Add(new ToolbarItem("Excel", null, () => _ = Ui.Guard(() => ExportExcelAsync(Visible().ToList(), DescribeFilter()))));
+            _exportAdded = true;
         }
         await ReloadAsync();
         AppServices.DataChanged += OnData;
@@ -169,6 +224,11 @@ public class SubcontractorListPage : ListPage<Subcontractor>
     protected override string[] FilterOptions => ["Active", "Inactive"];
     protected override bool Filter(Subcontractor s, string f) => f == "Active" ? s.IsActive : !s.IsActive;
     protected override Subcontractor Create() => new() { ProjectId = AppServices.ProjectId };
+    protected override IEnumerable<(string, Func<List<Subcontractor>, Task>)> BulkActions =>
+    [
+        ("Mark active", l => { foreach (var x in l) x.IsActive = true; return Task.CompletedTask; }),
+        ("Mark inactive", l => { foreach (var x in l) x.IsActive = false; return Task.CompletedTask; }),
+    ];
     protected override Page EditPage(Subcontractor s) => EntityForms.SubcontractorForm(s);
     protected override ListRow ToRow(Subcontractor s) => new(s, s.Name, $"{s.Trade} · {s.ContactPerson} {s.Phone}",
         s.IsActive ? "" : "INACTIVE", Ui.Muted);
@@ -227,6 +287,11 @@ public class HindranceListPage : ListPage<Hindrance>
         _ => items.OrderByDescending(h => h.FromDate).ThenByDescending(h => h.SerialNo),
     };
     protected override Hindrance Create() => new() { ProjectId = AppServices.ProjectId };
+    protected override IEnumerable<(string, Func<List<Hindrance>, Task>)> BulkActions =>
+    [
+        ("Mark resolved (today)", l => { foreach (var h in l) { h.Status = HindranceStatus.Resolved; h.ToDate ??= DateTime.Today; } return Task.CompletedTask; }),
+        ("Mark open", l => { foreach (var h in l) { h.Status = HindranceStatus.Open; h.ToDate = null; } return Task.CompletedTask; }),
+    ];
     protected override Page EditPage(Hindrance h) => EntityForms.HindranceForm(h);
     protected override ListRow ToRow(Hindrance h) => new(h, $"H-{h.SerialNo:000} · {h.Category}", h.Description,
         h.Status.ToString().ToUpperInvariant(), Ui.StatusColor(h.Status.ToString()),
@@ -234,8 +299,9 @@ public class HindranceListPage : ListPage<Hindrance>
     protected override bool CanExport => true;
     protected override async Task ExportPdfAsync(List<Hindrance> items, string filterText)
     {
+        var opt = await ReportProfiles.CurrentAsync();
         var path = await FileExport.CreateAsync($"Hindrance_register_{DateTime.Now:yyyyMMdd_HHmm}.pdf",
-            s => PdfReports.HindranceRegister(s, AppServices.CurrentProject, items, filterText));
+            s => PdfReports.HindranceRegister(s, AppServices.CurrentProject, items, filterText, opt));
         await FileExport.OfferAsync(this, path);
     }
     protected override async Task ExportExcelAsync(List<Hindrance> items, string filterText)
@@ -266,6 +332,8 @@ public class RequirementListPage : ListPage<Requirement>
         _ => items.OrderBy(r => r.RequiredBy ?? DateTime.MaxValue),
     };
     protected override Requirement Create() => new() { ProjectId = AppServices.ProjectId, RaisedBy = AppServices.Db.UserName };
+    protected override IEnumerable<(string, Func<List<Requirement>, Task>)> BulkActions =>
+        Enum.GetValues<RequirementStatus>().Select(st => ($"Mark {st}", (Func<List<Requirement>, Task>)(l => { foreach (var r in l) r.Status = st; return Task.CompletedTask; })));
     protected override Page EditPage(Requirement r) => EntityForms.RequirementForm(r);
     protected override ListRow ToRow(Requirement r) => new(r, $"R-{r.SerialNo:000} · {r.Item}",
         $"{r.Category} · {PdfReports.N(r.Quantity)} {r.Unit} · {r.Priority} priority",
@@ -274,8 +342,9 @@ public class RequirementListPage : ListPage<Requirement>
     protected override bool CanExport => true;
     protected override async Task ExportPdfAsync(List<Requirement> items, string filterText)
     {
+        var opt = await ReportProfiles.CurrentAsync();
         var path = await FileExport.CreateAsync($"Requirement_register_{DateTime.Now:yyyyMMdd_HHmm}.pdf",
-            s => PdfReports.RequirementRegister(s, AppServices.CurrentProject, items, filterText));
+            s => PdfReports.RequirementRegister(s, AppServices.CurrentProject, items, filterText, opt));
         await FileExport.OfferAsync(this, path);
     }
     protected override async Task ExportExcelAsync(List<Requirement> items, string filterText)
@@ -286,21 +355,21 @@ public class RequirementListPage : ListPage<Requirement>
     }
 }
 
-public class ResourceListPage : ListPage<Resource>
+public class ResourceListPage : ListPage<SiteResource>
 {
     public ResourceListPage() : base("Resources & rates") { }
     protected override string[] SortOptions => ["Type", "Name", "Rate"];
     protected override string[] FilterOptions => Enum.GetNames<ResourceType>();
-    protected override bool Filter(Resource r, string f) => r.Type.ToString() == f;
-    protected override IEnumerable<Resource> Sort(IEnumerable<Resource> items, string sort) => sort switch
+    protected override bool Filter(SiteResource r, string f) => r.Type.ToString() == f;
+    protected override IEnumerable<SiteResource> Sort(IEnumerable<SiteResource> items, string sort) => sort switch
     {
         "Name" => items.OrderBy(r => r.Name),
         "Rate" => items.OrderByDescending(r => r.Rate),
         _ => items.OrderBy(r => r.Type).ThenBy(r => r.Name),
     };
-    protected override Resource Create() => new() { ProjectId = AppServices.ProjectId };
-    protected override Page EditPage(Resource r) => EntityForms.ResourceForm(r);
-    protected override ListRow ToRow(Resource r) => new(r, r.ToString(), $"{RateText(r.Rate, r.Basis, r.Unit)}",
+    protected override SiteResource Create() => new() { ProjectId = AppServices.ProjectId };
+    protected override Page EditPage(SiteResource r) => EntityForms.ResourceForm(r);
+    protected override ListRow ToRow(SiteResource r) => new(r, r.ToString(), $"{RateText(r.Rate, r.Basis, r.Unit)}",
         r.Type == ResourceType.Other ? "NON-MATERIAL" : r.Type.ToString().ToUpperInvariant(), TypeColor(r.Type), r.Remarks);
 
     public static string RateText(decimal rate, RateBasis basis, string unit) => basis switch

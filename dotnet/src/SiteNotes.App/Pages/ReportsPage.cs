@@ -6,98 +6,73 @@ using SiteNotes.Core.Reports;
 
 namespace SiteNotes.App.Pages;
 
-/// <summary>Shared filter bar: date preset, from/to, status, subcontractor, search and sort.</summary>
-public class FilterBar : VerticalStackLayout
+/// <summary>Creating reports: number and date are automatic; the first number is asked only once per project.</summary>
+public static class DprFlow
 {
-    public ReportFilter Filter { get; } = new();
-    public event Action? Changed;
-    private readonly DatePicker _from = new() { Format = "dd-MMM-yyyy" };
-    private readonly DatePicker _to = new() { Format = "dd-MMM-yyyy" };
-    private readonly Picker _sub = new() { Title = "Subcontractor" };
-
-    public FilterBar()
+    public static async Task NewAsync()
     {
-        Spacing = 6;
-        Padding = new Thickness(12, 8, 12, 0);
-        var preset = new Picker { Title = "Period", ItemsSource = new[] { "All dates", "Today", "Yesterday", "This week", "Last 7 days", "This month", "Last month", "Custom" }, SelectedIndex = 0 };
-        var status = new Picker { Title = "Status", ItemsSource = new[] { "Any status", "Draft", "Submitted", "Approved" }, SelectedIndex = 0 };
-        var sort = new Picker
-        {
-            Title = "Sort",
-            ItemsSource = new[] { "Newest first", "Oldest first", "Report no.", "Most manpower", "Least manpower", "Status" },
-            SelectedIndex = 0,
-        };
-        var search = new Entry { Placeholder = "🔍 Search remarks, activities, report no.", ClearButtonVisibility = ClearButtonVisibility.WhileEditing };
-        _from.IsEnabled = _to.IsEnabled = false;
+        if (!await AppShell.RequireProjectAsync()) return;
+        var db = AppServices.Db;
+        var pid = AppServices.ProjectId;
+        var page = Shell.Current.CurrentPage;
 
-        preset.SelectedIndexChanged += (_, _) =>
+        if (await db.NeedsFirstReportNoAsync(pid))
         {
-            var t = DateTime.Today;
-            var weekStart = t.AddDays(-(((int)t.DayOfWeek + 6) % 7));
-            var m = new DateTime(t.Year, t.Month, 1);
-            (DateTime? f, DateTime? to) = (preset.SelectedItem as string) switch
+            var text = await page.DisplayPromptAsync("First report number",
+                "Number of this project's first daily report. Every next report is numbered automatically.",
+                "Start", "Cancel", "1", maxLength: 6, keyboard: Keyboard.Numeric, initialValue: "1");
+            if (text == null) return;
+            if (!int.TryParse(text, out var first) || first < 1) first = 1;
+            var project = await db.GetAsync<Project>(pid);
+            if (project != null)
             {
-                "Today" => (t, t),
-                "Yesterday" => (t.AddDays(-1), t.AddDays(-1)),
-                "This week" => (weekStart, t),
-                "Last 7 days" => (t.AddDays(-6), t),
-                "This month" => (m, t),
-                "Last month" => (m.AddMonths(-1), m.AddDays(-1)),
-                "Custom" => (_from.Date ?? t.AddDays(-30), _to.Date ?? t),
-                _ => ((DateTime?)null, (DateTime?)null),
-            };
-            var custom = preset.SelectedItem as string == "Custom";
-            _from.IsEnabled = _to.IsEnabled = custom;
-            if (f != null) _from.Date = f;
-            if (to != null) _to.Date = to;
-            Filter.From = f;
-            Filter.To = to;
-            Changed?.Invoke();
-        };
-        _from.DateSelected += (_, a) => { if (_from.IsEnabled) { Filter.From = a.NewDate; Changed?.Invoke(); } };
-        _to.DateSelected += (_, a) => { if (_to.IsEnabled) { Filter.To = a.NewDate; Changed?.Invoke(); } };
-        status.SelectedIndexChanged += (_, _) =>
+                project.FirstReportNo = first;
+                await db.SaveAsync(project);
+            }
+        }
+
+        var date = await db.NextReportDateAsync(pid);
+        var existing = (await db.ListForProjectAsync<DailyReport>(pid)).Where(r => r.Date.Date == date).OrderBy(r => r.ReportNo).ToList();
+        if (existing.Count > 0)
         {
-            Filter.Status = Enum.TryParse<ReportStatus>(status.SelectedItem as string, out var s) ? s : null;
-            Changed?.Invoke();
-        };
-        sort.SelectedIndexChanged += (_, _) => { Filter.Sort = (ReportSort)Math.Max(0, sort.SelectedIndex); Changed?.Invoke(); };
-        search.TextChanged += (_, a) => { Filter.Search = a.NewTextValue ?? ""; Changed?.Invoke(); };
-        _sub.SelectedIndexChanged += (_, _) => { Filter.SubcontractorId = (_sub.SelectedItem as Subcontractor)?.Id ?? ""; Changed?.Invoke(); };
-
-        Children.Add(search);
-        Children.Add(Ui.Columns(6, preset, _from, _to, status, _sub, sort));
+            var open = $"Open {existing[^1].Title}";
+            var c = await page.DisplayActionSheetAsync($"There is already a report for {date:ddd dd-MMM}", "Cancel", null, open, "New report (another shift)");
+            if (c == open) { await AppShell.Push(new DprEditorPage(existing[^1].Id)); return; }
+            if (c != "New report (another shift)") return;
+        }
+        await AppShell.Push(new DprEditorPage(null, date));
     }
 
-    public async Task LoadAsync()
+    /// <summary>Today's report if it exists, otherwise a new one.</summary>
+    public static async Task TodayAsync()
     {
-        Filter.ProjectId = AppServices.ProjectId;
-        var subs = (await AppServices.Db.ListForProjectAsync<Subcontractor>(AppServices.ProjectId)).OrderBy(s => s.Name).ToList();
-        subs.Insert(0, new Subcontractor { Id = "", Name = "All agencies" });
-        var keep = Filter.SubcontractorId;
-        _sub.ItemsSource = subs;
-        _sub.SelectedItem = subs.FirstOrDefault(s => s.Id == keep) ?? subs[0];
+        if (!await AppShell.RequireProjectAsync()) return;
+        var today = (await AppServices.Db.ListForProjectAsync<DailyReport>(AppServices.ProjectId)).FirstOrDefault(r => r.Date.Date == DateTime.Today);
+        if (today != null) await AppShell.Push(new DprEditorPage(today.Id));
+        else await NewAsync();
     }
-
-    public string Describe() => Filter.Describe();
 }
 
-/// <summary>List of daily reports with filter, sort and register exports.</summary>
+/// <summary>Daily reports: search, period, status, agency and sort; tap to open; Select for bulk actions.</summary>
 public class ReportsPage : ContentPage
 {
     private readonly FilterBar _filter = new();
     private readonly CollectionView _list = new() { SelectionMode = SelectionMode.Single, EmptyView = Ui.Caption("No reports match. Tap ＋ New DPR.") };
     private readonly Label _summary = Ui.Caption("");
+    private readonly Grid _bulkBar = new() { IsVisible = false, Padding = new Thickness(12, 6), ColumnSpacing = 6, BackgroundColor = Ui.PrimaryDark };
+    private readonly Label _bulkCount = new() { TextColor = Colors.White, FontAttributes = FontAttributes.Bold, VerticalOptions = LayoutOptions.Center };
     private List<DailyReport> _items = [];
+    private bool _selecting;
 
     public ReportsPage()
     {
         Title = "Daily reports";
         this.Page();
-        ToolbarItems.Add(new ToolbarItem("＋ New DPR", null, () => _ = Ui.Guard(NewAsync)));
-        ToolbarItems.Add(new ToolbarItem("PDF", null, () => _ = Ui.Guard(() => ExportAsync("pdf"))));
-        ToolbarItems.Add(new ToolbarItem("Excel", null, () => _ = Ui.Guard(() => ExportAsync("xlsx"))));
-        ToolbarItems.Add(new ToolbarItem("PDF with full reports", null, () => _ = Ui.Guard(() => ExportAsync("full"))) { Order = ToolbarItemOrder.Secondary });
+        ToolbarItems.Add(new ToolbarItem("＋ New DPR", null, () => _ = Ui.Guard(DprFlow.NewAsync)));
+        ToolbarItems.Add(new ToolbarItem("☑ Select", null, () => SetSelecting(!_selecting)));
+        ToolbarItems.Add(new ToolbarItem("PDF", null, () => _ = Ui.Guard(() => ExportAsync(_items, "pdf"))));
+        ToolbarItems.Add(new ToolbarItem("Excel", null, () => _ = Ui.Guard(() => ExportAsync(_items, "xlsx"))));
+        ToolbarItems.Add(new ToolbarItem("Report manager…", null, () => _ = AppShell.Push(new ReportCenterPage())) { Order = ToolbarItemOrder.Secondary });
 
         _list.ItemTemplate = new DataTemplate(() =>
         {
@@ -106,7 +81,7 @@ public class ReportsPage : ContentPage
             t.SetAppThemeColor(Label.TextColorProperty, Color.FromArgb("#111827"), Color.FromArgb("#E5E7EB"));
             var s = new Label { FontSize = 12, TextColor = Ui.Muted };
             s.SetBinding(Label.TextProperty, nameof(ListRow.Subtitle));
-            var d = new Label { FontSize = 12, TextColor = Ui.Primary };
+            var d = new Label { FontSize = 12, TextColor = Ui.Primary, MaxLines = 1, LineBreakMode = LineBreakMode.TailTruncation };
             d.SetBinding(Label.TextProperty, nameof(ListRow.Detail));
             var c = new Label { FontSize = 11, FontAttributes = FontAttributes.Bold };
             c.SetBinding(Label.TextProperty, nameof(ListRow.Chip));
@@ -114,10 +89,11 @@ public class ReportsPage : ContentPage
             var g = new Grid { ColumnDefinitions = [new(GridLength.Star), new(GridLength.Auto)] };
             g.Add(new VerticalStackLayout { Children = { t, s, d } }, 0);
             g.Add(c, 1);
-            return new ContentView { Padding = new Thickness(12, 4), Content = Ui.Card(g) };
+            return new ContentView { Padding = new Thickness(12, 3), Content = Ui.Card(g, 10) };
         });
         _list.SelectionChanged += async (_, e) =>
         {
+            if (_selecting) { _bulkCount.Text = $"{e.CurrentSelection.Count} selected"; return; }
             if (e.CurrentSelection.FirstOrDefault() is not ListRow row) return;
             _list.SelectedItem = null;
             await AppShell.Push(new DprEditorPage(((DailyReport)row.Item).Id));
@@ -125,11 +101,35 @@ public class ReportsPage : ContentPage
         _filter.Changed += async () => await Ui.Guard(ReloadAsync);
         _summary.Margin = new Thickness(16, 4);
 
-        var g = new Grid { RowDefinitions = [new(GridLength.Auto), new(GridLength.Auto), new(GridLength.Star)] };
-        g.Add(_filter, 0, 0);
-        g.Add(_summary, 0, 1);
-        g.Add(_list, 0, 2);
-        Content = g;
+        _bulkBar.ColumnDefinitions = [new(GridLength.Star), new(GridLength.Auto), new(GridLength.Auto), new(GridLength.Auto)];
+        _bulkBar.Add(_bulkCount, 0);
+        _bulkBar.Add(BulkButton("Actions…", BulkActionsAsync), 1);
+        _bulkBar.Add(BulkButton("All", () => { _list.SelectedItems = [.. (IEnumerable<ListRow>)_list.ItemsSource]; return Task.CompletedTask; }), 2);
+        _bulkBar.Add(BulkButton("Done", () => { SetSelecting(false); return Task.CompletedTask; }), 3);
+
+        var grid = new Grid { RowDefinitions = [new(GridLength.Auto), new(GridLength.Auto), new(GridLength.Auto), new(GridLength.Star)] };
+        grid.Add(_filter, 0, 0);
+        grid.Add(_summary, 0, 1);
+        grid.Add(_bulkBar, 0, 2);
+        grid.Add(_list, 0, 3);
+        Content = grid;
+    }
+
+    private static Button BulkButton(string text, Func<Task> action)
+    {
+        var b = new Button { Text = text, BackgroundColor = Colors.White, TextColor = Ui.Primary, Padding = new Thickness(10, 4), CornerRadius = 6, FontSize = 13 };
+        b.Clicked += async (_, _) => await Ui.Guard(action);
+        return b;
+    }
+
+    private void SetSelecting(bool on)
+    {
+        _selecting = on;
+        _list.SelectionMode = on ? SelectionMode.Multiple : SelectionMode.Single;
+        _list.SelectedItems?.Clear();
+        _list.SelectedItem = null;
+        _bulkBar.IsVisible = on;
+        _bulkCount.Text = "Tap reports to select";
     }
 
     protected override async void OnAppearing()
@@ -144,34 +144,67 @@ public class ReportsPage : ContentPage
         _filter.Filter.ProjectId = AppServices.ProjectId;
         _items = await AppServices.Reports.FindAsync(_filter.Filter);
         var cal = await AppServices.Db.CalendarAsync(AppServices.ProjectId);
-        _list.ItemsSource = _items.Select(r => new ListRow(r, $"DPR #{r.ReportNo} · {r.Date:ddd, dd-MMM-yyyy}",
-            $"{r.TotalManpower} manpower · {PdfReports.N(r.TotalManHours)} man-hrs · {r.TotalMachines} machines · {r.ActivityCount} activities · {r.HindranceCount} hindrances",
+        _list.ItemsSource = _items.Select(r => new ListRow(r, r.Title,
+            $"👷 {r.TotalManpower}  ·  ⏱ {PdfReports.N(r.TotalManHours)} man-hrs  ·  🚜 {r.TotalMachines}  ·  🏗 {r.ActivityCount}" + (r.HindranceCount > 0 ? $"  ·  ⚠ {r.HindranceCount}" : ""),
             r.Status.ToString().ToUpperInvariant(), Ui.StatusColor(r.Status.ToString()),
-            $"{r.WeatherMorning} · {cal.Currency} {PdfReports.M(r.TotalCost)}" + (string.IsNullOrWhiteSpace(r.Remarks) ? "" : $" · {r.Remarks}"))).ToList();
-        _summary.Text = $"{_items.Count} report(s) · {_items.Sum(r => r.TotalManpower)} man-days · {cal.Currency} {PdfReports.M(_items.Sum(r => r.TotalCost))} · {_filter.Describe()}";
+            (r.TotalCost > 0 ? $"{cal.Currency} {PdfReports.M(r.TotalCost)} · " : "") + r.WeatherMorning + (string.IsNullOrWhiteSpace(r.Remarks) ? "" : $" · {r.Remarks}"))).ToList();
+        _summary.Text = $"{_items.Count} report(s) · {_items.Sum(r => r.TotalManpower)} man-days" + (_items.Any(r => r.TotalCost > 0) ? $" · {cal.Currency} {PdfReports.M(_items.Sum(r => r.TotalCost))}" : "");
     }
 
-    private async Task NewAsync()
+    private List<DailyReport> Selected() => _list.SelectedItems?.OfType<ListRow>().Select(r => (DailyReport)r.Item).ToList() ?? [];
+
+    private async Task BulkActionsAsync()
     {
-        if (!await AppShell.RequireProjectAsync()) return;
-        var choice = await DisplayActionSheetAsync("New report for", "Cancel", null, "Today", "Yesterday", "Pick a date…");
-        DateTime? d = choice switch { "Today" => DateTime.Today, "Yesterday" => DateTime.Today.AddDays(-1), "Pick a date…" => DateTime.Today, _ => null };
-        if (d == null) return;
-        await AppShell.Push(new DprEditorPage(null, d));
+        var sel = Selected();
+        if (sel.Count == 0) { await DisplayAlertAsync("Nothing selected", "Tap reports to select them first.", "OK"); return; }
+        var c = await DisplayActionSheetAsync($"{sel.Count} report(s)", "Cancel", "Delete",
+            "PDF – all in one", "PDF – register summary", "Excel workbook", "Mark Submitted", "Mark Approved", "Back to Draft");
+        switch (c)
+        {
+            case "PDF – all in one": await ExportAsync(sel, "full"); break;
+            case "PDF – register summary": await ExportAsync(sel, "pdf"); break;
+            case "Excel workbook": await ExportAsync(sel, "xlsx"); break;
+            case "Mark Submitted": await SetStatusAsync(sel, ReportStatus.Submitted); break;
+            case "Mark Approved": await SetStatusAsync(sel, ReportStatus.Approved); break;
+            case "Back to Draft": await SetStatusAsync(sel, ReportStatus.Draft); break;
+            case "Delete":
+                if (!await DisplayAlertAsync($"Delete {sel.Count} report(s)?", "They are removed on every synced device.", "Delete", "Cancel")) return;
+                foreach (var b in await AppServices.Db.LoadReportsAsync(AppServices.ProjectId, sel))
+                {
+                    b.Activities.Clear(); b.Manpower.Clear(); b.Machines.Clear(); b.Materials.Clear(); b.Hindrances.Clear(); b.Requirements.Clear();
+                    await AppServices.Db.SaveReportAsync(b);
+                    await AppServices.Db.DeleteAsync(b.Report);
+                }
+                break;
+            default: return;
+        }
+        SetSelecting(false);
+        await ReloadAsync();
     }
 
-    private async Task ExportAsync(string kind)
+    private static async Task SetStatusAsync(List<DailyReport> reports, ReportStatus status)
     {
-        if (_items.Count == 0) { await DisplayAlertAsync("Nothing to export", "No reports match the filter.", "OK"); return; }
-        var bundles = await AppServices.Reports.LoadBundlesAsync(_filter.Filter);
+        foreach (var r in reports)
+        {
+            r.Status = status;
+            if (status == ReportStatus.Approved && string.IsNullOrWhiteSpace(r.ApprovedBy)) r.ApprovedBy = AppServices.Db.UserName;
+        }
+        await AppServices.Db.SaveAllAsync(reports);
+    }
+
+    private async Task ExportAsync(List<DailyReport> reports, string kind)
+    {
+        if (reports.Count == 0) { await DisplayAlertAsync("Nothing to export", "No reports match the filter.", "OK"); return; }
+        var bundles = await AppServices.Db.LoadReportsAsync(AppServices.ProjectId, _filter.Filter.ApplySort(reports).ToList());
         var cal = await AppServices.Db.CalendarAsync(AppServices.ProjectId);
-        var desc = _filter.Describe();
+        var opt = await ReportProfiles.CurrentAsync();
+        var desc = reports.Count == _items.Count ? _filter.Describe() : $"{reports.Count} selected report(s)";
         var stamp = DateTime.Now.ToString("yyyyMMdd_HHmm");
         var path = kind switch
         {
             "xlsx" => await FileExport.CreateAsync($"DPR_register_{stamp}.xlsx", s => ExcelReports.ReportWorkbook(s, AppServices.CurrentProject, bundles, desc, cal)),
-            "full" => await FileExport.CreateAsync($"DPR_full_{stamp}.pdf", s => PdfReports.ReportRegister(s, AppServices.CurrentProject, bundles, desc, true, AppServices.Db.MediaPath, cal)),
-            _ => await FileExport.CreateAsync($"DPR_register_{stamp}.pdf", s => PdfReports.ReportRegister(s, AppServices.CurrentProject, bundles, desc, false, AppServices.Db.MediaPath, cal)),
+            "full" => await FileExport.CreateAsync($"DPR_all_{stamp}.pdf", s => PdfReports.ReportRegister(s, AppServices.CurrentProject, bundles, desc, true, AppServices.Db.MediaPath, cal, opt)),
+            _ => await FileExport.CreateAsync($"DPR_register_{stamp}.pdf", s => PdfReports.ReportRegister(s, AppServices.CurrentProject, bundles, desc, false, AppServices.Db.MediaPath, cal, opt)),
         };
         await FileExport.OfferAsync(this, path);
     }
