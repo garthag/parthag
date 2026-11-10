@@ -1,6 +1,10 @@
+using System.Diagnostics;
+using System.IO;
+using System.Net.Http;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
+using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using ConstructDpr.Shared.Api;
 using ConstructDpr.Shared.Calculations;
@@ -9,13 +13,16 @@ using ConstructDpr.Shared.Security;
 
 namespace ConstructDpr.App.Views;
 
-public sealed record DprItem(int Id, string Title, string Sub, string Status, Brush Brush);
+public sealed record DprItem(int Id, string Title, string Sub, string Status, Brush Brush, DprStatus Raw);
+
+public sealed record PhotoItem(PhotoInfo Info, ImageSource? Image, string Caption, string Sub);
 
 /// <summary>Daily reports: list, editor and the submit → approve/reject → revise workflow (rules enforced by the API).</summary>
-public partial class DprView : UserControl, IRefreshable
+public partial class DprView : UserControl, IRefreshable, ISaveable
 {
     private Dpr? _dpr;
     private bool _loading, _dirty;
+    private List<DprItem> _items = new();
 
     public DprView()
     {
@@ -25,6 +32,38 @@ public partial class DprView : UserControl, IRefreshable
         NewDate.SelectedDate = DateTime.Today;
         NewDate.DisplayDateEnd = DateTime.Today;
         foreach (var box in FindTextBoxes(Narrative)) box.TextChanged += (_, _) => { if (!_loading) _dirty = true; };
+        StatusFilter.ItemsSource = new[] { "All", "Draft", "Submitted", "Approved", "Rejected" };
+        StatusFilter.SelectedIndex = 0;
+    }
+
+    /// <summary>Selects an editor tab by its header text (screenshot mode).</summary>
+    public void ShowTab(string startsWith)
+    {
+        foreach (var t in Tabs.Items.OfType<TabItem>())
+            if ((t.Header?.ToString() ?? "").StartsWith(startsWith, StringComparison.OrdinalIgnoreCase)) Tabs.SelectedItem = t;
+    }
+
+    /// <summary>Ctrl+S.</summary>
+    public async Task SaveShortcutAsync()
+    {
+        if (_dpr is { IsEditable: true } && SaveBtn.IsEnabled) await RunWorkflow((api, d) => api.SaveDprAsync(AppState.Pid, d), "Draft saved.");
+    }
+
+    private IEnumerable<DprItem> Filtered()
+    {
+        var status = StatusFilter.SelectedItem as string ?? "All";
+        var q = SearchBox.Text.Trim();
+        return _items.Where(i => (status == "All" || i.Raw.ToString() == status) &&
+                                 (q.Length == 0 || i.Title.Contains(q, StringComparison.OrdinalIgnoreCase) || i.Sub.Contains(q, StringComparison.OrdinalIgnoreCase)));
+    }
+
+    private void OnFilter(object sender, RoutedEventArgs e)
+    {
+        if (!IsLoaded) return;
+        _loading = true;
+        List.ItemsSource = Filtered().ToList();
+        List.SelectedItem = (List.ItemsSource as List<DprItem>)?.FirstOrDefault(i => i.Id == _dpr?.Id);
+        _loading = false;
     }
 
     private static IEnumerable<TextBox> FindTextBoxes(DependencyObject root)
@@ -56,9 +95,15 @@ public partial class DprView : UserControl, IRefreshable
     private async Task LoadListAsync(int? select, bool keepEditor = false)
     {
         if (AppState.Pid == 0) { List.ItemsSource = null; Show(null); return; }
-        var items = (await AppState.Api.DprsAsync(AppState.Pid)).Select(d => new DprItem(d.Id,
+        _items = (await AppState.Api.DprsAsync(AppState.Pid)).Select(d => new DprItem(d.Id,
             d.Number + (d.Revision > 0 ? $"  R{d.Revision}" : ""),
-            $"{d.ReportDate:ddd dd MMM yyyy} · {d.Shift} · {d.PreparedBy}", d.Status.ToString().ToUpperInvariant(), StatusBrush(d.Status))).ToList();
+            $"{d.ReportDate:ddd dd MMM yyyy} · {d.Shift} · {d.PreparedBy}", d.Status.ToString().ToUpperInvariant(), StatusBrush(d.Status), d.Status)).ToList();
+        var items = Filtered().ToList();
+        if (select is { } want && items.All(i => i.Id != want) && _items.Any(i => i.Id == want))
+        {
+            (StatusFilter.SelectedIndex, SearchBox.Text) = (0, ""); // make sure the report being opened is visible
+            items = _items;
+        }
         _loading = true;
         List.ItemsSource = items;
         var target = items.FirstOrDefault(i => i.Id == select) ?? items.FirstOrDefault();
@@ -79,7 +124,7 @@ public partial class DprView : UserControl, IRefreshable
     }
 
     private bool CanEdit(Dpr d) => d.IsEditable && (AppState.Can(Module.Dpr, Act.Edit) ||
-        (AppState.Can(Module.Dpr, Act.Create) && string.Equals(d.PreparedBy, AppState.IsServer ? AppState.Me.Email : AppState.Me.DisplayName, StringComparison.OrdinalIgnoreCase)));
+        (AppState.Can(Module.Dpr, Act.Create) && string.Equals(d.PreparedBy, AppState.MyReportName, StringComparison.OrdinalIgnoreCase)));
 
     private async void Show(Dpr? d)
     {
@@ -121,6 +166,8 @@ public partial class DprView : UserControl, IRefreshable
             .Select(a => new ActivityChoice(a.Id, $"{a.Code}  {a.Name}  ({a.Unit})")).ToList();
         Narrative.DataContext = d;
         Bind();
+        AddPhotoBtn.IsEnabled = RemovePhotoBtn.IsEnabled = CaptionBox.IsEnabled = editable;
+        _ = LoadPhotosAsync(d);
 
         var (notice, tone) = d.Status switch
         {
@@ -248,5 +295,100 @@ public partial class DprView : UserControl, IRefreshable
         if (_dpr is null) return;
         if (_dirty) { Dialogs.Error("Save the report first, so the file shows your latest changes."); return; }
         await Dialogs.RunAsync(async () => Dialogs.SaveAndOpen(await AppState.Api.ReportAsync(AppState.Pid, kind, _dpr.Id)));
+    }
+
+    // ───────────── photos ─────────────
+
+    private async Task LoadPhotosAsync(Dpr d)
+    {
+        List<PhotoInfo> infos;
+        try { infos = await AppState.Api.PhotosAsync(AppState.Pid, d.Id); }
+        catch (Exception ex) when (ex is HttpRequestException or NotFoundException) { return; }
+        var items = new List<PhotoItem>();
+        foreach (var p in infos)
+        {
+            ImageSource? img = null;
+            try { img = Thumbnail((await AppState.Api.PhotoAsync(AppState.Pid, p.Id)).Content); }
+            catch (Exception ex) when (ex is HttpRequestException or NotFoundException or NotSupportedException or FileFormatException) { }
+            items.Add(new PhotoItem(p, img, p.Caption ?? p.FileName, $"{p.TakenBy} · {p.At.ToLocalTime():dd MMM HH:mm}"));
+        }
+        if (_dpr?.Id != d.Id) return;
+        Photos.ItemsSource = items;
+        PhotosTab.Header = $"Photos ({items.Count})";
+    }
+
+    private static BitmapImage Thumbnail(byte[] bytes)
+    {
+        var img = new BitmapImage();
+        img.BeginInit();
+        img.CacheOption = BitmapCacheOption.OnLoad;
+        img.DecodePixelWidth = 400;
+        img.StreamSource = new MemoryStream(bytes);
+        img.EndInit();
+        img.Freeze();
+        return img;
+    }
+
+    /// <summary>Shrinks a photo to at most 1600 px (JPEG, quality 85): small enough for the database and quick to sync.</summary>
+    public static byte[] Shrink(byte[] original)
+    {
+        var decoder = BitmapDecoder.Create(new MemoryStream(original), BitmapCreateOptions.PreservePixelFormat, BitmapCacheOption.OnLoad);
+        BitmapSource frame = decoder.Frames[0];
+        var scale = Math.Min(1.0, 1600.0 / Math.Max(frame.PixelWidth, frame.PixelHeight));
+        if (scale < 1) frame = new TransformedBitmap(frame, new ScaleTransform(scale, scale));
+        // Respect the camera's orientation flag (photos taken in portrait).
+        if (decoder.Frames[0].Metadata is BitmapMetadata meta && meta.ContainsQuery("System.Photo.Orientation") && meta.GetQuery("System.Photo.Orientation") is ushort o)
+        {
+            var angle = o switch { 6 => 90, 3 => 180, 8 => 270, _ => 0 };
+            if (angle != 0) frame = new TransformedBitmap(frame, new RotateTransform(angle));
+        }
+        var enc = new JpegBitmapEncoder { QualityLevel = 85 };
+        enc.Frames.Add(BitmapFrame.Create(frame));
+        using var ms = new MemoryStream();
+        enc.Save(ms);
+        return ms.ToArray();
+    }
+
+    private async void OnAddPhotos(object sender, RoutedEventArgs e)
+    {
+        if (_dpr is null) return;
+        var dlg = new Microsoft.Win32.OpenFileDialog { Multiselect = true, Filter = "Photos (*.jpg;*.jpeg;*.png;*.webp)|*.jpg;*.jpeg;*.png;*.webp", Title = "Add site photos" };
+        if (dlg.ShowDialog(Window.GetWindow(this)) != true) return;
+        var caption = CaptionBox.Text.Trim();
+        var current = _dpr;
+        foreach (var path in dlg.FileNames)
+        {
+            await Dialogs.RunAsync(async () =>
+            {
+                byte[] bytes;
+                try { bytes = await Task.Run(() => Shrink(File.ReadAllBytes(path))); }
+                catch (Exception ex) when (ex is NotSupportedException or FileFormatException or IOException or ArgumentException)
+                {
+                    throw new WorkflowException($"{Path.GetFileName(path)} could not be read as a photo: {ex.Message}");
+                }
+                await AppState.Api.AddPhotoAsync(AppState.Pid, current.Id, Path.ChangeExtension(Path.GetFileName(path), ".jpg"), bytes, caption.Length == 0 ? null : caption);
+            });
+        }
+        CaptionBox.Text = "";
+        await LoadPhotosAsync(current);
+    }
+
+    private async void OnRemovePhoto(object sender, RoutedEventArgs e)
+    {
+        if (Photos.SelectedItem is not PhotoItem p || _dpr is null) return;
+        if (!Dialogs.Confirm($"Remove the photo \"{p.Caption}\" from {_dpr.Number}?")) return;
+        if (await Dialogs.RunAsync(() => AppState.Api.DeletePhotoAsync(AppState.Pid, p.Info.Id))) await LoadPhotosAsync(_dpr);
+    }
+
+    private async void OnOpenPhoto(object sender, System.Windows.Input.MouseButtonEventArgs e)
+    {
+        if (Photos.SelectedItem is not PhotoItem p) return;
+        await Dialogs.RunAsync(async () =>
+        {
+            var f = await AppState.Api.PhotoAsync(AppState.Pid, p.Info.Id);
+            var path = Path.Combine(Path.GetTempPath(), $"cdpr-photo-{p.Info.Id}{(f.ContentType == "image/png" ? ".png" : ".jpg")}");
+            await File.WriteAllBytesAsync(path, f.Content);
+            Process.Start(new ProcessStartInfo(path) { UseShellExecute = true });
+        });
     }
 }

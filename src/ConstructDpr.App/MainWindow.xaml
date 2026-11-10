@@ -22,10 +22,11 @@
       </StackPanel>
       <StackPanel x:Name="Nav">
         <RadioButton Style="{StaticResource Nav}" Tag="dashboard" Checked="OnNav" IsChecked="True" Content="▦   Dashboard"/>
+        <RadioButton Style="{StaticResource Nav}" Tag="dpr" Checked="OnNav" Content="✎   Daily reports"/>
         <RadioButton Style="{StaticResource Nav}" Tag="activities" Checked="OnNav" Content="☰   Activities &amp; BOQ"/>
         <RadioButton Style="{StaticResource Nav}" Tag="schedule" Checked="OnNav" Content="▤   Schedule (Gantt)"/>
-        <RadioButton Style="{StaticResource Nav}" Tag="dpr" Checked="OnNav" Content="✎   Daily reports"/>
         <RadioButton Style="{StaticResource Nav}" Tag="reports" Checked="OnNav" Content="⎙   Reports &amp; Excel"/>
+        <RadioButton Style="{StaticResource Nav}" Tag="projects" Checked="OnNav" Content="◫   Projects &amp; people"/>
         <RadioButton Style="{StaticResource Nav}" Tag="settings" Checked="OnNav" Content="⚙   Settings"/>
       </StackPanel>
     </DockPanel>

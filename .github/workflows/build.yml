@@ -21,12 +21,16 @@ concurrency:
 env:
   DOTNET_NOLOGO: true
   DOTNET_CLI_TELEMETRY_OPTOUT: true
-  VERSION: 2.0.${{ github.run_number }}
+  VERSION: 2.1.${{ github.run_number }}
 
 jobs:
   test:
     runs-on: ubuntu-latest
     services:
+      sqlserver:
+        image: mcr.microsoft.com/mssql/server:2022-latest
+        env: { ACCEPT_EULA: "Y", MSSQL_SA_PASSWORD: "Ci-only-Passw0rd!" }
+        ports: [ "1433:1433" ]
       postgres:
         image: postgres:16
         env: { POSTGRES_PASSWORD: ci-only-password }
@@ -36,8 +40,13 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
         with: { dotnet-version: 10.0.x }
-      - name: Tests
-        run: dotnet test tests/ConstructDpr.Tests -c Release --logger "console;verbosity=normal"
+      - name: Tests (incl. Microsoft SQL Server end-to-end)
+        env:
+          CDPR_SQLSERVER: "Server=localhost,1433;User Id=sa;Password=Ci-only-Passw0rd!;TrustServerCertificate=true;Encrypt=true"
+        run: |
+          for i in $(seq 1 30); do (echo > /dev/tcp/localhost/1433) 2>/dev/null && break; sleep 2; done
+          sleep 10 # SQL Server accepts connections a little after the port opens
+          dotnet test tests/ConstructDpr.Tests -c Release --logger "console;verbosity=normal"
       - name: Publish server (Linux, with the web app inside)
         run: dotnet publish src/ConstructDpr.Server -c Release -p:Version=$VERSION -o out/server-linux
       - name: Smoke test on PostgreSQL (sign up, demo project, PDF)
@@ -86,10 +95,15 @@ jobs:
           if (-not $p.WaitForExit(240000)) { $p.Kill(); throw "Screenshot run timed out" }
           if (Test-Path out\error.txt) { Get-Content out\error.txt; Remove-Item out\error.txt }
           if ($p.ExitCode -ne 0) { throw "Screenshot run failed with exit code $($p.ExitCode)" }
-          if ((Get-ChildItem out -Filter *.png).Count -lt 7) { throw "Expected 7 screenshots" }
+          if ((Get-ChildItem out -Filter *.png).Count -lt 9) { throw "Expected 9 screenshots" }
           Get-ChildItem out | ForEach-Object { Rename-Item $_.FullName ("windows-" + $_.Name) }
       - name: Publish the server for a Windows site-office PC
         run: dotnet publish src/ConstructDpr.Server -c Release -r win-x64 --self-contained true -p:Version=${{ env.VERSION }} -o publish/server
+      - name: Windows installer (Inno Setup)
+        run: |
+          choco install innosetup --no-progress -y | Out-Null
+          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" "/DMyVersion=${{ env.VERSION }}" "/DSourceExe=$PWD\publish\app\ConstructDpr.exe" installer\ConstructDpr.iss
+          if (-not (Test-Path out\CONSTRUCT-DPR-windows-setup.exe)) { throw "Installer not built" }
       - name: Collect
         run: |
           Copy-Item publish\app\ConstructDpr.exe out\CONSTRUCT-DPR-windows.exe
@@ -153,13 +167,14 @@ jobs:
           | Device | File | |
           |---|---|---|
           | Android phone / tablet | **CONSTRUCT-DPR-android.apk** | Open on the phone → allow installing from this source → Install |
-          | Windows PC | **CONSTRUCT-DPR-windows.exe** | Double-click (no installation). "Windows protected your PC" → More info → Run anyway |
+          | Windows PC (install) | **CONSTRUCT-DPR-windows-setup.exe** | Start menu + desktop icon + uninstaller; no administrator rights needed |
+          | Windows PC (no install) | **CONSTRUCT-DPR-windows.exe** | Double-click. "Windows protected your PC" → More info → Run anyway |
           | Web browser | your server's address | Served by the server itself |
           | Server (cloud) | — | Deploy with render.yaml or the Dockerfile in the repository |
           | Server (Windows site-office PC) | **CONSTRUCT-DPR-server-windows.zip** | Unzip, run ConstructDpr.Server.exe |
           | Server (Linux) | **CONSTRUCT-DPR-server-linux.zip** | Needs the .NET 10 ASP.NET Core runtime |
 
-          The Windows app also works **offline on one PC** without any server (Settings → "This PC only").
+          The Windows app works three ways (Settings): **This PC only** (offline, SQLite), **Office SQL Server** (everyone on one Microsoft SQL Server database, with accounts and roles) or **Cloud server** (sync with the web and Android apps).
           Phones and browsers sign in to the server and stay in live sync. Guide: docs/START_HERE.md
           NOTES
           gh release create apps-latest dist/* --target "$GITHUB_SHA" --latest \

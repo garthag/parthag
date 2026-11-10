@@ -21,6 +21,10 @@
           <Button Content="＋ Create today's DPR" Style="{StaticResource Primary}" Click="OnNew" Margin="0" HorizontalAlignment="Stretch"/>
         </StackPanel>
       </Border>
+      <DockPanel DockPanel.Dock="Top" Margin="0,0,0,8">
+        <ComboBox x:Name="StatusFilter" DockPanel.Dock="Right" Width="104" Margin="6,0,0,0" SelectionChanged="OnFilter"/>
+        <TextBox x:Name="SearchBox" TextChanged="OnFilter" ToolTip="Search by number, date or person"/>
+      </DockPanel>
       <ListBox x:Name="List" ScrollViewer.HorizontalScrollBarVisibility="Disabled" SelectionChanged="OnPick" BorderBrush="{StaticResource Line}" HorizontalContentAlignment="Stretch">
         <ListBox.ItemTemplate>
           <DataTemplate>
@@ -143,6 +147,35 @@
                 <DataGridTextColumn Header="Challan no." Binding="{Binding ChallanNo}" Width="100"/>
               </DataGrid.Columns>
             </DataGrid>
+          </DockPanel>
+        </TabItem>
+        <TabItem x:Name="PhotosTab" Header="Photos">
+          <DockPanel Margin="8">
+            <DockPanel DockPanel.Dock="Top" Margin="0,0,0,8">
+              <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                <Button x:Name="AddPhotoBtn" Content="📷 Add photos…" Style="{StaticResource Primary}" Click="OnAddPhotos" Margin="8,0,8,0"/>
+                <Button x:Name="RemovePhotoBtn" Content="Remove" Style="{StaticResource Danger}" Click="OnRemovePhoto" Margin="0"/>
+              </StackPanel>
+              <TextBox x:Name="CaptionBox" ToolTip="Caption for the photos you add next (e.g. 'Truss T3 erected, grid C')"/>
+            </DockPanel>
+            <TextBlock DockPanel.Dock="Bottom" Text="Photos are shrunk to 1600 px and stored in the database with the report. They appear in the PDF and are locked when the report is approved. Double-click to open."
+                       Foreground="{StaticResource Muted}" FontSize="11" TextWrapping="Wrap" Margin="0,6,0,0"/>
+            <ListBox x:Name="Photos" ScrollViewer.HorizontalScrollBarVisibility="Disabled" BorderBrush="{StaticResource Line}" MouseDoubleClick="OnOpenPhoto">
+              <ListBox.ItemsPanel>
+                <ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate>
+              </ListBox.ItemsPanel>
+              <ListBox.ItemTemplate>
+                <DataTemplate>
+                  <StackPanel Width="200" Margin="6">
+                    <Border Height="140" Background="#EEF1F4" CornerRadius="6" ClipToBounds="True">
+                      <Image Source="{Binding Image}" Stretch="UniformToFill"/>
+                    </Border>
+                    <TextBlock Text="{Binding Caption}" FontSize="12" Margin="0,4,0,0" TextTrimming="CharacterEllipsis"/>
+                    <TextBlock Text="{Binding Sub}" FontSize="11" Foreground="{StaticResource Muted}" TextTrimming="CharacterEllipsis"/>
+                  </StackPanel>
+                </DataTemplate>
+              </ListBox.ItemTemplate>
+            </ListBox>
           </DockPanel>
         </TabItem>
         <TabItem Header="Site &amp; narrative">

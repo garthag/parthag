@@ -3,27 +3,49 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Windows;
+using System.Windows.Threading;
 using ConstructDpr.Client;
 using ConstructDpr.Core;
 using ConstructDpr.Core.Data;
 using ConstructDpr.Shared.Api;
-using ConstructDpr.Shared.Model;
 using ConstructDpr.Shared.Security;
+using Microsoft.Data.SqlClient;
 
 namespace ConstructDpr.App;
 
-public enum DataMode { Local, Server }
+/// <summary>Where the data lives.</summary>
+public enum DataMode
+{
+    /// <summary>One SQLite file on this PC: offline, no accounts.</summary>
+    Local,
+    /// <summary>A shared Microsoft SQL Server database on the office network: accounts, roles, live refresh.</summary>
+    Office,
+    /// <summary>The CONSTRUCT DPR cloud server: sync with the web and Android apps.</summary>
+    Server,
+}
 
-/// <summary>Settings kept in the data folder.</summary>
+/// <summary>Settings kept in the data folder (no secrets; those are in DPAPI-protected files).</summary>
 public sealed class AppSettings
 {
     public DataMode Mode { get; set; } = DataMode.Local;
     /// <summary>Name on reports in the offline (this PC only) mode.</summary>
     public string UserName { get; set; } = "planning.engineer";
     public int? LocalProjectId { get; set; }
+    public string OfficeServer { get; set; } = @".\SQLEXPRESS";
+    public string OfficeDatabase { get; set; } = "ConstructDpr";
+    public bool OfficeWindowsAuth { get; set; } = true;
+    public string OfficeSqlUser { get; set; } = "";
+    public int? OfficeProjectId { get; set; }
 }
 
-/// <summary>The sign-in session for server mode, encrypted for the current Windows user (DPAPI).</summary>
+/// <summary>Secrets for office mode (SQL login password, remembered account), encrypted for this Windows user.</summary>
+public sealed class OfficeSecrets
+{
+    public string? SqlPassword { get; set; }
+    public string? UserId { get; set; }
+}
+
+/// <summary>Small text file encrypted for the current Windows user (DPAPI).</summary>
 public sealed class ProtectedFileStore(string path) : ISessionStore
 {
     private static readonly byte[] Entropy = Encoding.UTF8.GetBytes("ConstructDpr.Session");
@@ -58,33 +80,113 @@ public sealed class LocalLive : ILiveUpdates
 }
 
 /// <summary>
-/// The Windows app works in one of two modes, chosen in Settings:
-/// <list type="bullet">
-/// <item>Local: everything in one SQLite file on this PC, no account, works without internet.</item>
-/// <item>Server: signs in to the CONSTRUCT DPR server and stays in live sync with the web and Android apps.</item>
-/// </list>
-/// Every screen talks to <see cref="Api"/> only, so both modes behave identically.
+/// Office mode: every few seconds asks the shared SQL Server for the project's latest change number and refreshes the
+/// screens when a colleague changed something. Own changes are announced immediately and do not trigger a second refresh.
+/// </summary>
+public sealed class OfficeLive : ILiveUpdates
+{
+    private readonly DispatcherTimer _timer = new() { Interval = TimeSpan.FromSeconds(4) };
+    private readonly Func<int, Task<int>> _stamp;
+    private int _projectId, _known;
+    private bool _busy;
+    private string _status = "connecting";
+
+    public OfficeLive(Func<int, Task<int>> stamp)
+    {
+        _stamp = stamp;
+        _timer.Tick += async (_, _) => await PollAsync();
+        _timer.Start();
+    }
+
+    public event Action<LiveChange>? Changed;
+    public event Action<string>? StatusChanged;
+    public string Status => _status;
+
+    public async Task WatchProjectAsync(int projectId)
+    {
+        _projectId = projectId;
+        try { _known = await _stamp(projectId); SetStatus("office"); }
+        catch (Exception ex) when (ex is SqlException or InvalidOperationException or TimeoutException) { SetStatus("offline"); }
+    }
+
+    /// <summary>A change made by this app: show it now, and remember the new change number.</summary>
+    public void Raise(LiveChange c)
+    {
+        Application.Current?.Dispatcher.BeginInvoke(async () =>
+        {
+            Changed?.Invoke(c);
+            try { _known = await _stamp(c.ProjectId); } catch (Exception ex) when (ex is SqlException or InvalidOperationException) { }
+        });
+    }
+
+    private async Task PollAsync()
+    {
+        if (_busy || _projectId == 0) return;
+        _busy = true;
+        try
+        {
+            var now = await _stamp(_projectId);
+            SetStatus("office");
+            if (now != _known)
+            {
+                _known = now;
+                Changed?.Invoke(new LiveChange(_projectId, "all", null, "resync", "", DateTime.UtcNow));
+            }
+        }
+        catch (Exception ex) when (ex is SqlException or InvalidOperationException or TimeoutException or NotFoundException)
+        {
+            SetStatus("offline");
+        }
+        finally { _busy = false; }
+    }
+
+    private void SetStatus(string s)
+    {
+        if (s == _status) return;
+        _status = s;
+        StatusChanged?.Invoke(s);
+    }
+
+    public void Stop() => _timer.Stop();
+}
+
+/// <summary>
+/// The Windows app works in one of three modes, chosen in Settings (see <see cref="DataMode"/>).
+/// Every screen talks to <see cref="Api"/> only, so all modes behave identically and follow the same rules.
 /// </summary>
 public static class AppState
 {
     public static string DataFolder { get; private set; } = "";
     public static string DbPath => Path.Combine(DataFolder, "construct-dpr.db");
     private static string SettingsPath => Path.Combine(DataFolder, "settings.json");
+    private static ProtectedFileStore OfficeSecretStore => new(Path.Combine(DataFolder, "office.bin"));
 
     public static AppSettings Settings { get; private set; } = new();
     public static IConstructDprApi Api { get; private set; } = null!;
     public static ILiveUpdates Live { get; private set; } = new LocalLive();
     public static AuthSession Session { get; private set; } = null!;
+    public static DirectAccounts? OfficeAccounts { get; private set; }
     public static UserInfo Me { get; private set; } = new("local", "", "");
     public static AppFeatures Features { get; private set; } = new(true, false, "local");
     public static List<ProjectSummary> Projects { get; private set; } = new();
     public static ProjectSummary? Project { get; private set; }
     public static DateOnly Today => DateOnly.FromDateTime(DateTime.Today);
 
+    public static DataMode Mode => Settings.Mode;
     public static bool IsServer => Settings.Mode == DataMode.Server;
+    public static bool HasAccounts => Settings.Mode != DataMode.Local;
+    /// <summary>The name stored on reports for the current person (e-mail with accounts, the chosen name offline).</summary>
+    public static string MyReportName => HasAccounts ? Me.Email : Me.DisplayName;
     public static int Pid => Project?.Id ?? 0;
     public static ProjectRole Role => Project?.MyRole ?? ProjectRole.Auditor;
     public static bool Can(Module m, Act a) => Project is not null && Permissions.Can(Role, m, a);
+
+    public static string ModeLabel => Settings.Mode switch
+    {
+        DataMode.Office => $"Office SQL Server · {Settings.OfficeServer} / {Settings.OfficeDatabase}",
+        DataMode.Server => $"Cloud server · {Session.ServerUrl}",
+        _ => "This PC only · SQLite",
+    };
 
     /// <summary>Project switched, signed in/out, settings changed: header and screens reload.</summary>
     public static event Action? Changed;
@@ -107,39 +209,112 @@ public static class AppState
 
     public static void SaveSettings() => File.WriteAllText(SettingsPath, JsonSerializer.Serialize(Settings, Json.Options));
 
-    /// <summary>Connects in the chosen mode. Returns false when server mode needs a sign-in first.</summary>
+    public static async Task<OfficeSecrets> LoadOfficeSecretsAsync()
+    {
+        var raw = await OfficeSecretStore.LoadAsync();
+        try { return raw is null ? new() : JsonSerializer.Deserialize<OfficeSecrets>(raw, Json.Options) ?? new(); }
+        catch (JsonException) { return new(); }
+    }
+
+    public static Task SaveOfficeSecretsAsync(OfficeSecrets s) => OfficeSecretStore.SaveAsync(JsonSerializer.Serialize(s, Json.Options));
+
+    /// <summary>Connection string for the office SQL Server (Windows sign-in or a SQL login).</summary>
+    public static string OfficeConnectionString(AppSettings s, string? sqlPassword)
+    {
+        var b = new SqlConnectionStringBuilder
+        {
+            DataSource = s.OfficeServer.Trim(),
+            InitialCatalog = string.IsNullOrWhiteSpace(s.OfficeDatabase) ? "ConstructDpr" : s.OfficeDatabase.Trim(),
+            IntegratedSecurity = s.OfficeWindowsAuth,
+            Encrypt = SqlConnectionEncryptOption.Mandatory,
+            TrustServerCertificate = true, // office SQL Express usually has a self-signed certificate; traffic is still encrypted
+            ConnectTimeout = 10,
+            ApplicationName = "CONSTRUCT DPR",
+        };
+        if (!s.OfficeWindowsAuth) (b.UserID, b.Password) = (s.OfficeSqlUser, sqlPassword ?? "");
+        return b.ConnectionString;
+    }
+
+    private static Func<AppDbContext> OfficeFactory(string conn)
+    {
+        var options = AppDbContext.Options(DbProvider.SqlServer, conn);
+        return () => new AppDbContext(options);
+    }
+
+    /// <summary>Checks the office database (creating its tables on first use). Throws with a readable message.</summary>
+    public static async Task<DirectAccounts> ConnectOfficeAsync(AppSettings s, string? sqlPassword)
+    {
+        var factory = OfficeFactory(OfficeConnectionString(s, sqlPassword));
+        try
+        {
+            await Task.Run(() => { using var db = factory(); db.EnsureSchema(); });
+        }
+        catch (SqlException ex)
+        {
+            throw new WorkflowException($"Cannot open the SQL Server database \"{s.OfficeDatabase}\" on {s.OfficeServer}:\n{ex.Message}\n\n" +
+                "Check the server name (for example .\\SQLEXPRESS or OFFICE-PC\\SQLEXPRESS), that SQL Server is running, " +
+                "that TCP/IP is enabled for remote PCs, and that your Windows account or SQL login may create/use the database.");
+        }
+        return new DirectAccounts(factory);
+    }
+
+    /// <summary>Connects in the chosen mode. Returns false when a sign-in is needed first.</summary>
     public static async Task<bool> StartAsync()
     {
-        if (Live is LiveClient old) await old.StopAsync();
-        if (Settings.Mode == DataMode.Local)
+        StopLive();
+        switch (Settings.Mode)
         {
-            var options = AppDbContext.Options(DbProvider.Sqlite, $"Data Source={DbPath}");
-            using (var db = new AppDbContext(options)) db.EnsureSchema();
-            var live = new LocalLive();
-            Live = live;
-            Me = new UserInfo("local", "", Settings.UserName);
-            Api = new LocalApi(() => new AppDbContext(options), new Caller("local", "", Settings.UserName, IsLocalOwner: true),
-                new AppFeatures(true, false, "this PC"), live.Raise);
-            Features = await Api.FeaturesAsync();
-            Projects = await Api.ProjectsAsync();
-            if (Projects.Count == 0)
+            case DataMode.Local:
             {
-                await Api.CreateDemoProjectAsync();
+                var options = AppDbContext.Options(DbProvider.Sqlite, $"Data Source={DbPath}");
+                using (var db = new AppDbContext(options)) db.EnsureSchema();
+                var live = new LocalLive();
+                Live = live;
+                Me = new UserInfo("local", "", Settings.UserName);
+                OfficeAccounts = null;
+                Api = new LocalApi(() => new AppDbContext(options), new Caller("local", "", Settings.UserName, IsLocalOwner: true),
+                    new AppFeatures(true, false, "this PC"), live.Raise);
+                Features = await Api.FeaturesAsync();
                 Projects = await Api.ProjectsAsync();
+                if (Projects.Count == 0)
+                {
+                    await Api.CreateDemoProjectAsync();
+                    Projects = await Api.ProjectsAsync();
+                }
+                Project = Projects.FirstOrDefault(p => p.Id == Settings.LocalProjectId) ?? Projects.FirstOrDefault();
+                break;
             }
-            Project = Projects.FirstOrDefault(p => p.Id == Settings.LocalProjectId) ?? Projects.FirstOrDefault();
-        }
-        else
-        {
-            await Session.LoadAsync();
-            if (!Session.IsSignedIn) return false;
-            var live = new LiveClient(Session);
-            Live = live;
-            Api = new RemoteApi(Session);
-            Me = await Api.MeAsync();
-            Features = await Api.FeaturesAsync();
-            Projects = await Api.ProjectsAsync();
-            Project = Projects.FirstOrDefault(p => p.Id == Session.ProjectId) ?? Projects.FirstOrDefault();
+            case DataMode.Office:
+            {
+                var secrets = await LoadOfficeSecretsAsync();
+                if (secrets.UserId is null) return false;
+                var conn = OfficeConnectionString(Settings, secrets.SqlPassword);
+                OfficeAccounts = await ConnectOfficeAsync(Settings, secrets.SqlPassword);
+                var caller = await Task.Run(() => OfficeAccounts.Find(secrets.UserId));
+                if (caller is null) return false;
+                LocalApi api = null!;
+                var live = new OfficeLive(pid => api.ChangeStampAsync(pid));
+                api = new LocalApi(OfficeFactory(conn), caller, new AppFeatures(true, true, "SQL Server"), live.Raise);
+                (Api, Live) = (api, live);
+                Me = new UserInfo(caller.UserId, caller.Email, caller.DisplayName);
+                Features = await Api.FeaturesAsync();
+                Projects = await Api.ProjectsAsync();
+                Project = Projects.FirstOrDefault(p => p.Id == Settings.OfficeProjectId) ?? Projects.FirstOrDefault();
+                break;
+            }
+            default:
+            {
+                await Session.LoadAsync();
+                if (!Session.IsSignedIn) return false;
+                Live = new LiveClient(Session);
+                Api = new RemoteApi(Session);
+                OfficeAccounts = null;
+                Me = await Api.MeAsync();
+                Features = await Api.FeaturesAsync();
+                Projects = await Api.ProjectsAsync();
+                Project = Projects.FirstOrDefault(p => p.Id == Session.ProjectId) ?? Projects.FirstOrDefault();
+                break;
+            }
         }
         Live.Changed += c =>
         {
@@ -152,11 +327,21 @@ public static class AppState
         return true;
     }
 
+    private static void StopLive()
+    {
+        if (Live is LiveClient lc) _ = lc.StopAsync();
+        if (Live is OfficeLive ol) ol.Stop();
+    }
+
     public static async Task OpenProjectAsync(int projectId)
     {
         Project = Projects.FirstOrDefault(p => p.Id == projectId);
-        if (IsServer) await Session.SetProjectAsync(Project?.Id);
-        else { Settings.LocalProjectId = Project?.Id; SaveSettings(); }
+        switch (Settings.Mode)
+        {
+            case DataMode.Server: await Session.SetProjectAsync(Project?.Id); break;
+            case DataMode.Office: Settings.OfficeProjectId = Project?.Id; SaveSettings(); break;
+            default: Settings.LocalProjectId = Project?.Id; SaveSettings(); break;
+        }
         if (Project is not null) await Live.WatchProjectAsync(Project.Id);
         Changed?.Invoke();
     }
@@ -168,19 +353,25 @@ public static class AppState
         Changed?.Invoke();
     }
 
-    public static async Task SwitchModeAsync(DataMode mode)
+    public static async Task<bool> SwitchModeAsync(DataMode mode)
     {
         Settings.Mode = mode;
         SaveSettings();
         Project = null;
         Projects = new();
-        await StartAsync();
+        return await StartAsync();
     }
 
     public static async Task SignOutAsync()
     {
-        if (Live is LiveClient lc) await lc.StopAsync();
-        await Session.SignOutAsync();
+        StopLive();
+        if (Settings.Mode == DataMode.Office)
+        {
+            var s = await LoadOfficeSecretsAsync();
+            s.UserId = null;
+            await SaveOfficeSecretsAsync(s);
+        }
+        else await Session.SignOutAsync();
         (Project, Projects) = (null, new());
         Changed?.Invoke();
     }

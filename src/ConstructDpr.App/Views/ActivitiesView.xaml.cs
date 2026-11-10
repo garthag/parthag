@@ -10,7 +10,7 @@ namespace ConstructDpr.App.Views;
 public sealed record ActivityChoice(int Id, string Display);
 
 /// <summary>Activities, BOQ quantities and predecessors. Edits are collected and sent in one save (validated by the API).</summary>
-public partial class ActivitiesView : UserControl, IRefreshable
+public partial class ActivitiesView : UserControl, IRefreshable, ISaveable
 {
     private ObservableCollection<Activity> _acts = new();
     private List<Dependency> _deps = new();
@@ -26,6 +26,22 @@ public partial class ActivitiesView : UserControl, IRefreshable
         Links.CellEditEnding += (_, _) => { if (Selected is { } a) _linksFor.Add(a.Id); };
     }
 
+    public async Task SaveShortcutAsync()
+    {
+        if (await SaveAsync()) Dialogs.Info("Saved. The schedule was recalculated.");
+    }
+
+    private void OnSearch(object sender, TextChangedEventArgs e) => ApplyFilter();
+
+    private void ApplyFilter()
+    {
+        var q = SearchBox.Text.Trim();
+        var view = System.Windows.Data.CollectionViewSource.GetDefaultView(Grid.ItemsSource);
+        if (view is null) return;
+        view.Filter = q.Length == 0 ? null : o => o is Activity a && new[] { a.Code, a.Name, a.Wbs, a.Area, a.Responsible }
+            .Any(v => v?.Contains(q, StringComparison.OrdinalIgnoreCase) == true);
+    }
+
     private bool Dirty => _changed.Count + _deleted.Count + _linksFor.Count > 0;
 
     public async Task RefreshAsync()
@@ -37,6 +53,7 @@ public partial class ActivitiesView : UserControl, IRefreshable
         var keep = Selected?.Id;
         (_acts, _deps) = (new ObservableCollection<Activity>(await t1), await t2);
         Grid.ItemsSource = _acts;
+        ApplyFilter();
         PredColumn.ItemsSource = _acts.Where(a => a.Id != 0).Select(a => new ActivityChoice(a.Id, $"{a.Code}  {a.Name}")).ToList();
         Grid.IsReadOnly = !AppState.Can(Module.Masters, Act.Edit);
         Links.IsReadOnly = !AppState.Can(Module.Schedule, Act.Edit);

@@ -19,15 +19,21 @@ public partial class SettingsView : UserControl, IRefreshable
     public async Task RefreshAsync()
     {
         _loading = true;
-        LocalMode.IsChecked = !AppState.IsServer;
-        ServerMode.IsChecked = AppState.IsServer;
+        LocalMode.IsChecked = AppState.Mode == DataMode.Local;
+        OfficeMode.IsChecked = AppState.Mode == DataMode.Office;
+        ServerMode.IsChecked = AppState.Mode == DataMode.Server;
         _loading = false;
-        ConnectionText.Text = AppState.IsServer
-            ? (AppState.Session.IsSignedIn ? $"Signed in to {AppState.Session.ServerUrl} as {AppState.Me.Email}. Changes appear on every device within seconds." : "Not signed in.")
-            : "Data: " + AppState.DbPath;
-        SignInBtn.Visibility = AppState.IsServer && !AppState.Session.IsSignedIn ? Visibility.Visible : Visibility.Collapsed;
-        SignOutBtn.Visibility = AppState.IsServer && AppState.Session.IsSignedIn ? Visibility.Visible : Visibility.Collapsed;
-        DataCard.Visibility = AppState.IsServer ? Visibility.Collapsed : Visibility.Visible;
+        var signedIn = AppState.Mode switch { DataMode.Server => AppState.Session.IsSignedIn, DataMode.Office => AppState.OfficeAccounts is not null && AppState.Me.Id != "local", _ => false };
+        ConnectionText.Text = AppState.Mode switch
+        {
+            DataMode.Server => signedIn ? $"Signed in to {AppState.Session.ServerUrl} as {AppState.Me.Email}. Changes appear on every device within seconds." : "Not signed in.",
+            DataMode.Office => $"SQL Server {AppState.Settings.OfficeServer}, database {AppState.Settings.OfficeDatabase} · signed in as {AppState.Me.Email}. Colleagues' changes appear within a few seconds.",
+            _ => "Data: " + AppState.DbPath,
+        };
+        SignInBtn.Visibility = AppState.HasAccounts && !signedIn ? Visibility.Visible : Visibility.Collapsed;
+        SignOutBtn.Visibility = AppState.HasAccounts && signedIn ? Visibility.Visible : Visibility.Collapsed;
+        PasswordBtn.Visibility = AppState.Mode == DataMode.Office && signedIn ? Visibility.Visible : Visibility.Collapsed;
+        DataCard.Visibility = AppState.Mode == DataMode.Local ? Visibility.Visible : Visibility.Collapsed;
         UserBox.Text = AppState.Me.DisplayName;
         PathText.Text = "Database: " + AppState.DbPath + "\nEverything is stored in this one SQLite file. Back it up regularly (for example to OneDrive or a USB drive).";
 
@@ -41,31 +47,48 @@ public partial class SettingsView : UserControl, IRefreshable
     private async void OnMode(object sender, RoutedEventArgs e)
     {
         if (_loading) return;
-        var mode = ServerMode.IsChecked == true ? DataMode.Server : DataMode.Local;
+        var mode = OfficeMode.IsChecked == true ? DataMode.Office : ServerMode.IsChecked == true ? DataMode.Server : DataMode.Local;
         if (mode == AppState.Settings.Mode) return;
-        if (mode == DataMode.Server)
+        var previous = AppState.Settings.Mode;
+        if (mode == DataMode.Office)
+        {
+            if (new OfficeConnectWindow { Owner = Window.GetWindow(this) }.ShowDialog() != true) { await RefreshAsync(); return; }
+        }
+        else if (mode == DataMode.Server)
         {
             await AppState.Session.LoadAsync();
             if (!AppState.Session.IsSignedIn && new SignInWindow(AppState.Session) { Owner = Window.GetWindow(this) }.ShowDialog() != true)
             {
-                await RefreshAsync(); // stay offline
+                await RefreshAsync(); // stay where we were
                 return;
             }
         }
-        await Dialogs.RunAsync(() => AppState.SwitchModeAsync(mode));
+        var ok = false;
+        await Dialogs.RunAsync(async () => ok = await AppState.SwitchModeAsync(mode));
+        if (!ok) await Dialogs.RunAsync(() => AppState.SwitchModeAsync(previous));
     }
 
     private async void OnSignIn(object sender, RoutedEventArgs e)
     {
-        if (new SignInWindow(AppState.Session) { Owner = Window.GetWindow(this) }.ShowDialog() == true)
-            await Dialogs.RunAsync(AppState.StartAsync);
+        Window w = AppState.Mode == DataMode.Office ? new OfficeConnectWindow() : new SignInWindow(AppState.Session);
+        w.Owner = Window.GetWindow(this);
+        if (w.ShowDialog() == true) await Dialogs.RunAsync(AppState.StartAsync);
     }
 
     private async void OnSignOut(object sender, RoutedEventArgs e)
     {
-        if (!Dialogs.Confirm("Sign out of the server on this PC?")) return;
+        if (!Dialogs.Confirm("Sign out on this PC?")) return;
         await AppState.SignOutAsync();
         await RefreshAsync();
+    }
+
+    private async void OnPassword(object sender, RoutedEventArgs e)
+    {
+        var current = Dialogs.Prompt("Change password", "Current password:", password: true);
+        if (current is null) return;
+        var next = Dialogs.Prompt("Change password", "New password (at least 8 characters):", password: true);
+        if (next is null) return;
+        await Dialogs.RunAsync(() => Task.Run(() => AppState.OfficeAccounts!.ChangePassword(AppState.Me.Id, current, next)), "Password changed.");
     }
 
     private async void OnDemo(object sender, RoutedEventArgs e)
@@ -82,9 +105,13 @@ public partial class SettingsView : UserControl, IRefreshable
     {
         var name = UserBox.Text.Trim();
         if (name.Length < 2) { Dialogs.Error("Enter your name."); return; }
-        if (AppState.IsServer)
+        if (AppState.Mode == DataMode.Server)
         {
             if (!await Dialogs.RunAsync(() => AppState.Session.UpdateProfileAsync(name), "Saved.")) return;
+        }
+        else if (AppState.Mode == DataMode.Office)
+        {
+            if (!await Dialogs.RunAsync(() => Task.Run(() => AppState.OfficeAccounts!.Rename(AppState.Me.Id, name)), "Saved.")) return;
         }
         else
         {

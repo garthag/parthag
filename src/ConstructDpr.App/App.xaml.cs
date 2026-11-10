@@ -32,8 +32,9 @@ public partial class App : Application
             var ready = await AppState.StartAsync();
             while (!ready)
             {
-                // Server mode without a valid sign-in.
-                if (new SignInWindow(AppState.Session).ShowDialog() == true) { ready = await AppState.StartAsync(); continue; }
+                // Office or server mode without a valid sign-in.
+                Window signIn = AppState.Mode == DataMode.Office ? new OfficeConnectWindow() : new SignInWindow(AppState.Session);
+                if (signIn.ShowDialog() == true) { ready = await AppState.StartAsync(); continue; }
                 if (MessageBox.Show("Use CONSTRUCT DPR on this PC only (offline, no account) instead?", "CONSTRUCT DPR", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes)
                 {
                     Shutdown(0);

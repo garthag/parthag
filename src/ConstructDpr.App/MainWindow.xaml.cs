@@ -10,6 +10,9 @@ namespace ConstructDpr.App;
 /// <summary>Screens that reload their data when shown, when the project changes and on live changes.</summary>
 public interface IRefreshable { Task RefreshAsync(); }
 
+/// <summary>Screens that save with Ctrl+S.</summary>
+public interface ISaveable { Task SaveShortcutAsync(); }
+
 public sealed record ProjectChoice(int Id, string Title);
 
 public partial class MainWindow : Window
@@ -21,6 +24,7 @@ public partial class MainWindow : Window
         ["schedule"] = () => new ScheduleView(),
         ["dpr"] = () => new DprView(),
         ["reports"] = () => new ReportsView(),
+        ["projects"] = () => new ProjectsView(),
         ["settings"] = () => new SettingsView(),
     };
     private readonly Dictionary<string, UserControl> _views = new();
@@ -33,6 +37,21 @@ public partial class MainWindow : Window
         AppState.Changed += OnStateChanged;
         AppState.LiveChanged += c => { _ = RefreshCurrentAsync(); };
         if (Host.Content is null) _ = NavigateAsync("dashboard");
+        PreviewKeyDown += OnKey;
+    }
+
+    /// <summary>Ctrl+S save · F5 reload · Ctrl+1…7 switch screens.</summary>
+    private async void OnKey(object sender, System.Windows.Input.KeyEventArgs e)
+    {
+        var ctrl = (System.Windows.Input.Keyboard.Modifiers & System.Windows.Input.ModifierKeys.Control) != 0;
+        if (ctrl && e.Key == System.Windows.Input.Key.S && Host.Content is ISaveable s) { e.Handled = true; await s.SaveShortcutAsync(); }
+        else if (e.Key == System.Windows.Input.Key.F5) { e.Handled = true; await RefreshCurrentAsync(); }
+        else if (ctrl && e.Key is >= System.Windows.Input.Key.D1 and <= System.Windows.Input.Key.D7)
+        {
+            var keys = new[] { "dashboard", "dpr", "activities", "schedule", "reports", "projects", "settings" };
+            e.Handled = true;
+            await NavigateAsync(keys[e.Key - System.Windows.Input.Key.D1]);
+        }
     }
 
     public string Current { get; private set; } = "";
@@ -79,9 +98,9 @@ public partial class MainWindow : Window
         ProjectSub.Text = AppState.Project is null ? "No project yet: load the demo in Settings" : $"{Permissions.Label(AppState.Role)} · {AppState.Me.DisplayName}";
         DateText.Text = DateTime.Today.ToString("dddd, dd MMM yyyy");
         UserText.Text = AppState.Me.DisplayName;
-        ModeText.Text = AppState.IsServer ? $"Server · {AppState.Session.ServerUrl}" : "Offline · data on this PC (SQLite)";
+        ModeText.Text = AppState.ModeLabel;
         var status = AppState.Live.Status;
-        LiveText.Text = status switch { "live" => "Live", "local" => "This PC", "reconnecting" => "Reconnecting…", "connecting" => "Connecting…", _ => "Offline" };
-        LiveDot.Fill = (Brush)FindResource(status is "live" or "local" ? "Good" : status is "reconnecting" or "connecting" ? "Warn" : "Muted");
+        LiveText.Text = status switch { "live" => "Live", "office" => "Office · live", "local" => "This PC", "reconnecting" => "Reconnecting…", "connecting" => "Connecting…", _ => "Offline" };
+        LiveDot.Fill = (Brush)FindResource(status is "live" or "local" or "office" ? "Good" : status is "reconnecting" or "connecting" ? "Warn" : "Muted");
     }
 }

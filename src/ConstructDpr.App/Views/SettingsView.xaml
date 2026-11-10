@@ -9,12 +9,15 @@
           <TextBlock Text="Where your data lives" Style="{StaticResource H2}"/>
           <RadioButton x:Name="LocalMode" GroupName="Mode" Margin="0,0,0,6" Checked="OnMode"
                        Content="This PC only — offline, no account, one SQLite file on this computer"/>
+          <RadioButton x:Name="OfficeMode" GroupName="Mode" Margin="0,0,0,6" Checked="OnMode"
+                       Content="Office SQL Server — everyone in the office on one Microsoft SQL Server database, with accounts and roles"/>
           <RadioButton x:Name="ServerMode" GroupName="Mode" Margin="0,0,0,10" Checked="OnMode"
-                       Content="CONSTRUCT DPR server — sign in, live sync with the web and Android apps"/>
+                       Content="Cloud server — sign in, live sync with the web and Android apps"/>
           <TextBlock x:Name="ConnectionText" TextWrapping="Wrap" FontSize="12" Foreground="{StaticResource Muted}" Margin="0,0,0,8"/>
           <WrapPanel>
             <Button x:Name="SignInBtn" Content="Sign in…" Style="{StaticResource Primary}" Click="OnSignIn" Margin="0,0,8,6"/>
             <Button x:Name="SignOutBtn" Content="Sign out" Style="{StaticResource Danger}" Click="OnSignOut" Margin="0,0,8,6"/>
+            <Button x:Name="PasswordBtn" Content="Change password…" Click="OnPassword" Margin="0,0,8,6"/>
             <Button x:Name="DemoBtn" Content="Load demo project" Click="OnDemo" Margin="0,0,8,6"/>
           </WrapPanel>
         </StackPanel>

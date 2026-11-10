@@ -68,9 +68,11 @@ public static class Dialogs
     }
 
     /// <summary>Simple one-line text prompt (reject reason, revision reason, baseline name).</summary>
-    public static string? Prompt(string title, string label, string initial = "")
+    public static string? Prompt(string title, string label, string initial = "", bool password = false)
     {
-        var box = new System.Windows.Controls.TextBox { Text = initial, Margin = new Thickness(0, 6, 0, 12), MinWidth = 380 };
+        var text = new System.Windows.Controls.TextBox { Text = initial, Margin = new Thickness(0, 6, 0, 12), MinWidth = 380 };
+        var secret = new System.Windows.Controls.PasswordBox { Margin = new Thickness(0, 6, 0, 12), MinWidth = 380, Padding = new Thickness(6, 5, 6, 5) };
+        System.Windows.Controls.Control box = password ? secret : text;
         var ok = new System.Windows.Controls.Button { Content = "OK", IsDefault = true, Style = (Style)Application.Current.Resources["Primary"] };
         var cancel = new System.Windows.Controls.Button { Content = "Cancel", IsCancel = true };
         var buttons = new System.Windows.Controls.StackPanel { Orientation = System.Windows.Controls.Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
@@ -87,6 +89,6 @@ public static class Dialogs
         };
         ok.Click += (_, _) => w.DialogResult = true;
         box.Focus();
-        return w.ShowDialog() == true ? box.Text.Trim() : null;
+        return w.ShowDialog() == true ? (password ? secret.Password : text.Text.Trim()) : null;
     }
 }

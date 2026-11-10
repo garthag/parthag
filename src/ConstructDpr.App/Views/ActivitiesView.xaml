@@ -11,6 +11,8 @@
         <Button Content="Save changes" Style="{StaticResource Primary}" Click="OnSave"/>
         <Button Content="▶ Run CPM schedule" Style="{StaticResource Success}" Click="OnSchedule"/>
         <Button Content="Freeze baseline…" Click="OnBaseline"/>
+        <TextBox x:Name="SearchBox" Width="240" Margin="8,0,0,0" VerticalContentAlignment="Center" TextChanged="OnSearch"
+                 ToolTip="Filter by code, name, WBS, area or responsible"/>
       </WrapPanel>
     </StackPanel>
     <Border DockPanel.Dock="Bottom" Style="{StaticResource CardBorder}" Margin="0,12,0,0" Height="210">
