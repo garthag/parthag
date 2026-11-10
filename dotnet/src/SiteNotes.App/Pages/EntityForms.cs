@@ -1,5 +1,6 @@
 using SiteNotes.App.Services;
 using SiteNotes.App.UI;
+using SiteNotes.Core;
 using SiteNotes.Core.Models;
 
 namespace SiteNotes.App.Pages;
@@ -92,17 +93,105 @@ public static class EntityForms
     {
         var subPicker = new Picker { Title = "Agency" };
         _ = FillSubcontractorsAsync(subPicker, a.SubcontractorId, id => a.SubcontractorId = id);
+        var deptPicker = new Picker { Title = "Department" };
+        _ = FillAsync<Department>(deptPicker, a.DepartmentId, id => a.DepartmentId = id, "(none)");
+        var wbsPicker = new Picker { Title = "WBS" };
+        _ = FillWbsAsync(wbsPicker, a.WbsId, id => a.WbsId = id);
+        var resources = new ActivityResourceEditor(a);
         return new FormPage<Activity>(string.IsNullOrEmpty(a.Name) ? "New activity" : a.Name, a,
-            x => string.IsNullOrWhiteSpace(x.Name) ? "Enter the activity name." : null, null,
+            x => string.IsNullOrWhiteSpace(x.Name) ? "Enter the activity name."
+                : x.PlannedStart != null && x.PlannedFinish != null && x.PlannedFinish < x.PlannedStart ? "Planned finish is before planned start." : null,
+            _ => resources.SaveAsync(),
+            Ui.SectionHeader("Activity"),
             Ui.Columns(2,
-                F("Code / BOQ item", Ui.Entry(a.Code, "e.g. 4.2.1", changed: v => a.Code = v)),
-                F("Activity *", Ui.Entry(a.Name, "e.g. RCC slab L5", changed: v => a.Name = v)),
+                F("Code / BOQ item", Ui.Entry(a.Code, "e.g. C-101", changed: v => a.Code = v)),
+                F("Activity *", Ui.Entry(a.Name, "e.g. Raft concrete", changed: v => a.Name = v)),
+                F("WBS (plant › unit › area)", wbsPicker),
                 F("Location", Ui.Entry(a.Location, "Block / floor / grid", changed: v => a.Location = v)),
+                F("Method", new Combo(a.Method, ["Conventional", "Pump placement", "Crane & bucket", "Slip form", "Jump form", "Precast", "Pre-engineered", "Mechanised", "Manual"], v => a.Method = v, "Construction method")),
+                F("Agency (subcontractor)", subPicker),
+                F("Department", deptPicker),
+                F("Weightage (for overall %)", Ui.Number(a.Weightage, v => a.Weightage = v, "auto"))),
+            Ui.SectionHeader("Quantity & schedule"),
+            Ui.Columns(2,
                 F("Unit", new Combo(a.Unit, Lists.Units, v => a.Unit = v)),
-                F("Planned quantity", Ui.Number(a.PlannedQty, v => a.PlannedQty = v)),
-                F("Agency", subPicker),
+                F("Planned quantity (100 %)", Ui.Number(a.PlannedQty, v => a.PlannedQty = v)),
+                F("Planned output per day", Ui.Number(a.PlannedRatePerDay, v => a.PlannedRatePerDay = v, "optional")),
                 F("Planned start", Ui.OptionalDate(a.PlannedStart, v => a.PlannedStart = v)),
-                F("Planned finish", Ui.OptionalDate(a.PlannedFinish, v => a.PlannedFinish = v))));
+                F("Planned finish", Ui.OptionalDate(a.PlannedFinish, v => a.PlannedFinish = v))),
+            Ui.Caption("Progress is not typed here: it is the sum of 'today' quantities in the daily reports and stops at 100 %."),
+            Ui.SectionHeader("Assigned resources (planned)"), resources,
+            F("Remarks", Ui.Memo(a.Remarks, "", v => a.Remarks = v, 50)));
+    }
+
+    public static async Task FillAsync<T>(Picker picker, string selectedId, Action<string> changed, string noneText) where T : SyncEntity, new()
+    {
+        var items = (await AppServices.Db.ListForProjectAsync<T>(AppServices.ProjectId)).OrderBy(x => x.ToString()).Cast<object>().ToList();
+        var none = new PickItem("", noneText);
+        var list = new List<PickItem> { none };
+        list.AddRange(items.Select(i => new PickItem(((SyncEntity)i).Id, i.ToString() ?? "")));
+        picker.ItemsSource = list;
+        picker.SelectedItem = list.FirstOrDefault(x => x.Id == selectedId) ?? none;
+        picker.SelectedIndexChanged += (_, _) => { if (picker.SelectedItem is PickItem p) changed(p.Id); };
+    }
+
+    public static async Task FillWbsAsync(Picker picker, string selectedId, Action<string> changed)
+    {
+        var all = await AppServices.Db.ListForProjectAsync<WbsNode>(AppServices.ProjectId);
+        var map = all.ToDictionary(w => w.Id);
+        var list = new List<PickItem> { new("", "(no WBS)") };
+        list.AddRange(all.Select(w => new PickItem(w.Id, ProgressService.WbsPath(w.Id, map))).OrderBy(p => p.Name));
+        picker.ItemsSource = list;
+        picker.SelectedItem = list.FirstOrDefault(x => x.Id == selectedId) ?? list[0];
+        picker.SelectedIndexChanged += (_, _) => { if (picker.SelectedItem is PickItem p) changed(p.Id); };
+    }
+
+    public static Page ResourceForm(Resource r)
+    {
+        var subPicker = new Picker { Title = "Agency" };
+        _ = FillSubcontractorsAsync(subPicker, r.SubcontractorId, id => r.SubcontractorId = id);
+        var deptPicker = new Picker { Title = "Department" };
+        _ = FillAsync<Department>(deptPicker, r.DepartmentId, id => r.DepartmentId = id, "(none)");
+        return new FormPage<Resource>(string.IsNullOrEmpty(r.Name) ? "New resource" : r.Name, r,
+            x => string.IsNullOrWhiteSpace(x.Name) ? "Enter the resource name." : x.Rate < 0 ? "Rate cannot be negative." : null, null,
+            Ui.Columns(2,
+                F("Type", Ui.EnumPicker(r.Type, v => r.Type = v)),
+                F("Code", Ui.Entry(r.Code, "e.g. L-MAS", changed: v => r.Code = v)),
+                F("Name *", new Combo(r.Name, Lists.Trades.Concat(["JCB", "Tower crane", "Concrete pump", "Transit mixer", "RMC M25", "TMT steel", "Cement", "Scaffolding hire", "Testing charges"]), v => r.Name = v)),
+                F("Unit", new Combo(r.Unit, Lists.Units, v => r.Unit = v)),
+                F("Rate", DecimalEntry(r.Rate, v => r.Rate = v)),
+                F("Rate basis", Ui.EnumPicker(r.Basis, v => r.Basis = v)),
+                F("Supplied by (agency)", subPicker),
+                F("Department (own staff)", deptPicker)),
+            Ui.Caption("Manpower & machines: usually per day or per hour. Materials: per unit. Non-material (hire, testing, transport): per unit or lump sum."),
+            F("Remarks", Ui.Memo(r.Remarks, "Rate source, validity…", v => r.Remarks = v, 50)));
+    }
+
+    public static Entry DecimalEntry(decimal value, Action<decimal> changed)
+    {
+        var e = new Entry { Text = value == 0 ? "" : value.ToString("0.##"), Placeholder = "0.00", Keyboard = Keyboard.Numeric, HorizontalTextAlignment = TextAlignment.End };
+        e.TextChanged += (_, a) => changed(decimal.TryParse(a.NewTextValue, out var v) ? v : 0);
+        return e;
+    }
+
+    public static Page WbsForm(WbsNode w, List<WbsNode> all)
+    {
+        var parentPicker = new Picker { Title = "Parent" };
+        var map = all.ToDictionary(x => x.Id);
+        var opts = new List<PickItem> { new("", "(top level)") };
+        opts.AddRange(all.Where(x => x.Id != w.Id && !ProgressService.WbsPath(x.Id, map).Contains(w.ToString() + " ›") )
+            .Select(x => new PickItem(x.Id, ProgressService.WbsPath(x.Id, map))).OrderBy(p => p.Name));
+        parentPicker.ItemsSource = opts;
+        parentPicker.SelectedItem = opts.FirstOrDefault(o => o.Id == w.ParentId) ?? opts[0];
+        parentPicker.SelectedIndexChanged += (_, _) => { if (parentPicker.SelectedItem is PickItem p) w.ParentId = p.Id; };
+        return new FormPage<WbsNode>(string.IsNullOrEmpty(w.Name) ? "New WBS element" : w.Name, w,
+            x => string.IsNullOrWhiteSpace(x.Name) ? "Enter a name." : x.ParentId == x.Id ? "An element cannot be its own parent." : null, null,
+            Ui.Columns(2,
+                F("Level", Ui.EnumPicker(w.Level, v => w.Level = v)),
+                F("Parent", parentPicker),
+                F("Code", Ui.Entry(w.Code, "e.g. P1-U2", changed: v => w.Code = v)),
+                F("Name *", Ui.Entry(w.Name, "e.g. Boiler plant / Unit 2 / Pump house", changed: v => w.Name = v))),
+            Ui.Caption("Typical structure: Project › Plant › Unit › Area › System › Work package. Activities are linked to any level."));
     }
 
     public static async Task FillSubcontractorsAsync(Picker picker, string selectedId, Action<string> changed)
@@ -147,4 +236,10 @@ public static class EntityForms
             F("Raised by", Ui.Entry(r.RaisedBy, "", changed: v => r.RaisedBy = v)),
             F("Status", Ui.EnumPicker(r.Status, v => r.Status = v))),
         F("Remarks", Ui.Memo(r.Remarks, "PO no., supplier, follow-up…", v => r.Remarks = v, 50)));
+}
+
+/// <summary>Picker item with an id and a display name.</summary>
+public record PickItem(string Id, string Name)
+{
+    public override string ToString() => Name;
 }

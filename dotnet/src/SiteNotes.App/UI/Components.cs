@@ -24,8 +24,8 @@ public class Combo : Grid
             var choice = await page.DisplayActionSheetAsync(placeholder == "" ? "Choose" : placeholder, "Cancel", null, opts);
             if (choice != null && choice != "Cancel") Entry.Text = choice;
         };
-        Add(Entry, 0);
-        Add(pick, 1);
+        this.Add(Entry, 0);
+        this.Add(pick, 1);
     }
 }
 
@@ -67,7 +67,7 @@ public class Section : VerticalStackLayout
         return this;
     }
 
-    public void Clear() => _body.Children.Clear();
+    public void ClearBody() => _body.Children.Clear();
 }
 
 /// <summary>Editable list of rows (manpower, machines…). Each row is a card with fields and a delete button.</summary>

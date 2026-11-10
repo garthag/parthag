@@ -34,10 +34,14 @@ public class AppShell : Shell
         Add("📊  Dashboard", "dashboard", typeof(DashboardPage));
         Add("📅  Daily reports", "reports", typeof(ReportsPage));
         Add("📝  Notes & scans", "notes", typeof(NotesPage));
+        Add("📈  Progress & cost", "progress", typeof(ProgressPage));
         Add("⚠️  Hindrances", "hindrances", typeof(HindranceListPage));
         Add("📦  Requirements", "requirements", typeof(RequirementListPage));
         Add("🖨️  Report centre", "reportcentre", typeof(ReportCenterPage));
         Add("🏗️  Activities", "activities", typeof(ActivityListPage));
+        Add("🧱  WBS – plant / unit", "wbs", typeof(WbsListPage));
+        Add("💰  Resources & rates", "resources", typeof(ResourceListPage));
+        Add("🗓️  Work calendar", "calendar", typeof(CalendarPage));
         Add("👷  Subcontractors", "subcontractors", typeof(SubcontractorListPage));
         Add("🏢  Departments", "departments", typeof(DepartmentListPage));
         Add("📁  Projects", "projects", typeof(ProjectListPage));
@@ -53,7 +57,7 @@ public class AppShell : Shell
         {
             Title = title,
             Route = route,
-            Items = { new ShellContent { Title = title[3..].Trim(), Route = route + "page", ContentTemplate = new DataTemplate(page) } }
+            Items = { new ShellContent { Title = title.Split("  ", 2)[^1].Trim(), Route = route + "page", ContentTemplate = new DataTemplate(page) } }
         });
 
     private void Refresh()

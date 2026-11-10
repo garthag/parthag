@@ -45,19 +45,19 @@ public static class MediaService
         {
             var file = MediaPicker.Default.IsCaptureSupported
                 ? await MediaPicker.Default.CaptureVideoAsync(new MediaPickerOptions())
-                : await MediaPicker.Default.PickVideoAsync(new MediaPickerOptions());
+                : await PickOneVideoAsync();
             return file == null ? null : await ImportAsync(file, owner, ownerId, MediaKind.Video);
         }
         catch (FeatureNotSupportedException)
         {
-            var file = await MediaPicker.Default.PickVideoAsync(new MediaPickerOptions());
+            var file = await PickOneVideoAsync();
             return file == null ? null : await ImportAsync(file, owner, ownerId, MediaKind.Video);
         }
     }
 
     public static async Task<MediaItem?> PickVideoAsync(MediaOwner owner, string ownerId)
     {
-        var file = await MediaPicker.Default.PickVideoAsync(new MediaPickerOptions());
+        var file = await PickOneVideoAsync();
         return file == null ? null : await ImportAsync(file, owner, ownerId, MediaKind.Video);
     }
 
@@ -70,11 +70,11 @@ public static class MediaService
         {
             file = MediaPicker.Default.IsCaptureSupported
                 ? await MediaPicker.Default.CapturePhotoAsync(PhotoOptions)
-                : await MediaPicker.Default.PickPhotoAsync(PhotoOptions);
+                : await PickOnePhotoAsync();
         }
         catch (FeatureNotSupportedException)
         {
-            file = await MediaPicker.Default.PickPhotoAsync(PhotoOptions);
+            file = await PickOnePhotoAsync();
         }
         return file == null ? null : await CopyToCacheAsync(file);
     }
@@ -86,6 +86,12 @@ public static class MediaService
         foreach (var f in files ?? []) if (f != null) list.Add(await CopyToCacheAsync(f));
         return list;
     }
+
+    private static async Task<FileResult?> PickOneVideoAsync() =>
+        (await MediaPicker.Default.PickVideosAsync(new MediaPickerOptions { SelectionLimit = 1 }))?.FirstOrDefault();
+
+    private static async Task<FileResult?> PickOnePhotoAsync() =>
+        (await MediaPicker.Default.PickPhotosAsync(new MediaPickerOptions { SelectionLimit = 1, MaximumWidth = 2400, MaximumHeight = 2400 }))?.FirstOrDefault();
 
     private static async Task<string> CopyToCacheAsync(FileResult file)
     {

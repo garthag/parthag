@@ -1,5 +1,7 @@
 # Site DPR – Daily Progress Report app for construction sites
 
+> **New: SiteNotes DPR (C# / .NET MAUI + SQL)** for Android and Windows, with notes, a PDF scanner, WBS, resources and rates, automatic activity progress, cost per activity, day and hour, and real-time sync through SQL Server. See [`dotnet/README.md`](dotnet/README.md). The Flutter app below is unchanged.
+
 A Flutter (Google) mobile app for Android and iOS that lets site engineers record the **Daily Progress Report (DPR)** of a construction project the way Indian sites do it: IS-code units and specs, a hindrance register, safety records under the BOCW Act, geo-tagged photos and videos, signatures, and a PDF ready to print or share on WhatsApp.
 
 It works fully **offline** on site. You can optionally turn on **Google sign-in and cloud sync** through Firebase.

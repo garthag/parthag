@@ -125,3 +125,28 @@ public class PlanningTests : IDisposable
         }
     }
 }
+
+public class SampleDataTests
+{
+    [Fact]
+    public async Task Sample_project_builds_and_reports()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "sitenotes-sample-" + Guid.NewGuid().ToString("N"));
+        var db = new LocalDatabase(dir);
+        await db.InitAsync();
+        var p = await SampleData.CreateAsync(db, new DateTime(2026, 11, 10));
+        var reports = await db.ListForProjectAsync<DailyReport>(p.Id);
+        Assert.True(reports.Count >= 4);
+        Assert.All(reports, r => Assert.True(r.TotalCost > 0));
+        var pp = await new ProgressService(db).ComputeAsync(p.Id, asOf: new DateTime(2026, 11, 10));
+        Assert.True(pp.OverallPercent > 0);
+        Assert.Contains(pp.BySubcontractor, s => s.Name == "Om Rebar Works" && s.ManDays > 0);
+        Assert.True(pp.Activities.Single(a => a.Activity.Code == "C-100").DoneQty > 0);
+        // The next report automatically lists running activities.
+        var next = await db.NewReportAsync(p.Id, new DateTime(2026, 11, 10), carryForward: true);
+        Assert.Contains(next.Activities, a => a.ActivityName.Contains("Excavation"));
+        using var ms = new MemoryStream();
+        PdfReports.ReportRegister(ms, p, await new ReportQueryService(db).LoadBundlesAsync(new ReportFilter { ProjectId = p.Id }), "All", true, db.MediaPath, await db.CalendarAsync(p.Id));
+        Assert.True(ms.Length > 5000);
+    }
+}

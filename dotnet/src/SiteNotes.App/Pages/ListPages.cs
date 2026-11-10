@@ -285,3 +285,61 @@ public class RequirementListPage : ListPage<Requirement>
         await FileExport.OfferAsync(this, path);
     }
 }
+
+public class ResourceListPage : ListPage<Resource>
+{
+    public ResourceListPage() : base("Resources & rates") { }
+    protected override string[] SortOptions => ["Type", "Name", "Rate"];
+    protected override string[] FilterOptions => Enum.GetNames<ResourceType>();
+    protected override bool Filter(Resource r, string f) => r.Type.ToString() == f;
+    protected override IEnumerable<Resource> Sort(IEnumerable<Resource> items, string sort) => sort switch
+    {
+        "Name" => items.OrderBy(r => r.Name),
+        "Rate" => items.OrderByDescending(r => r.Rate),
+        _ => items.OrderBy(r => r.Type).ThenBy(r => r.Name),
+    };
+    protected override Resource Create() => new() { ProjectId = AppServices.ProjectId };
+    protected override Page EditPage(Resource r) => EntityForms.ResourceForm(r);
+    protected override ListRow ToRow(Resource r) => new(r, r.ToString(), $"{RateText(r.Rate, r.Basis, r.Unit)}",
+        r.Type == ResourceType.Other ? "NON-MATERIAL" : r.Type.ToString().ToUpperInvariant(), TypeColor(r.Type), r.Remarks);
+
+    public static string RateText(decimal rate, RateBasis basis, string unit) => basis switch
+    {
+        RateBasis.PerHour => $"{PdfReports.M(rate)} per hour",
+        RateBasis.PerDay => $"{PdfReports.M(rate)} per day",
+        RateBasis.PerUnit => $"{PdfReports.M(rate)} per {unit}",
+        _ => $"{PdfReports.M(rate)} lump sum",
+    };
+
+    public static Color TypeColor(ResourceType t) => t switch
+    {
+        ResourceType.Manpower => Ui.Primary,
+        ResourceType.Machinery => Ui.Accent,
+        ResourceType.Material => Ui.Success,
+        _ => Ui.Muted,
+    };
+}
+
+public class WbsListPage : ListPage<WbsNode>
+{
+    private Dictionary<string, WbsNode> _map = [];
+    public WbsListPage() : base("WBS – plant / unit / area") { }
+    protected override string[] SortOptions => ["Tree", "Code"];
+    protected override string[] FilterOptions => Enum.GetNames<WbsLevel>();
+    protected override bool Filter(WbsNode w, string f) => w.Level.ToString() == f;
+    protected override IEnumerable<WbsNode> Sort(IEnumerable<WbsNode> items, string sort)
+    {
+        _map = All.ToDictionary(w => w.Id);
+        return sort == "Code" ? items.OrderBy(w => w.Code) : items.OrderBy(w => ProgressService.WbsPath(w.Id, _map));
+    }
+    protected override WbsNode Create() => new() { ProjectId = AppServices.ProjectId };
+    protected override Page EditPage(WbsNode w) => EntityForms.WbsForm(w, All);
+    protected override ListRow ToRow(WbsNode w)
+    {
+        var depth = 0;
+        var p = w.ParentId;
+        while (p != "" && _map.TryGetValue(p, out var n) && depth < 10) { depth++; p = n.ParentId; }
+        return new(w, new string(' ', depth * 4) + (depth > 0 ? "└ " : "") + w, w.Level.ToString(), "", null,
+            depth > 0 ? ProgressService.WbsPath(w.ParentId, _map) : "");
+    }
+}
