@@ -16,14 +16,18 @@ public static class ScreenshotMode
 
     public static Settings? Options { get; set; }
 
+    private static int _started;
+
     public static async Task RunAsync(Window window, Settings o)
     {
+        if (Interlocked.Exchange(ref _started, 1) == 1) return; // Android may create the window twice; run once
         var dir = Path.Combine(o.Folder, "screens");
         Directory.CreateDirectory(dir);
         try
         {
             await AppState.Session.SetServerAsync(o.Server);
-            try { await AppState.Session.RegisterAsync(o.Email, o.Password, "Site Engineer"); } catch (WorkflowException) { /* already registered */ }
+            try { await AppState.Session.RegisterAsync(o.Email, o.Password, "Site Engineer"); }
+            catch (Exception ex) when (ex is WorkflowException or ConflictException) { /* already registered */ }
             await AppState.Session.SignInAsync(o.Email, o.Password);
             await AppState.StartAsync();
             if (AppState.Projects.Count == 0)
