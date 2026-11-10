@@ -34,6 +34,7 @@ public partial class SettingsView : UserControl, IRefreshable
         SignOutBtn.Visibility = AppState.HasAccounts && signedIn ? Visibility.Visible : Visibility.Collapsed;
         PasswordBtn.Visibility = AppState.Mode == DataMode.Office && signedIn ? Visibility.Visible : Visibility.Collapsed;
         DataCard.Visibility = AppState.Mode == DataMode.Local ? Visibility.Visible : Visibility.Collapsed;
+        ShowPhones();
         UserBox.Text = AppState.Me.DisplayName;
         PathText.Text = "Database: " + AppState.DbPath + "\nEverything is stored in this one SQLite file. Back it up regularly (for example to OneDrive or a USB drive).";
 
@@ -66,6 +67,42 @@ public partial class SettingsView : UserControl, IRefreshable
         var ok = false;
         await Dialogs.RunAsync(async () => ok = await AppState.SwitchModeAsync(mode));
         if (!ok) await Dialogs.RunAsync(() => AppState.SwitchModeAsync(previous));
+    }
+
+    private void ShowPhones()
+    {
+        _loading = true;
+        PhonesCard.Visibility = AppState.Mode == DataMode.Server ? Visibility.Collapsed : Visibility.Visible;
+        PhonesBox.IsChecked = AppState.Settings.ShareWithPhones;
+        _loading = false;
+        if (!AppState.Settings.ShareWithPhones)
+        {
+            PhonesText.Text = "Switch on to let site engineers use the Android app with this PC's data. No separate server is needed. " +
+                              "The PC must stay on and connected to the site Wi-Fi.";
+            PhonesAddress.Visibility = Visibility.Collapsed;
+        }
+        else if (AppState.PhoneServerError is { } err)
+        {
+            PhonesText.Text = err;
+            PhonesAddress.Visibility = Visibility.Collapsed;
+        }
+        else
+        {
+            PhonesText.Text = "On. In the Android app, enter one of these server addresses (phone on the same Wi-Fi). " +
+                              "Each person creates an account in the app; then add them under Projects & people. " +
+                              "If Windows Firewall asks, allow private networks.";
+            PhonesAddress.Text = string.Join("    ", AppState.PhoneAddresses());
+            PhonesAddress.Visibility = Visibility.Visible;
+        }
+    }
+
+    private async void OnPhones(object sender, RoutedEventArgs e)
+    {
+        if (_loading) return;
+        AppState.Settings.ShareWithPhones = PhonesBox.IsChecked == true;
+        AppState.SaveSettings();
+        await Dialogs.RunAsync(AppState.StartPhoneServerAsync);
+        ShowPhones();
     }
 
     private async void OnSignIn(object sender, RoutedEventArgs e)

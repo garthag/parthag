@@ -36,6 +36,9 @@ public sealed class AppSettings
     public bool OfficeWindowsAuth { get; set; } = true;
     public string OfficeSqlUser { get; set; } = "";
     public int? OfficeProjectId { get; set; }
+    /// <summary>Run the sync server inside this app so Android phones can connect (This PC or Office SQL Server mode).</summary>
+    public bool ShareWithPhones { get; set; }
+    public int PhonePort { get; set; } = 5080;
 }
 
 /// <summary>Secrets for office mode (SQL login password, remembered account), encrypted for this Windows user.</summary>
@@ -90,10 +93,12 @@ public sealed class OfficeLive : ILiveUpdates
     private int _projectId, _known;
     private bool _busy;
     private string _status = "connecting";
+    private readonly string _ok;
 
-    public OfficeLive(Func<int, Task<int>> stamp)
+    public OfficeLive(Func<int, Task<int>> stamp, string okStatus = "office")
     {
         _stamp = stamp;
+        _ok = okStatus;
         _timer.Tick += async (_, _) => await PollAsync();
         _timer.Start();
     }
@@ -105,7 +110,7 @@ public sealed class OfficeLive : ILiveUpdates
     public async Task WatchProjectAsync(int projectId)
     {
         _projectId = projectId;
-        try { _known = await _stamp(projectId); SetStatus("office"); }
+        try { _known = await _stamp(projectId); SetStatus(_ok); }
         catch (Exception ex) when (ex is SqlException or InvalidOperationException or TimeoutException) { SetStatus("offline"); }
     }
 
@@ -126,7 +131,7 @@ public sealed class OfficeLive : ILiveUpdates
         try
         {
             var now = await _stamp(_projectId);
-            SetStatus("office");
+            SetStatus(_ok);
             if (now != _known)
             {
                 _known = now;
@@ -258,22 +263,83 @@ public static class AppState
         return new DirectAccounts(factory);
     }
 
+    // ───────── "Let phones connect to this PC": the sync server inside this app ─────────
+
+    private static Microsoft.AspNetCore.Builder.WebApplication? _phoneServer;
+    public static bool PhoneServerRunning => _phoneServer is not null;
+    public static string? PhoneServerError { get; private set; }
+
+    /// <summary>Addresses phones on the same network can type (computer name and IPv4 addresses).</summary>
+    public static List<string> PhoneAddresses()
+    {
+        var list = new List<string> { $"http://{System.Net.Dns.GetHostName()}:{Settings.PhonePort}" };
+        foreach (var nic in System.Net.NetworkInformation.NetworkInterface.GetAllNetworkInterfaces()
+                     .Where(n => n.OperationalStatus == System.Net.NetworkInformation.OperationalStatus.Up
+                                 && n.NetworkInterfaceType != System.Net.NetworkInformation.NetworkInterfaceType.Loopback))
+            foreach (var a in nic.GetIPProperties().UnicastAddresses.Where(a => a.Address.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork))
+                list.Add($"http://{a.Address}:{Settings.PhonePort}");
+        return list.Distinct().ToList();
+    }
+
+    public static async Task StartPhoneServerAsync()
+    {
+        await StopPhoneServerAsync();
+        PhoneServerError = null;
+        if (!Settings.ShareWithPhones || Settings.Mode == DataMode.Server) return;
+        var (provider, connection) = Settings.Mode == DataMode.Office
+            ? ("SqlServer", OfficeConnectionString(Settings, (await LoadOfficeSecretsAsync()).SqlPassword))
+            : ("Sqlite", $"Data Source={DbPath}");
+        try
+        {
+            var app = await Task.Run(() => ConstructDpr.Server.SyncServerHost.Create([], new Dictionary<string, string?>
+            {
+                ["Urls"] = $"http://0.0.0.0:{Settings.PhonePort}",
+                ["Database:Provider"] = provider,
+                ["ConnectionStrings:Default"] = connection,
+                ["Features:AdminPortal"] = "false",
+                ["Features:Registration"] = "true",
+                ["Logging:LogLevel:Default"] = "Warning",
+            }));
+            await app.StartAsync();
+            _phoneServer = app;
+        }
+        catch (Exception ex) when (ex is IOException or System.Net.Sockets.SocketException or InvalidOperationException)
+        {
+            PhoneServerError = $"Phones cannot connect: port {Settings.PhonePort} is already in use on this PC " +
+                               $"(is the separate CONSTRUCT DPR sync server running here?). {ex.GetBaseException().Message}";
+        }
+        Changed?.Invoke();
+    }
+
+    public static async Task StopPhoneServerAsync()
+    {
+        if (_phoneServer is null) return;
+        var app = _phoneServer;
+        _phoneServer = null;
+        try { using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(3)); await app.StopAsync(cts.Token); await app.DisposeAsync(); }
+        catch (ObjectDisposedException) { }
+    }
+
     /// <summary>Connects in the chosen mode. Returns false when a sign-in is needed first.</summary>
     public static async Task<bool> StartAsync()
     {
         StopLive();
+        await StopPhoneServerAsync();
         switch (Settings.Mode)
         {
             case DataMode.Local:
             {
                 var options = AppDbContext.Options(DbProvider.Sqlite, $"Data Source={DbPath}");
                 using (var db = new AppDbContext(options)) db.EnsureSchema();
-                var live = new LocalLive();
+                // Polls the file for changes, so reports sent from phones (built-in sync server) appear without F5.
+                LocalApi api = null!;
+                var live = new OfficeLive(pid => api.ChangeStampAsync(pid), "local");
                 Live = live;
                 Me = new UserInfo("local", "", Settings.UserName);
                 OfficeAccounts = null;
-                Api = new LocalApi(() => new AppDbContext(options), new Caller("local", "", Settings.UserName, IsLocalOwner: true),
+                api = new LocalApi(() => new AppDbContext(options), new Caller("local", "", Settings.UserName, IsLocalOwner: true),
                     new AppFeatures(true, false, "this PC"), live.Raise);
+                Api = api;
                 Features = await Api.FeaturesAsync();
                 Projects = await Api.ProjectsAsync();
                 if (Projects.Count == 0)
@@ -323,6 +389,7 @@ public static class AppState
         };
         Live.StatusChanged += _ => Application.Current?.Dispatcher.BeginInvoke(() => Changed?.Invoke());
         if (Project is not null) await Live.WatchProjectAsync(Project.Id);
+        if (Settings.ShareWithPhones && Settings.Mode != DataMode.Server) await StartPhoneServerAsync();
         Changed?.Invoke();
         return true;
     }
@@ -332,6 +399,9 @@ public static class AppState
         if (Live is LiveClient lc) _ = lc.StopAsync();
         if (Live is OfficeLive ol) ol.Stop();
     }
+
+    /// <summary>The people screen works in every mode now (phones join "This PC" through the built-in sync server).</summary>
+    public static bool CanManagePeople => Features.AdminPortal || Settings.Mode != DataMode.Server;
 
     public static async Task OpenProjectAsync(int projectId)
     {
@@ -379,6 +449,7 @@ public static class AppState
     /// <summary>Offline mode only: deletes this PC's database and loads the demo project again.</summary>
     public static async Task ResetLocalToDemoAsync()
     {
+        await StopPhoneServerAsync();
         Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
         File.Delete(DbPath);
         Settings.LocalProjectId = null;

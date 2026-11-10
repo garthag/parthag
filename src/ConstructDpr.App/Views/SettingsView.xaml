@@ -22,6 +22,14 @@
           </WrapPanel>
         </StackPanel>
       </Border>
+      <Border x:Name="PhonesCard" Style="{StaticResource CardBorder}" Margin="0,0,0,12">
+        <StackPanel>
+          <TextBlock Text="Phones (Android app)" Style="{StaticResource H2}"/>
+          <CheckBox x:Name="PhonesBox" Content="Let phones connect to this PC" FontSize="13" Checked="OnPhones" Unchecked="OnPhones" Margin="0,0,0,8"/>
+          <TextBlock x:Name="PhonesText" TextWrapping="Wrap" FontSize="12" Foreground="{StaticResource Muted}"/>
+          <TextBox x:Name="PhonesAddress" IsReadOnly="True" FontSize="15" FontWeight="SemiBold" BorderThickness="0" Background="Transparent" Margin="0,6,0,0" Visibility="Collapsed"/>
+        </StackPanel>
+      </Border>
       <Border Style="{StaticResource CardBorder}" Margin="0,0,0,12">
         <StackPanel>
           <TextBlock Text="You" Style="{StaticResource H2}"/>

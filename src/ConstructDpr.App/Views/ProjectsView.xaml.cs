@@ -31,7 +31,7 @@ public partial class ProjectsView : UserControl, IRefreshable
         NewBtn.IsEnabled = AppState.Features.AdminPortal;
         Summary.Text = AppState.Mode switch
         {
-            DataMode.Local => "This PC only: you are the administrator of every project here. People and roles need the office SQL Server or the sync server (Settings).",
+            DataMode.Local => "This PC only: you are the administrator of every project here. To work with phones, switch on Settings → \"Let phones connect to this PC\"; each person creates an account in the Android app, then add them here with their role.",
             DataMode.Office => "Office SQL Server: colleagues create their account the first time they connect; then add them here with their role.",
             _ => AppState.Features.AdminPortal ? "Sync server: colleagues create an account in the Android or Windows app; then add them here with their role."
                                                : "Sync server: creating projects and managing people is switched off on this server; do it in Office SQL Server mode or set Features:AdminPortal on the server.",
@@ -46,10 +46,9 @@ public partial class ProjectsView : UserControl, IRefreshable
         var row = ProjectGrid.SelectedItem as ProjectRow;
         var summary = AppState.Projects.FirstOrDefault(p => p.Id == row?.Id);
         PeopleTitle.Text = row is null ? "People" : $"People on {row.Code}";
-        var canView = AppState.HasAccounts && AppState.Features.AdminPortal && summary is not null && Permissions.Can(summary.MyRole, Module.Members, Act.View);
+        var canView = AppState.CanManagePeople && summary is not null && Permissions.Can(summary.MyRole, Module.Members, Act.View);
         AddPanel.Visibility = canView && Permissions.Can(summary!.MyRole, Module.Members, Act.Create) ? Visibility.Visible : Visibility.Collapsed;
-        PeopleNote.Text = !AppState.HasAccounts ? "Not available in \"This PC only\" mode."
-            : !canView ? "Your role does not show the member list of this project." : "";
+        PeopleNote.Text = !canView ? "Your role does not show the member list of this project." : "";
         if (!canView) { People.ItemsSource = null; return; }
         await Dialogs.RunAsync(async () =>
             People.ItemsSource = (await AppState.Api.MembersAsync(summary!.Id))
@@ -103,6 +102,16 @@ public partial class ProjectsView : UserControl, IRefreshable
             EmailBox.Text = "";
             await LoadPeopleAsync();
         }
+    }
+
+    private async void OnResetPassword(object sender, RoutedEventArgs e)
+    {
+        if (ProjectGrid.SelectedItem is not ProjectRow r || People.SelectedItem is not PersonRow p) { Dialogs.Info("Select the person in the list first."); return; }
+        if (!Dialogs.Confirm($"Give {p.DisplayName} ({p.Email}) a new temporary password?\n\nThey are signed out on all devices and sign in again with the temporary password, then change it.")) return;
+        string? temp = null;
+        if (!await Dialogs.RunAsync(async () => temp = await AppState.Api.ResetPasswordAsync(r.Id, p.Id))) return;
+        Clipboard.SetText(temp!);
+        Dialogs.Info($"Temporary password for {p.Email}:\n\n    {temp}\n\nIt has been copied to the clipboard. Give it to {p.DisplayName} in person or by phone.");
     }
 
     private async void OnRemoveMember(object sender, RoutedEventArgs e)

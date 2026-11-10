@@ -44,6 +44,24 @@
       </UniformGrid>
       <Border Style="{StaticResource CardBorder}" Margin="0,12,0,0">
         <StackPanel>
+          <TextBlock Text="▦  Progress report for a period (weekly, monthly, client meeting)" Style="{StaticResource H2}"/>
+          <TextBlock TextWrapping="Wrap" Foreground="{StaticResource Muted}" FontSize="12" Margin="0,0,0,10"
+                     Text="From approved daily reports only: quantities and value done in the period, manpower (man-days), equipment hours and utilisation, materials received and issued, delays, breakdowns and safety notes, and the list of reports."/>
+          <WrapPanel>
+            <TextBlock Text="From" VerticalAlignment="Center" Margin="0,0,6,6"/>
+            <DatePicker x:Name="PeriodFrom" Width="140" Margin="0,0,12,6"/>
+            <TextBlock Text="To" VerticalAlignment="Center" Margin="0,0,6,6"/>
+            <DatePicker x:Name="PeriodTo" Width="140" Margin="0,0,16,6"/>
+            <Button Content="This week" Click="OnThisWeek" Margin="0,0,6,6"/>
+            <Button Content="Last week" Click="OnLastWeek" Margin="0,0,6,6"/>
+            <Button Content="This month" Click="OnThisMonth" Margin="0,0,16,6"/>
+            <Button Content="PDF" Style="{StaticResource Primary}" Click="OnPeriodPdf" Margin="0,0,8,6"/>
+            <Button Content="Excel" Click="OnPeriodExcel" Margin="0,0,8,6"/>
+          </WrapPanel>
+        </StackPanel>
+      </Border>
+      <Border Style="{StaticResource CardBorder}" Margin="0,12,0,0">
+        <StackPanel>
           <TextBlock Text="Audit trail (latest 40 actions)" Style="{StaticResource H2}"/>
           <DataGrid x:Name="Audit" IsReadOnly="True" Height="300">
             <DataGrid.Columns>

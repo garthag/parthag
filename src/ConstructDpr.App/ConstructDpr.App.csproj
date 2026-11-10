@@ -13,6 +13,11 @@
   <ItemGroup>
     <ProjectReference Include="..\ConstructDpr.Core\ConstructDpr.Core.csproj" />
     <ProjectReference Include="..\ConstructDpr.Client\ConstructDpr.Client.csproj" />
+    <!-- "Let phones connect to this PC": the sync server runs inside the Windows app. -->
+    <ProjectReference Include="..\ConstructDpr.Server\ConstructDpr.Server.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="10.0.14" />

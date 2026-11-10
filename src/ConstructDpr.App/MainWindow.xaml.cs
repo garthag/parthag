@@ -1,3 +1,4 @@
+using System.Net.Http;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
@@ -35,7 +36,7 @@ public partial class MainWindow : Window
         InitializeComponent();
         UpdateHeader();
         AppState.Changed += OnStateChanged;
-        AppState.LiveChanged += c => { _ = RefreshCurrentAsync(); };
+        AppState.LiveChanged += c => { _ = RefreshCurrentAsync(); _ = RefreshBadgeAsync(); };
         if (Host.Content is null) _ = NavigateAsync("dashboard");
         PreviewKeyDown += OnKey;
     }
@@ -81,6 +82,21 @@ public partial class MainWindow : Window
     {
         UpdateHeader();
         _ = RefreshCurrentAsync();
+        _ = RefreshBadgeAsync();
+    }
+
+    /// <summary>"Daily reports ● 2" when reports wait for someone who may approve them.</summary>
+    private async Task RefreshBadgeAsync()
+    {
+        var item = Nav.Children.OfType<RadioButton>().First(r => (string)r.Tag == "dpr");
+        var waiting = 0;
+        try
+        {
+            if (AppState.Pid != 0 && AppState.Can(Module.Dpr, Act.Approve))
+                waiting = (await AppState.Api.DprsAsync(AppState.Pid)).Count(d => d.Status == ConstructDpr.Shared.Model.DprStatus.Submitted);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or UnauthorizedAccessException or NotFoundException or InvalidOperationException) { }
+        item.Content = waiting > 0 ? $"✎   Daily reports   ● {waiting} to approve" : "✎   Daily reports";
     }
 
     private async void OnProjectPicked(object sender, SelectionChangedEventArgs e)

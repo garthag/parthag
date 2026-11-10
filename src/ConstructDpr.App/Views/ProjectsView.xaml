@@ -43,7 +43,8 @@
             </DockPanel>
             <WrapPanel>
               <Button Content="Add / change role" Style="{StaticResource Primary}" Click="OnAddMember" Margin="0,0,8,0"/>
-              <Button Content="Remove selected" Style="{StaticResource Danger}" Click="OnRemoveMember"/>
+              <Button Content="Remove selected" Style="{StaticResource Danger}" Click="OnRemoveMember" Margin="0,0,8,0"/>
+              <Button Content="Reset password…" Click="OnResetPassword"/>
             </WrapPanel>
           </StackPanel>
           <DataGrid x:Name="People" IsReadOnly="True" SelectionChanged="OnPersonSelected">

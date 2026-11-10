@@ -11,7 +11,25 @@ public sealed record DprChoice(int Id, string Title);
 /// <summary>PDF (QuestPDF) and Excel (ClosedXML) downloads, Excel import and the audit trail — all through the API.</summary>
 public partial class ReportsView : UserControl, IRefreshable
 {
-    public ReportsView() => InitializeComponent();
+    public ReportsView()
+    {
+        InitializeComponent();
+        SetPeriod(Monday(DateTime.Today), DateTime.Today);
+    }
+
+    private static DateTime Monday(DateTime d) => d.AddDays(-(((int)d.DayOfWeek + 6) % 7));
+    private void SetPeriod(DateTime from, DateTime to) => (PeriodFrom.SelectedDate, PeriodTo.SelectedDate) = (from, to);
+    private void OnThisWeek(object sender, RoutedEventArgs e) => SetPeriod(Monday(DateTime.Today), DateTime.Today);
+    private void OnLastWeek(object sender, RoutedEventArgs e) => SetPeriod(Monday(DateTime.Today).AddDays(-7), Monday(DateTime.Today).AddDays(-1));
+    private void OnThisMonth(object sender, RoutedEventArgs e) => SetPeriod(new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1), DateTime.Today);
+    private async void OnPeriodPdf(object sender, RoutedEventArgs e) => await Period(false);
+    private async void OnPeriodExcel(object sender, RoutedEventArgs e) => await Period(true);
+
+    private async Task Period(bool excel)
+    {
+        if (PeriodFrom.SelectedDate is not { } f || PeriodTo.SelectedDate is not { } t) { Dialogs.Error("Choose the start and end dates."); return; }
+        await Dialogs.RunAsync(async () => Dialogs.SaveAndOpen(await AppState.Api.PeriodReportAsync(AppState.Pid, DateOnly.FromDateTime(f), DateOnly.FromDateTime(t), excel)));
+    }
 
     public async Task RefreshAsync()
     {
