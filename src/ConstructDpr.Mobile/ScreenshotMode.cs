@@ -18,9 +18,11 @@ public static class ScreenshotMode
 
     private static int _started;
 
-    public static async Task RunAsync(Window window, Settings o)
+    public static async Task RunAsync(Window first, Settings o)
     {
         if (Interlocked.Exchange(ref _started, 1) == 1) return; // Android may create the window twice; run once
+        await Task.Delay(4000); // let Android settle, then use the window that is actually on screen
+        var window = Application.Current?.Windows.LastOrDefault() ?? first;
         var dir = Path.Combine(o.Folder, "screens");
         Directory.CreateDirectory(dir);
         try
