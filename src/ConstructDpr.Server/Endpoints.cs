@@ -111,11 +111,4 @@ public static class Endpoints
             return Results.File(file.Content, file.ContentType, file.FileName);
         });
     }
-
-    /// <summary>The Blazor web app (published into wwwroot with the server) answers every other path.</summary>
-    public static void MapWebApp(this WebApplication app)
-    {
-        app.Map("/api/{**rest}", () => Results.NotFound()); // unknown API paths stay 404, never the web page
-        app.MapFallbackToFile("index.html");
-    }
 }

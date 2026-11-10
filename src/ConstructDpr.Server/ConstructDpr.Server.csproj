@@ -1,5 +1,5 @@
 <Project Sdk="Microsoft.NET.Sdk.Web">
-  <!-- The shared server: sign-in, REST API, live updates (SignalR), PDF/Excel, and it serves the Blazor web app. -->
+  <!-- CONSTRUCT DPR sync server: lets the Android app (and Windows PCs away from the office) reach the SQL database safely. Sign-in, REST API, live updates (SignalR), PDF/Excel. -->
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <AssemblyName>ConstructDpr.Server</AssemblyName>
@@ -7,13 +7,6 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\ConstructDpr.Core\ConstructDpr.Core.csproj" />
-    <ProjectReference Include="..\ConstructDpr.Web\ConstructDpr.Web.csproj" />
-  </ItemGroup>
-  <ItemGroup>
-    <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.Server" Version="10.0.14" />
-  </ItemGroup>
-  <ItemGroup>
-    <None Update="start-server.cmd" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
   <ItemGroup>
     <InternalsVisibleTo Include="ConstructDpr.Tests" />

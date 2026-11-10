@@ -8,7 +8,7 @@ namespace ConstructDpr.Server;
 /// whenever anyone commits a change there. Joining checks project membership.
 /// </summary>
 [Authorize]
-public sealed class LiveHub(ApiFactory factory) : Hub
+public sealed class LiveHub(ApiFactory factory, ChangeWatcher watcher) : Hub
 {
     public static string Group(int projectId) => $"project-{projectId}";
 
@@ -17,6 +17,7 @@ public sealed class LiveHub(ApiFactory factory) : Hub
         var api = await factory.ForUserAsync(Context.User ?? throw new UnauthorizedAccessException());
         await api.ProjectAsync(projectId); // throws for non-members
         await Groups.AddToGroupAsync(Context.ConnectionId, Group(projectId));
+        watcher.Watch(projectId);
     }
 
     public Task UnwatchProject(int projectId) => Groups.RemoveFromGroupAsync(Context.ConnectionId, Group(projectId));

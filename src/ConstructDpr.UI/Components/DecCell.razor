@@ -1,8 +1,0 @@
-@if (Edit) { <input class="qty" type="number" inputmode="decimal" min="0" step="any" value="@Value" @onchange="OnChange" style="min-width:72px" /> }
-else { <span class="num" style="display:block">@Fmt.N(Value)</span> }
-@code {
-    [Parameter] public decimal Value { get; set; }
-    [Parameter] public bool Edit { get; set; }
-    [Parameter] public EventCallback<decimal> Changed { get; set; }
-    private Task OnChange(ChangeEventArgs e) => Fmt.ParseDec(e.Value?.ToString()) is { } v && v >= 0 ? Changed.InvokeAsync(v) : Task.CompletedTask;
-}

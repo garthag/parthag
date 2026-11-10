@@ -10,7 +10,7 @@ namespace ConstructDpr.Server;
 
 /// <summary>Builds the LocalApi for the signed-in person of the current request.</summary>
 public sealed class ApiFactory(IHttpContextAccessor http, DbContextOptions<AppDbContext> options, AppFeatures features,
-    SiteClock clock, IHubContext<LiveHub> hub, ILogger<ApiFactory> log)
+    SiteClock clock, IHubContext<LiveHub> hub, ChangeWatcher watcher, ILogger<ApiFactory> log)
 {
     public Task<LocalApi> ForCurrentUserAsync() => ForUserAsync(http.HttpContext?.User ?? throw new UnauthorizedAccessException());
 
@@ -23,7 +23,10 @@ public sealed class ApiFactory(IHttpContextAccessor http, DbContextOptions<AppDb
         return new LocalApi(() => new AppDbContext(options), caller, features, Publish, () => clock.Today);
     }
 
-    private void Publish(LiveChange change) =>
+    private void Publish(LiveChange change)
+    {
+        watcher.Seen(change.ProjectId);
         hub.Clients.Group(LiveHub.Group(change.ProjectId)).SendAsync("changed", change)
             .ContinueWith(t => log.LogWarning(t.Exception, "Live update not sent"), TaskContinuationOptions.OnlyOnFaulted);
+    }
 }

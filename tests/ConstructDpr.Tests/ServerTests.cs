@@ -107,6 +107,29 @@ public class ServerTests
     }
 
     [Fact]
+    public async Task Changes_made_directly_in_the_database_reach_the_phones()
+    {
+        using var server = new TestServer();
+        var (session, api) = await server.SignUpAsync("pm@site.test", "Priya");
+        var p = await api.CreateDemoProjectAsync();
+        var live = new LiveClient(session);
+        var got = new TaskCompletionSource<LiveChange>();
+        live.Changed += c => { if (c.Action == "resync") got.TrySetResult(c); };
+        await live.WatchProjectAsync(p.Id);
+
+        // A Windows PC in "Office SQL Server" mode writes straight into the same database, past the server.
+        var me = await api.MeAsync();
+        var direct = new ConstructDpr.Core.LocalApi(
+            () => new ConstructDpr.Core.Data.AppDbContext(ConstructDpr.Core.Data.AppDbContext.Options(ConstructDpr.Core.Data.DbProvider.Sqlite, $"Data Source={server.DbPath}")),
+            new ConstructDpr.Core.Caller(me.Id, me.Email, me.DisplayName), new AppFeatures(true, true, "office"));
+        await direct.CreateDprAsync(p.Id, DateOnly.FromDateTime(DateTime.UtcNow.AddHours(5.5)), Shift.Night);
+
+        var change = await got.Task.WaitAsync(TimeSpan.FromSeconds(20));
+        Assert.Equal(p.Id, change.ProjectId);
+        await live.DisposeAsync();
+    }
+
+    [Fact]
     public async Task Anonymous_requests_are_refused_and_unknown_api_paths_are_404()
     {
         using var server = new TestServer();
@@ -114,6 +137,7 @@ public class ServerTests
         Assert.Equal(HttpStatusCode.Unauthorized, (await http.GetAsync("/api/projects")).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, (await http.PostAsJsonAsync("/api/identity/register", new { email = "a@b.c", password = "x" })).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await http.GetAsync("/health")).StatusCode);
+        Assert.Contains("sync server", await http.GetStringAsync("/"));
         var features = await http.GetFromJsonAsync<AppFeatures>("/api/account/features", Json.Options);
         Assert.True(features!.Registration);
     }

@@ -1,4 +1,0 @@
--- Demo data is created per user, through the real workflow, by the
--- load_demo_project() function (migration 7): sign in, then press
--- "Load demo project" on the Home screen, or run as that user:
---   select public.load_demo_project();

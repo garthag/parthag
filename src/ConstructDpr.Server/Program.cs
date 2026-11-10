@@ -64,6 +64,8 @@ builder.Services.AddSingleton(ServerSettings.Features(cfg));
 builder.Services.AddSingleton(new SiteClock(cfg["Site:TimeZone"] ?? "Asia/Kolkata"));
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<ApiFactory>();
+builder.Services.AddSingleton<ChangeWatcher>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<ChangeWatcher>());
 
 var app = builder.Build();
 
@@ -87,9 +89,6 @@ app.UseForwardedHeaders();
 app.UseExceptionHandler();
 app.UseMiddleware<ApiErrors>();
 if (!app.Environment.IsDevelopment()) app.UseHsts();
-app.UseDefaultFiles();
-app.UseBlazorFrameworkFiles();
-app.UseStaticFiles();
 app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
@@ -98,7 +97,8 @@ app.MapGet("/health", () => Results.Ok(new { status = "ok", version = ServerSett
 app.MapAccount();
 app.MapApi();
 app.MapHub<LiveHub>("/hubs/live");
-app.MapWebApp();
+app.MapGet("/", () => Results.Text($"CONSTRUCT DPR sync server {ServerSettings.Version} is running. Connect the Android or Windows app to this address."));
+app.Map("/api/{**rest}", () => Results.NotFound());
 
 app.Run();
 

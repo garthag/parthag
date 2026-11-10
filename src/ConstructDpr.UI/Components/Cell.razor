@@ -1,8 +1,0 @@
-@if (Edit) { <input value="@Value" @onchange="e => Changed.InvokeAsync(e.Value?.ToString() ?? string.Empty)" style="min-width:@(Width)px" /> }
-else { <span>@Value</span> }
-@code {
-    [Parameter] public string? Value { get; set; }
-    [Parameter] public bool Edit { get; set; }
-    [Parameter] public int Width { get; set; } = 90;
-    [Parameter] public EventCallback<string> Changed { get; set; }
-}

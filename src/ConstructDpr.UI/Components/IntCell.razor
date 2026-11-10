@@ -1,8 +1,0 @@
-@if (Edit) { <input class="qty" type="number" inputmode="numeric" min="0" step="1" value="@Value" @onchange="OnChange" style="min-width:64px" /> }
-else { <span class="num" style="display:block">@Value</span> }
-@code {
-    [Parameter] public int Value { get; set; }
-    [Parameter] public bool Edit { get; set; }
-    [Parameter] public EventCallback<int> Changed { get; set; }
-    private Task OnChange(ChangeEventArgs e) => int.TryParse(e.Value?.ToString(), out var v) && v >= 0 ? Changed.InvokeAsync(v) : Task.CompletedTask;
-}
