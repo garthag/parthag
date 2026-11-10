@@ -10,7 +10,7 @@ This takes about 30 minutes, all in a web browser. When you finish, everyone on 
 | D | Android app | `.apk` from the Releases page | Free |
 | E | Windows app | `.exe` from the Releases page | Free |
 
-> **Only need it on one PC?** Skip all of this. Download **CONSTRUCT-DPR-windows.exe** (step E) and use it offline.
+> **Only Windows PCs, in one office?** You don't need any of this: install the Windows app and use one **Microsoft SQL Server** database on the office network — see [WINDOWS_APP.md](WINDOWS_APP.md). **Only one PC?** Install the Windows app (step E) and use it offline.
 
 ---
 
@@ -57,9 +57,9 @@ Reports you download open in the share sheet, so you can save them to Drive or s
 
 ## E. Windows app
 
-1. Download **CONSTRUCT-DPR-windows.exe** from the same Releases page and double-click it. Nothing needs installing. If *"Windows protected your PC"* appears, click **More info → Run anyway**: the file is not code-signed yet.
+1. Download **CONSTRUCT-DPR-windows-setup.exe** from the same Releases page and run it (or use **CONSTRUCT-DPR-windows.exe** without installing). If *"Windows protected your PC"* appears, click **More info → Run anyway**: the files are not code-signed yet.
 2. It starts in **This PC only** mode, offline with a demo project, which is useful for planners working without internet.
-3. To sync with everyone else: **Settings → CONSTRUCT DPR server**, then enter the server address and sign in.
+3. To sync with everyone else: **Settings → Cloud server**, then enter the server address and sign in. (Office-only teams can use **Office SQL Server** instead: [WINDOWS_APP.md](WINDOWS_APP.md).)
 
 ## F. Colleagues and real projects
 

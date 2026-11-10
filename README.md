@@ -5,10 +5,10 @@
 | | Technology | Where |
 |---|---|---|
 | **Server** | ASP.NET Core · Identity sign-in · REST API · SignalR live updates | Cloud (Render, Azure, any Docker host) or a site-office Windows PC |
-| **Database** | PostgreSQL (shared server) or SQLite (one PC) · EF Core | Your Supabase/Neon/own PostgreSQL, or a file |
+| **Database (SQL)** | Microsoft SQL Server, PostgreSQL or SQLite · EF Core | Office SQL Server Express, your Supabase/Neon/own PostgreSQL, or a file |
 | **Web app** | Blazor WebAssembly, installable (PWA) | Any browser, served by the server |
 | **Android app** | .NET MAUI Blazor Hybrid (same screens as the web app) | `.apk` from Releases |
-| **Windows app** | WPF with a native Gantt control | `.exe` from Releases. Works **offline on one PC** or **signed in to the server** |
+| **Windows app** | WPF with a native Gantt control · installer | Three modes: **This PC only** (SQLite), **Office SQL Server** (shared Microsoft SQL Server database, accounts, roles, live refresh) or **Cloud server** — see [docs/WINDOWS_APP.md](docs/WINDOWS_APP.md) |
 | **Scheduling** | CPM in C# (FS/SS/FF/SF, lag/lead, calendars, floats, critical path, baselines) | Shared by all |
 | **Reports** | QuestPDF (PDF) · ClosedXML (Excel export/import) | Server, or the offline Windows app |
 
@@ -28,7 +28,7 @@ All devices signed in to the same server stay in **live sync**. An approval on a
 
 **Not a programmer?** Follow [docs/START_HERE.md](docs/START_HERE.md). It takes about 30 minutes, all in the browser: database → server → apps.
 
-**Just want to try it on one PC?** Download **CONSTRUCT-DPR-windows.exe** from the *Releases* page and double-click it. It opens offline with a demo project; no server or account is needed.
+**Windows (C# · WPF · SQL):** install **CONSTRUCT-DPR-windows-setup.exe** from the *Releases* page. It opens offline with a demo project. For a whole office on one SQL Server database, follow [docs/WINDOWS_APP.md](docs/WINDOWS_APP.md).
 
 ## What it does
 
@@ -38,6 +38,7 @@ All devices signed in to the same server stay in **live sync**. An approval on a
 | **Approvals** | Draft → submit → approve (the reviewer may lower the *accepted* quantity) or reject (reason required) → revise. No self-approval unless the project allows it. Approved reports are locked with a SHA-256 snapshot, and tampering is detected |
 | **Schedule** | Activities and BOQ, predecessors, CPM with data date and actual dates, critical path, numbered baselines, custom Gantt chart (web/Android SVG, Windows native) |
 | **Dashboard** | Physical progress vs plan, S-curve, forecast finish vs contract, executed value (₹), approvals pending, delayed/critical activities |
+| **Site photos** | Attached to daily reports, shrunk on the device, stored in the database, printed in the PDF and part of the approval fingerprint |
 | **Reports & Excel** | DPR PDF (A4), schedule PDF with Gantt (A3), Excel exports with formulas, Excel activity import that rejects the whole file if any row is wrong |
 | **People & roles** | 13 roles × 7 modules × 8 actions ([docs/PERMISSIONS.md](docs/PERMISSIONS.md)), enforced on the server for every call |
 | **Safety of data** | Every save carries a version: a stale copy from another device is refused instead of overwriting newer work. Unsaved report edits are kept on the device. There is a full audit trail |
@@ -48,7 +49,7 @@ All devices signed in to the same server stay in **live sync**. An approval on a
 ## For developers
 
 ```bash
-dotnet test tests/ConstructDpr.Tests                       # 40 tests (needs the .NET 10 SDK)
+dotnet test tests/ConstructDpr.Tests                       # 46 tests (needs the .NET 10 SDK); set CDPR_SQLSERVER to include SQL Server
 dotnet run --project src/ConstructDpr.Server               # http://localhost:5080 — SQLite file in src/ConstructDpr.Server/data
 DATABASE_URL=postgres://user:pass@localhost:5432/db dotnet run --project src/ConstructDpr.Server   # PostgreSQL
 dotnet run --project src/ConstructDpr.App                  # Windows app (Windows only)
@@ -66,9 +67,10 @@ src/
   ConstructDpr.UI/       Blazor screens shared by the web and Android apps
   ConstructDpr.Web/      Blazor WebAssembly host (PWA)
   ConstructDpr.Mobile/   .NET MAUI Android host
-  ConstructDpr.App/      WPF Windows app (offline or server mode)
+  ConstructDpr.App/      WPF Windows app (This PC / Office SQL Server / Cloud server)
 tests/ConstructDpr.Tests  xUnit: CPM, workflow, permissions, conflicts, PDF/Excel, server end-to-end
 tools/ConstructDpr.Preview  writes sample PDFs and workbooks
+installer/               Inno Setup script for the Windows installer
 legacy/                  the earlier TypeScript/Supabase, Electron, Capacitor and Google Workspace editions (kept for reference)
 ```
 
