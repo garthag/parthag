@@ -29,7 +29,7 @@ public sealed class SignInWindow : Window
 
         var panel = new StackPanel { Margin = new Thickness(22) };
         panel.Children.Add(new TextBlock { Text = "CONSTRUCT DPR", FontSize = 20, FontWeight = FontWeights.Bold, Foreground = (System.Windows.Media.Brush)Application.Current.Resources["Brand"] });
-        panel.Children.Add(new TextBlock { Text = "Sign in to stay in live sync with the web and Android apps.", Foreground = (System.Windows.Media.Brush)Application.Current.Resources["Muted"], Margin = new Thickness(0, 2, 0, 16), TextWrapping = TextWrapping.Wrap });
+        panel.Children.Add(new TextBlock { Text = "Sign in to the CONSTRUCT DPR sync server to stay in live sync with the Android phones.", Foreground = (System.Windows.Media.Brush)Application.Current.Resources["Muted"], Margin = new Thickness(0, 2, 0, 16), TextWrapping = TextWrapping.Wrap });
         panel.Children.Add(Label("Server address (from your administrator)"));
         panel.Children.Add(_server);
         _nameRow.Children.Add(Label("Your name"));

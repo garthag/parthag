@@ -1,82 +1,61 @@
-# Start here: set up CONSTRUCT DPR without coding
+# Start here: set up CONSTRUCT DPR in your office
 
-This takes about 30 minutes, all in a web browser. When you finish, everyone on site can use CONSTRUCT DPR on a phone, a Windows PC or a web browser, and their data stays in sync.
+You need one Windows PC (or server) in the office that stays switched on. Everything else is the Windows app on office PCs and the Android app on phones.
 
-| Step | What | Where | Cost |
+| Step | What | Time | Cost |
 |---|---|---|---|
-| A | Database | supabase.com (you may already have this project) | Free plan |
-| B | Server, which also serves the web app | render.com | Free plan |
-| C | Use it in the browser | Chrome or Edge | Free |
-| D | Android app | `.apk` from the Releases page | Free |
-| E | Windows app | `.exe` from the Releases page | Free |
+| A | Microsoft SQL Server Express on the office PC | 15 min | Free |
+| B | Windows app on every office PC | 2 min per PC | Free |
+| C | Sync server on the office PC (only if phones are used) | 5 min | Free |
+| D | Android app on the phones | 2 min per phone | Free |
 
-> **Only Windows PCs, in one office?** You don't need any of this: install the Windows app and use one **Microsoft SQL Server** database on the office network — see [WINDOWS_APP.md](WINDOWS_APP.md). **Only one PC?** Install the Windows app (step E) and use it offline.
+> **Just trying it?** Install the Windows app (step B) and use it as it opens: **This PC only**, offline, with a demo project. No SQL Server needed.
 
 ---
 
-## A. Database (Supabase PostgreSQL)
+## A. SQL Server Express (on the office PC)
 
-If you created a Supabase project earlier, reuse it. CONSTRUCT DPR keeps its tables in its own section (schema `cdpr`), so nothing that is already there is touched.
+1. Download **SQL Server Express** from Microsoft's website → run it → **Basic** → Accept → Install. Note the instance name, normally `SQLEXPRESS`.
+2. Start **SQL Server Configuration Manager** → *SQL Server Network Configuration → Protocols for SQLEXPRESS* → **TCP/IP → Enable**. Under *SQL Server Services*, restart **SQL Server (SQLEXPRESS)** and start **SQL Server Browser** (set it to *Automatic*).
+3. Windows Defender Firewall: allow inbound **TCP 1433** and **UDP 1434** on the *Private/Domain* network.
 
-1. Open <https://supabase.com> and sign in. If you have no project yet: **New project**, name `construct-dpr`, then click **Generate** for the database password and **save it** in your password manager. Pick the region nearest your sites (e.g. Mumbai), then **Create**.
-2. In the project, click the green **Connect** button at the top.
-3. Choose **Session pooler** and copy the **URI**. It looks like:
-   `postgresql://postgres.abcdefgh:[YOUR-PASSWORD]@aws-0-ap-south-1.pooler.supabase.com:5432/postgres`
-4. In a note, replace `[YOUR-PASSWORD]` with your database password. If the password contains `@`, `#` or `/`, reset it in Supabase (*Project Settings → Database → Reset password*) to one made only of letters and numbers.
+Details, logins without a company domain, and backups: [WINDOWS_APP.md](WINDOWS_APP.md).
 
-This complete line is your **DATABASE_URL**. Keep it private: it gives full access to the data.
+## B. Windows app (every office PC)
 
-## B. Server (Render)
+1. Download **CONSTRUCT-DPR-windows-setup.exe** from the repository's **Releases** page and run it. No administrator rights are needed. If *"Windows protected your PC"* appears, click **More info → Run anyway**: the file is not code-signed yet.
+2. In the app: **Settings → Office SQL Server**. Enter the server name `OFFICE-PC\SQLEXPRESS` (on the office PC itself: `.\SQLEXPRESS`) and the database `ConstructDpr`.
+3. The **first person** clicks *Create an account instead*, then **Connect and create account**. The database and its tables are created automatically.
+4. **Projects & people → Load demo project** to explore, or **＋ New project** for your real job.
+5. Colleagues connect the same way and create their own account. The project administrator adds them under **Projects & people** with their role.
 
-1. Open <https://render.com> → **Get started** → **GitHub**, and allow access to the repository **parthag**.
-2. **New ＋ → Blueprint** → choose **parthag**. Render finds `render.yaml`.
-3. When it asks for **DATABASE_URL**, paste the line from step A4. Click **Apply** / **Deploy Blueprint**.
-4. The first build takes 5–10 minutes. When it says **Live**, your address appears at the top, e.g. `https://construct-dpr.onrender.com`. This is your **server address**; write it down.
+## C. Sync server (on the office PC, only for phones)
 
-> **Free plan:** the server goes to sleep after 15 minutes without use. The first visit afterwards takes up to a minute to wake it. A paid plan (about US$7/month) keeps it always on.
+Phones never connect to SQL Server directly, which would not be safe. They talk to this small C# program, which uses the same database.
 
-## C. Use it in the browser
+1. Download **CONSTRUCT-DPR-server-windows.zip**, unzip it to e.g. `C:\ConstructDpr\Server`.
+2. Open `appsettings.json` in Notepad and point it at the office database:
+   ```json
+   "Database": { "Provider": "SqlServer" },
+   "ConnectionStrings": { "Default": "Server=.\\SQLEXPRESS;Database=ConstructDpr;Trusted_Connection=True;TrustServerCertificate=True" },
+   ```
+3. Double-click **ConstructDpr.Server.exe**. When Windows Firewall asks, allow **private networks**. Leave the window open; Windows can also run it as a service, see [SYNC_SERVER.md](SYNC_SERVER.md).
+4. Check from a phone's browser: `http://OFFICE-PC:5080` should say *"CONSTRUCT DPR sync server … is running"*.
 
-1. Open your server address in Chrome or Edge, on a PC or a phone.
-2. Click **Create an account** and enter your name, e-mail and a password (8+ characters).
-3. Click **Load demo project**. A blast-furnace project appears with a schedule, a week of approved reports and one report waiting for your approval.
-4. To install it as an app: Chrome menu **⋮ → Install app** (or *Add to Home screen*); in Edge, **⋯ → Apps → Install**.
+For phones outside the office network (e.g. on another site), the server needs to be reachable over the internet with HTTPS. Ask IT for a VPN, or see [SYNC_SERVER.md](SYNC_SERVER.md).
 
-Try these:
-* **Approvals → Review** → change an *Accepted* quantity → **Approve**. Keep the dashboard open on another device and watch it update.
-* **＋ Today's DPR** → add an activity → enter today's quantity → **Submit for review**.
-* **Schedule** → the Gantt chart; **PDF (A3)** downloads the schedule report.
+## D. Android app (phones)
 
-## D. Android app
-
-1. On the phone, open the repository's **Releases** page → **CONSTRUCT DPR … (C# / .NET)** → **CONSTRUCT-DPR-android.apk**.
-2. Open the downloaded file, allow installing from this source, then tap **Install**.
-3. Start the app, enter your **server address**, tap **Connect**, then sign in.
-
-Reports you download open in the share sheet, so you can save them to Drive or send them on WhatsApp or by e-mail.
-
-## E. Windows app
-
-1. Download **CONSTRUCT-DPR-windows-setup.exe** from the same Releases page and run it (or use **CONSTRUCT-DPR-windows.exe** without installing). If *"Windows protected your PC"* appears, click **More info → Run anyway**: the files are not code-signed yet.
-2. It starts in **This PC only** mode, offline with a demo project, which is useful for planners working without internet.
-3. To sync with everyone else: **Settings → Cloud server**, then enter the server address and sign in. (Office-only teams can use **Office SQL Server** instead: [WINDOWS_APP.md](WINDOWS_APP.md).)
-
-## F. Colleagues and real projects
-
-Creating projects and managing people is part of the **admin portal**, which is switched off for now. Until then, each person can sign up and load their own demo project.
-
-To switch it on: Render → your service → **Environment** → set `Features__AdminPortal` to `true` → **Save** (Render restarts the server). After that:
-* **Projects → ＋ New project** creates your real project, with you as its administrator.
-* Each colleague first creates an account. You then add them in **Settings → People on this project** with their role (site engineer, supervisor, planning engineer, client reviewer and so on). The project appears on their devices immediately.
+1. On the phone, open the Releases page → **CONSTRUCT-DPR-android.apk** → open the download → allow installing from this source → **Install**.
+2. Start the app. Enter the server address (`http://OFFICE-PC:5080`, or the office PC's IP address such as `http://192.168.1.20:5080`), then sign in with the same account as on the PC, or create one.
+3. Report from site: **Home → ＋ Today's daily report** → add activities and today's quantities → **📷 Take photo** → **Submit**. The engineer approves it on the PC or phone, and everyone sees it within seconds.
 
 ## If something goes wrong
 
 | You see | Do this |
 |---|---|
-| Render build fails or the server keeps restarting | Render → **Logs**. "password authentication failed" means DATABASE_URL has the wrong password; "Name or service not known" means use the **Session pooler** URI from Supabase |
-| "Cannot reach the CONSTRUCT DPR server" | Check the address (it must start with `https://`). On the free plan, wait a minute for it to wake and try again |
+| Windows app: "Cannot open the SQL Server database" | Check the server name, that SQL Server and SQL Server Browser are running, TCP/IP is enabled, and the firewall (step A) |
+| Phone: "Cannot reach the CONSTRUCT DPR server" | Phone and office PC on the same Wi-Fi? Sync server window open? Try the IP address instead of the PC name |
 | "Wrong e-mail or password" | Passwords are case-sensitive. After 8 wrong tries the account is locked for 10 minutes |
-| "…was changed on another device" | Someone saved the same report or activity at the same time. Reload, then make your change again; nothing is lost silently |
-| Android: "App not installed" after a new version | Uninstall the old app first. Builds are only installable over each other when the release is signed with your own key; see SELF_HOSTING.md |
-
-More options, including running the server on a Windows PC in the site office or with Docker: [SELF_HOSTING.md](SELF_HOSTING.md).
+| "…was changed on another device" | Someone saved the same record first. Reload (F5 on PC, ↻ on phone), then make your change again |
+| Android: "App not installed" after an update | Uninstall the old app first (see SYNC_SERVER.md → Android signing to avoid this) |

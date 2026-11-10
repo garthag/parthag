@@ -7,7 +7,13 @@ using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Identity;
 
-var builder = WebApplication.CreateBuilder(args);
+var builder = WebApplication.CreateBuilder(new WebApplicationOptions
+{
+    Args = args,
+    // As a Windows service the working folder is C:\Windows\System32: settings and data stay next to the program.
+    ContentRootPath = AppContext.BaseDirectory,
+});
+builder.Host.UseWindowsService(o => o.ServiceName = "CONSTRUCT DPR sync server"); // no effect when started normally
 var cfg = builder.Configuration;
 
 // ── Database: PostgreSQL (shared server) or SQLite (one site-office PC) ──

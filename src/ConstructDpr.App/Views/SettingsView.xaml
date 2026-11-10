@@ -12,7 +12,7 @@
           <RadioButton x:Name="OfficeMode" GroupName="Mode" Margin="0,0,0,6" Checked="OnMode"
                        Content="Office SQL Server — everyone in the office on one Microsoft SQL Server database, with accounts and roles"/>
           <RadioButton x:Name="ServerMode" GroupName="Mode" Margin="0,0,0,10" Checked="OnMode"
-                       Content="Cloud server — sign in, live sync with the web and Android apps"/>
+                       Content="Sync server — connect through the CONSTRUCT DPR server (from another site or over the internet), live sync with the Android phones"/>
           <TextBlock x:Name="ConnectionText" TextWrapping="Wrap" FontSize="12" Foreground="{StaticResource Muted}" Margin="0,0,0,8"/>
           <WrapPanel>
             <Button x:Name="SignInBtn" Content="Sign in…" Style="{StaticResource Primary}" Click="OnSignIn" Margin="0,0,8,6"/>

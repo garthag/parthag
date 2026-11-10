@@ -31,10 +31,10 @@ public partial class ProjectsView : UserControl, IRefreshable
         NewBtn.IsEnabled = AppState.Features.AdminPortal;
         Summary.Text = AppState.Mode switch
         {
-            DataMode.Local => "This PC only: you are the administrator of every project here. People and roles need the office SQL Server or the cloud server (Settings).",
+            DataMode.Local => "This PC only: you are the administrator of every project here. People and roles need the office SQL Server or the sync server (Settings).",
             DataMode.Office => "Office SQL Server: colleagues create their account the first time they connect; then add them here with their role.",
-            _ => AppState.Features.AdminPortal ? "Cloud server: colleagues create an account in any app; then add them here with their role."
-                                               : "Cloud server: creating projects and managing people is switched off on this server (admin portal).",
+            _ => AppState.Features.AdminPortal ? "Sync server: colleagues create an account in the Android or Windows app; then add them here with their role."
+                                               : "Sync server: creating projects and managing people is switched off on this server; do it in Office SQL Server mode or set Features:AdminPortal on the server.",
         };
         await LoadPeopleAsync();
     }

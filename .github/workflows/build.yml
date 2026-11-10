@@ -1,9 +1,9 @@
 name: Build and release (C# / .NET 10)
 
 # One pipeline for the whole C# solution:
-#   test     – unit + server tests (in-memory server driven by the real client), PostgreSQL smoke test, Docker image
-#   windows  – WPF app (single .exe) with screenshots, Windows server package
-#   android  – .NET MAUI Android app (.apk)
+#   test     – unit + server tests, Microsoft SQL Server end-to-end test, sync-server smoke test on SQL Server
+#   windows  – WPF app (installer + single .exe) with screenshots, sync server for a Windows PC
+#   android  – native .NET MAUI Android app (.apk)
 #   publish  – replaces the "apps-latest" download page with the new files (fixed names, links never change)
 on:
   push:
@@ -31,11 +31,6 @@ jobs:
         image: mcr.microsoft.com/mssql/server:2022-latest
         env: { ACCEPT_EULA: "Y", MSSQL_SA_PASSWORD: "Ci-only-Passw0rd!" }
         ports: [ "1433:1433" ]
-      postgres:
-        image: postgres:16
-        env: { POSTGRES_PASSWORD: ci-only-password }
-        ports: [ "5432:5432" ]
-        options: --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
@@ -47,12 +42,13 @@ jobs:
           for i in $(seq 1 30); do (echo > /dev/tcp/localhost/1433) 2>/dev/null && break; sleep 2; done
           sleep 10 # SQL Server accepts connections a little after the port opens
           dotnet test tests/ConstructDpr.Tests -c Release --logger "console;verbosity=normal"
-      - name: Publish server (Linux, with the web app inside)
+      - name: Publish sync server (Linux)
         run: dotnet publish src/ConstructDpr.Server -c Release -p:Version=$VERSION -o out/server-linux
-      - name: Smoke test on PostgreSQL (sign up, demo project, PDF)
+      - name: Smoke test of the sync server on SQL Server (sign up, demo project, PDF)
         run: |
           cd out/server-linux
-          DATABASE_URL=postgres://postgres:ci-only-password@localhost:5432/postgres ASPNETCORE_URLS=http://127.0.0.1:5080 dotnet ConstructDpr.Server.dll &
+          Database__Provider=SqlServer ConnectionStrings__Default="Server=localhost,1433;Database=cdpr_smoke;User Id=sa;Password=Ci-only-Passw0rd!;TrustServerCertificate=true" \
+            dotnet ConstructDpr.Server.dll --urls http://127.0.0.1:5080 &
           for i in $(seq 1 60); do curl -sf http://127.0.0.1:5080/health && break; sleep 1; done
           curl -sf -X POST http://127.0.0.1:5080/api/account/register -H 'content-type: application/json' -d '{"email":"ci@example.com","password":"ci-password-1","displayName":"CI"}'
           TOKEN=$(curl -sf -X POST http://127.0.0.1:5080/api/identity/login -H 'content-type: application/json' -d '{"email":"ci@example.com","password":"ci-password-1"}' | jq -r .accessToken)
@@ -60,12 +56,10 @@ jobs:
           curl -sf http://127.0.0.1:5080/api/projects/$PID/dashboard -H "authorization: Bearer $TOKEN" | jq '{plannedPct, actualPct, pendingApprovals}'
           curl -sf -o schedule.pdf http://127.0.0.1:5080/api/projects/$PID/reports/SchedulePdf -H "authorization: Bearer $TOKEN"
           head -c 4 schedule.pdf | grep -q '%PDF'
-          curl -sf http://127.0.0.1:5080/ | grep -q 'CONSTRUCT DPR'
+          curl -sf http://127.0.0.1:5080/ | grep -q 'sync server'
           echo "Smoke test passed"
       - name: Sample reports (QuestPDF + ClosedXML)
         run: dotnet run --project tools/ConstructDpr.Preview -c Release -- out/samples
-      - name: Docker image builds
-        run: docker build -t construct-dpr:ci .
       - name: Package
         run: |
           cd out && (cd server-linux && zip -qr ../CONSTRUCT-DPR-server-linux.zip .)
@@ -97,7 +91,7 @@ jobs:
           if ($p.ExitCode -ne 0) { throw "Screenshot run failed with exit code $($p.ExitCode)" }
           if ((Get-ChildItem out -Filter *.png).Count -lt 9) { throw "Expected 9 screenshots" }
           Get-ChildItem out | ForEach-Object { Rename-Item $_.FullName ("windows-" + $_.Name) }
-      - name: Publish the server for a Windows site-office PC
+      - name: Publish the sync server for a Windows PC
         run: dotnet publish src/ConstructDpr.Server -c Release -r win-x64 --self-contained true -p:Version=${{ env.VERSION }} -o publish/server
       - name: Windows installer (Inno Setup)
         run: |
@@ -166,16 +160,14 @@ jobs:
 
           | Device | File | |
           |---|---|---|
-          | Android phone / tablet | **CONSTRUCT-DPR-android.apk** | Open on the phone → allow installing from this source → Install |
           | Windows PC (install) | **CONSTRUCT-DPR-windows-setup.exe** | Start menu + desktop icon + uninstaller; no administrator rights needed |
           | Windows PC (no install) | **CONSTRUCT-DPR-windows.exe** | Double-click. "Windows protected your PC" → More info → Run anyway |
-          | Web browser | your server's address | Served by the server itself |
-          | Server (cloud) | — | Deploy with render.yaml or the Dockerfile in the repository |
-          | Server (Windows site-office PC) | **CONSTRUCT-DPR-server-windows.zip** | Unzip, run ConstructDpr.Server.exe |
-          | Server (Linux) | **CONSTRUCT-DPR-server-linux.zip** | Needs the .NET 10 ASP.NET Core runtime |
+          | Android phone / tablet | **CONSTRUCT-DPR-android.apk** | Open on the phone → allow installing from this source → Install |
+          | Sync server (Windows PC) | **CONSTRUCT-DPR-server-windows.zip** | Only needed for phones: unzip next to SQL Server, run ConstructDpr.Server.exe |
+          | Sync server (Linux) | **CONSTRUCT-DPR-server-linux.zip** | Same, for a Linux machine (.NET 10 ASP.NET Core runtime) |
 
-          The Windows app works three ways (Settings): **This PC only** (offline, SQLite), **Office SQL Server** (everyone on one Microsoft SQL Server database, with accounts and roles) or **Cloud server** (sync with the web and Android apps).
-          Phones and browsers sign in to the server and stay in live sync. Guide: docs/START_HERE.md
+          Everything is C# (.NET 10): Windows app in WPF, Android app in .NET MAUI, data in Microsoft SQL Server (or SQLite on one PC).
+          Windows modes (Settings): **This PC only** · **Office SQL Server** · **Sync server**. Guide: docs/START_HERE.md
           NOTES
           gh release create apps-latest dist/* --target "$GITHUB_SHA" --latest \
             --title "CONSTRUCT DPR $VERSION (C# / .NET) — $(date -u '+%d %b %Y')" --notes-file notes.md

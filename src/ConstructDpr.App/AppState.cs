@@ -20,7 +20,7 @@ public enum DataMode
     Local,
     /// <summary>A shared Microsoft SQL Server database on the office network: accounts, roles, live refresh.</summary>
     Office,
-    /// <summary>The CONSTRUCT DPR cloud server: sync with the web and Android apps.</summary>
+    /// <summary>Through the CONSTRUCT DPR sync server (for PCs away from the office); sync with the Android phones.</summary>
     Server,
 }
 
@@ -184,7 +184,7 @@ public static class AppState
     public static string ModeLabel => Settings.Mode switch
     {
         DataMode.Office => $"Office SQL Server · {Settings.OfficeServer} / {Settings.OfficeDatabase}",
-        DataMode.Server => $"Cloud server · {Session.ServerUrl}",
+        DataMode.Server => $"Sync server · {Session.ServerUrl}",
         _ => "This PC only · SQLite",
     };
 

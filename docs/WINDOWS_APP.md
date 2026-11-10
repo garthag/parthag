@@ -6,9 +6,9 @@ The Windows app is a native WPF program. It works in one of three ways; you choo
 |---|---|---|
 | **This PC only** | SQLite file in `%LOCALAPPDATA%\ConstructDpr` | One planner or engineer, fully offline, no accounts |
 | **Office SQL Server** | One Microsoft SQL Server database on the office network | Everyone in a site or head office: accounts, roles, approvals between people, changes appear on every PC within ~4 seconds |
-| **Cloud server** | The CONSTRUCT DPR server (PostgreSQL) | Teams that also use phones (Android app) and browsers |
+| **Sync server** | Through the CONSTRUCT DPR sync server | PCs at another site or at home (phones always use the sync server) |
 
-All three follow exactly the same rules: overrun checks, approvals, locked reports with SHA-256 snapshots, roles and the audit trail.
+Phones (Android app) connect through the sync server to the same SQL Server database: see [SYNC_SERVER.md](SYNC_SERVER.md). All modes follow exactly the same rules: overrun checks, approvals, locked reports with SHA-256 snapshots, roles and the audit trail.
 
 ## Install
 
