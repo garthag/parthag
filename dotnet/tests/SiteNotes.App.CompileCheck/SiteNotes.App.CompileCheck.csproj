@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    Compiles the app's shared C# (everything except Platforms/) against the MAUI libraries on plain
+    net10.0, so UI code can be checked on any OS without the Android/Windows workloads.
+    The real app is built by CI (see .github/workflows/dotnet.yml).
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>SiteNotes.App</RootNamespace>
+    <IsPackable>false</IsPackable>
+    <NoWarn>$(NoWarn);CA1416</NoWarn>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="..\..\src\SiteNotes.App\**\*.cs" Exclude="..\..\src\SiteNotes.App\Platforms\**;..\..\src\SiteNotes.App\obj\**;..\..\src\SiteNotes.App\bin\**" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Maui.Controls" Version="10.0.130" />
+    <PackageReference Include="SkiaSharp" Version="3.119.4" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\SiteNotes.Core\SiteNotes.Core.csproj" />
+  </ItemGroup>
+</Project>
