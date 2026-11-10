@@ -58,25 +58,50 @@ public static class DemoData
         schedule.ApplyToPlan(p.Id);
         schedule.FreezeBaseline(p.Id, "Contract baseline");
 
+        // One approved report per working day since the work started: quantities follow the baseline at about 85 %
+        // (rain on some days), so the project is realistically a little behind plan.
         var service = new DprService(db, user);
-        for (var i = 0; i < 7; i++)
+        var cal = schedule.CalendarFor(p);
+        var measured = acts.Where(a => a.TotalQty > 0).ToList();
+        var done = measured.ToDictionary(a => a.Id, _ => 0m);
+        decimal Round(Activity a, decimal q) => a.Unit == "MT" ? Math.Round(q * 2, MidpointRounding.AwayFromZero) / 2 : Math.Round(q, MidpointRounding.AwayFromZero);
+        decimal Planned(Activity a, DateOnly d)
         {
-            var date = today.AddDays(i - 7);
+            if (a.BaselineStart is not { } bs || a.BaselineFinish is not { } bf || d < bs || d > bf) return 0;
+            var days = cal.IndexOf(bf) - cal.IndexOf(bs) + 1;
+            return a.TotalQty / Math.Max(1, days);
+        }
+        var day = 0;
+        for (var date = start; date < today; date = date.AddDays(1))
+        {
+            if (!cal.IsWorkday(date)) continue;
+            day++;
+            var rain = day % 7 == 4;
+            var factor = rain ? 0.4m : 0.9m + (day % 3) * 0.05m;
+            var lines = new List<DprActivityLine>();
+            foreach (var a in measured)
+            {
+                var q = Round(a, Planned(a, date) * factor);
+                q = Math.Min(q, a.TotalQty - done[a.Id]);
+                if (q <= 0) continue;
+                done[a.Id] += q;
+                lines.Add(new DprActivityLine { ActivityId = a.Id, QtyToday = q, DelayReason = rain ? "Rain stoppage 2 h" : null });
+            }
+            if (lines.Count == 0) continue;
             var dpr = service.Create(p.Id, date, Shift.Day);
-            dpr.Weather = i == 3 ? "Rain 10:00–12:00" : "Clear, 34 °C";
-            dpr.SiteConditions = i == 3 ? "Wet ground near grid C; work stopped 2 h" : "Normal";
-            dpr.WorkCompleted = "Excavation, RCC and steel fabrication progressed as listed.";
-            dpr.TomorrowPlan = "Continue truss erection T3–T4; pour footing F6.";
-            dpr.DelayReasons = i == 3 ? "Rain stoppage" : null;
-            dpr.SafetyNotes = "Toolbox talk: work at height. No incidents.";
-            dpr.Activities.Add(new DprActivityLine { ActivityId = Id("A1000"), QtyToday = i == 3 ? 40 : 85, DelayReason = i == 3 ? "Rain" : null });
-            dpr.Activities.Add(new DprActivityLine { ActivityId = Id("A1010"), QtyToday = i < 2 ? 0 : 32 });
-            dpr.Activities.Add(new DprActivityLine { ActivityId = Id("A2000"), QtyToday = 7.5m });
-            dpr.Manpower.Add(new ManpowerLine { Agency = "Bharat Civil Works", Trade = "Civil", Skilled = 18, SemiSkilled = 12, Unskilled = 30, Supervisors = 2 });
-            dpr.Manpower.Add(new ManpowerLine { Agency = "Sterling Steel Erectors", Trade = "Structural", Skilled = 20 + i, SemiSkilled = 8, Unskilled = 10, Supervisors = 2 });
-            dpr.Equipment.Add(new EquipmentLine { Code = "CR-01", Type = "Mobile crane 100 T", WorkingHours = 7, IdleHours = 2 });
-            dpr.Equipment.Add(new EquipmentLine { Code = "EX-02", Type = "Excavator", WorkingHours = i == 5 ? 3 : 8, BreakdownHours = i == 5 ? 4 : 0, BreakdownReason = i == 5 ? "Hydraulic hose failure" : null });
-            dpr.Materials.Add(new MaterialLine { Code = "CEM-OPC53", Description = "Cement OPC 53", Unit = "bags", Opening = 400 + i * 20, Received = i % 2 == 0 ? 600 : 0, Issued = 220, ChallanNo = $"CH-{5100 + i}" });
+            dpr.Weather = rain ? "Rain 10:00–12:00" : "Clear, 33 °C";
+            dpr.SiteConditions = rain ? "Wet ground near grid C; work stopped 2 h" : "Normal";
+            dpr.WorkCompleted = "Work progressed as listed: " + string.Join(", ", lines.Select(l => acts.First(a => a.Id == l.ActivityId).Name.Split(" — ")[0].ToLowerInvariant()).Distinct()) + ".";
+            dpr.TomorrowPlan = "Continue the same fronts; next pour as per the 3-week look-ahead.";
+            dpr.DelayReasons = rain ? "Rain stoppage" : null;
+            dpr.SafetyNotes = day % 5 == 0 ? "Toolbox talk: work at height. Near miss reported at grid B (dropped spanner); barricading improved." : "Toolbox talk held. No incidents.";
+            dpr.Activities.AddRange(lines);
+            dpr.Manpower.Add(new ManpowerLine { Agency = "Bharat Civil Works", Trade = "Civil", Skilled = 16 + day % 5, SemiSkilled = 12, Unskilled = 26 + day % 6, Supervisors = 2 });
+            if (lines.Any(l => acts.First(a => a.Id == l.ActivityId).Wbs!.StartsWith("2")))
+                dpr.Manpower.Add(new ManpowerLine { Agency = "Sterling Steel Erectors", Trade = "Structural", Skilled = 18 + day % 8, SemiSkilled = 8, Unskilled = 10, Supervisors = 2 });
+            dpr.Equipment.Add(new EquipmentLine { Code = "CR-01", Type = "Mobile crane 100 T", WorkingHours = rain ? 5 : 7, IdleHours = rain ? 4 : 2 });
+            dpr.Equipment.Add(new EquipmentLine { Code = "EX-02", Type = "Excavator", WorkingHours = day % 9 == 5 ? 3 : 8, BreakdownHours = day % 9 == 5 ? 4 : 0, BreakdownReason = day % 9 == 5 ? "Hydraulic hose failure" : null });
+            dpr.Materials.Add(new MaterialLine { Code = "CEM-OPC53", Description = "Cement OPC 53", Unit = "bags", Opening = 400 + day * 10, Received = day % 2 == 0 ? 600 : 0, Issued = 220, ChallanNo = $"CH-{5100 + day}" });
             service.Save(dpr);
             service.Submit(dpr);
             service.Approve(dpr);
@@ -89,9 +114,12 @@ public static class DemoData
         pending.WorkCompleted = "Footing F6 poured; trusses T3–T4 erected with 100 T crane.";
         pending.TomorrowPlan = "Start purlins bay 1–3; backfill F1–F4.";
         pending.SafetyNotes = "Lifting permit LP-112 closed. No incidents.";
-        pending.Activities.Add(new DprActivityLine { ActivityId = Id("A1000"), QtyToday = 90 });
-        pending.Activities.Add(new DprActivityLine { ActivityId = Id("A1010"), QtyToday = 36 });
-        pending.Activities.Add(new DprActivityLine { ActivityId = Id("A2000"), QtyToday = 9 });
+        foreach (var a in measured)
+        {
+            var q = Math.Min(Round(a, Planned(a, today) * 0.95m), a.TotalQty - done[a.Id]);
+            if (q > 0) pending.Activities.Add(new DprActivityLine { ActivityId = a.Id, QtyToday = q });
+        }
+        if (pending.Activities.Count == 0) pending.Activities.Add(new DprActivityLine { ActivityId = Id("A2000"), QtyToday = 1 });
         pending.Manpower.Add(new ManpowerLine { Agency = "Bharat Civil Works", Trade = "Civil", Skilled = 20, SemiSkilled = 12, Unskilled = 28, Supervisors = 2 });
         pending.Manpower.Add(new ManpowerLine { Agency = "Sterling Steel Erectors", Trade = "Structural", Skilled = 27, SemiSkilled = 8, Unskilled = 10, Supervisors = 2 });
         pending.Equipment.Add(new EquipmentLine { Code = "CR-01", Type = "Mobile crane 100 T", WorkingHours = 8, IdleHours = 1 });

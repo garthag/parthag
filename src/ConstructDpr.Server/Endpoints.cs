@@ -74,6 +74,8 @@ public static class Endpoints
 
         project.MapGet("/members", (int projectId, ApiFactory f) => Ok(f, a => a.MembersAsync(projectId)));
         project.MapPost("/members", (int projectId, MemberRequest r, ApiFactory f) => Ok(f, a => a.AddMemberAsync(projectId, r.Email, r.Role)));
+        project.MapPost("/members/{memberId:int}/reset-password", async (int projectId, int memberId, ApiFactory f) =>
+            Results.Ok(new { password = await (await f.ForCurrentUserAsync()).ResetPasswordAsync(projectId, memberId) }));
         project.MapDelete("/members/{memberId:int}", (int projectId, int memberId, ApiFactory f) => NoContent(f, a => a.RemoveMemberAsync(projectId, memberId)));
 
         project.MapGet("/activities", (int projectId, ApiFactory f) => Ok(f, a => a.ActivitiesAsync(projectId)));
@@ -105,6 +107,11 @@ public static class Endpoints
         });
 
         project.MapGet("/audit", (int projectId, int? take, ApiFactory f) => Ok(f, a => a.AuditAsync(projectId, take ?? 50)));
+        project.MapGet("/reports/period", async (int projectId, DateOnly from, DateOnly to, bool? excel, ApiFactory f) =>
+        {
+            var file = await (await f.ForCurrentUserAsync()).PeriodReportAsync(projectId, from, to, excel == true);
+            return Results.File(file.Content, file.ContentType, file.FileName);
+        });
         project.MapGet("/reports/{kind}", async (int projectId, ReportKind kind, int? dprId, ApiFactory f) =>
         {
             var file = await (await f.ForCurrentUserAsync()).ReportAsync(projectId, kind, dprId);

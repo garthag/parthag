@@ -101,6 +101,10 @@ public sealed class RemoteApi(AuthSession session) : IConstructDprApi
 
     public Task<List<ProjectMember>> MembersAsync(int projectId) => Get<List<ProjectMember>>($"{P(projectId)}/members");
     public Task<ProjectMember> AddMemberAsync(int projectId, string email, ProjectRole role) => Send<ProjectMember>(HttpMethod.Post, $"{P(projectId)}/members", new { email, role });
+    public async Task<string> ResetPasswordAsync(int projectId, int memberId) =>
+        (await Send<PasswordAnswer>(HttpMethod.Post, $"{P(projectId)}/members/{memberId}/reset-password")).Password;
+    private sealed record PasswordAnswer(string Password);
+
     public Task RemoveMemberAsync(int projectId, int memberId) => Send(HttpMethod.Delete, $"{P(projectId)}/members/{memberId}");
 
     public Task<List<Activity>> ActivitiesAsync(int projectId) => Get<List<Activity>>($"{P(projectId)}/activities");
@@ -137,10 +141,16 @@ public sealed class RemoteApi(AuthSession session) : IConstructDprApi
 
     public Task<List<AuditEntry>> AuditAsync(int projectId, int take = 50) => Get<List<AuditEntry>>($"{P(projectId)}/audit?take={take}");
 
-    public async Task<FileDownload> ReportAsync(int projectId, ReportKind kind, int? dprId = null)
+    public Task<FileDownload> PeriodReportAsync(int projectId, DateOnly from, DateOnly to, bool excel) =>
+        Download($"{P(projectId)}/reports/period?from={from:yyyy-MM-dd}&to={to:yyyy-MM-dd}&excel={(excel ? "true" : "false")}", "progress-report");
+
+    public Task<FileDownload> ReportAsync(int projectId, ReportKind kind, int? dprId = null) =>
+        Download($"{P(projectId)}/reports/{kind}" + (dprId is { } d ? $"?dprId={d}" : ""), kind.ToString());
+
+    private async Task<FileDownload> Download(string path, string fallbackName)
     {
-        using var res = await SendAsync(HttpMethod.Get, $"{P(projectId)}/reports/{kind}" + (dprId is { } d ? $"?dprId={d}" : ""));
-        var name = res.Content.Headers.ContentDisposition?.FileNameStar ?? res.Content.Headers.ContentDisposition?.FileName?.Trim('"') ?? $"{kind}";
+        using var res = await SendAsync(HttpMethod.Get, path);
+        var name = res.Content.Headers.ContentDisposition?.FileNameStar ?? res.Content.Headers.ContentDisposition?.FileName?.Trim('"') ?? fallbackName;
         return new FileDownload(name, res.Content.Headers.ContentType?.MediaType ?? "application/octet-stream", await res.Content.ReadAsByteArrayAsync());
     }
 }

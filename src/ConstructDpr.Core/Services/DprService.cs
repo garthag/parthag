@@ -63,8 +63,8 @@ public sealed class DprService(AppDbContext db, string currentUser)
     public List<string> Validate(Dpr dpr, bool approving)
     {
         var errors = new List<string>();
-        if (dpr.Activities.Count == 0 && string.IsNullOrWhiteSpace(dpr.WorkCompleted))
-            errors.Add("Add at least one activity or describe the work completed.");
+        if (!dpr.Activities.Any(l => l.QtyToday > 0) && string.IsNullOrWhiteSpace(dpr.WorkCompleted))
+            errors.Add("Enter today's quantity for at least one activity, or describe the work completed.");
         Recalculate(dpr, approving);
         foreach (var l in dpr.Activities)
         {
@@ -95,6 +95,8 @@ public sealed class DprService(AppDbContext db, string currentUser)
         if (!dpr.IsEditable) throw new WorkflowException($"{dpr.Number} is already {dpr.Status}.");
         var errors = Validate(dpr, false);
         if (errors.Count > 0) throw new WorkflowException(string.Join(Environment.NewLine, errors));
+        // Lines copied from yesterday that saw no work and carry no remark only clutter the report: drop them.
+        dpr.Activities.RemoveAll(l => l.QtyToday == 0 && string.IsNullOrWhiteSpace(l.DelayReason) && string.IsNullOrWhiteSpace(l.Remarks));
         dpr.Status = DprStatus.Submitted;
         dpr.ReviewComment = null;
         db.SaveChanges();

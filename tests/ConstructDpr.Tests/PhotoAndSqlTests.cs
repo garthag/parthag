@@ -29,7 +29,7 @@ public class PhotoAndSqlTests
         Assert.Equal(Png, (await api.PhotoAsync(t.Project.Id, info.Id)).Content);
 
         var d = await api.DprAsync(t.Project.Id, draft.Id);
-        d.Activities.Add(new DprActivityLine { ActivityId = t.ActivityId("A2000"), QtyToday = 2 });
+        DemoDb.SetQty(d, t.ActivityId("A2000"), 2);
         await api.SubmitDprAsync(t.Project.Id, d);
         await api.ApproveDprAsync(t.Project.Id, draft.Id, new());
         Assert.True(await api.VerifyDprAsync(t.Project.Id, draft.Id));
@@ -63,12 +63,13 @@ public class PhotoAndSqlTests
     public async Task Database_from_an_earlier_version_gains_the_new_tables()
     {
         using var t = new DemoDb();
+        var reports = t.Db.Dprs.Count(d => d.Status != DprStatus.Draft);
         t.Db.Database.ExecuteSqlRaw("DROP TABLE Photos");
         using (var again = new AppDbContext(AppDbContext.Options(DbProvider.Sqlite, $"Data Source={t.Path}"))) again.EnsureSchema();
         var draft = await t.Api().CreateDprAsync(t.Project.Id, t.Today, Shift.Night);
         await t.Api().AddPhotoAsync(t.Project.Id, draft.Id, "p.png", Png, null);
         Assert.Equal(1, t.Db.Photos.Count());
-        Assert.Equal(8, t.Db.Dprs.Count(d => d.Status != DprStatus.Draft)); // existing data untouched
+        Assert.Equal(reports, t.Db.Dprs.Count(d => d.Status != DprStatus.Draft)); // existing data untouched
     }
 
     [Fact]

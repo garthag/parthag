@@ -67,6 +67,21 @@ public sealed class DirectAccounts(Func<AppDbContext> dbFactory)
             : new Caller(u.Id, u.Email ?? "", string.IsNullOrWhiteSpace(u.DisplayName) ? u.Email ?? "" : u.DisplayName);
     }
 
+    /// <summary>A readable temporary password (no 0/O or 1/l/I to confuse), for an administrator to pass on.</summary>
+    public static string NewTemporaryPassword()
+    {
+        const string chars = "ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789";
+        return new string(Enumerable.Range(0, 10).Select(_ => chars[System.Security.Cryptography.RandomNumberGenerator.GetInt32(chars.Length)]).ToArray());
+    }
+
+    /// <summary>Sets a new password, unlocks the account and signs the person out everywhere (new security stamp).</summary>
+    public static void SetPassword(AppUser user, string password)
+    {
+        user.PasswordHash = Hasher.HashPassword(user, password);
+        user.SecurityStamp = Guid.NewGuid().ToString("N").ToUpperInvariant();
+        (user.AccessFailedCount, user.LockoutEnd) = (0, null);
+    }
+
     public void Rename(string userId, string displayName)
     {
         if (string.IsNullOrWhiteSpace(displayName)) throw new WorkflowException("Enter your name.");

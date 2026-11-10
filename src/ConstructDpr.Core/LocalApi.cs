@@ -159,7 +159,6 @@ public sealed class LocalApi(Func<AppDbContext> dbFactory, Caller caller, AppFea
 
     public Task<ProjectMember> AddMemberAsync(int projectId, string email, ProjectRole role)
     {
-        if (caller.IsLocalOwner) throw new WorkflowException("People and roles are managed on the server. This copy works on one PC.");
         ProjectMember member;
         using (var db = dbFactory())
         {
@@ -192,6 +191,25 @@ public sealed class LocalApi(Func<AppDbContext> dbFactory, Caller caller, AppFea
         }
         Publish(projectId, "members", memberId, "delete");
         return Task.CompletedTask;
+    }
+
+    public Task<string> ResetPasswordAsync(int projectId, int memberId)
+    {
+        string temp;
+        using (var db = dbFactory())
+        {
+            var myRole = Require(db, projectId, Module.Members, Act.Delete);
+            var m = db.Members.FirstOrDefault(x => x.Id == memberId && x.ProjectId == projectId) ?? throw new NotFoundException("Member not found.");
+            if (m.UserId == caller.UserId) throw new WorkflowException("Change your own password in Settings.");
+            if (m.Role == ProjectRole.ProjectAdmin && myRole != ProjectRole.ProjectAdmin)
+                throw new ForbiddenException("Only a project administrator can reset another administrator's password.");
+            var user = db.Users.First(u => u.Id == m.UserId);
+            temp = DirectAccounts.NewTemporaryPassword();
+            DirectAccounts.SetPassword(user, temp);
+            db.SaveChanges();
+            Audit(db, projectId, "Member", memberId, "reset-password", m.Email);
+        }
+        return Done(temp);
     }
 
     // ───────────────────────────── activities & schedule ─────────────────────────────
@@ -431,6 +449,10 @@ public sealed class LocalApi(Func<AppDbContext> dbFactory, Caller caller, AppFea
                 d.Manpower.AddRange(prev.Manpower.Select(m => new ManpowerLine { Agency = m.Agency, Trade = m.Trade, Skilled = m.Skilled, SemiSkilled = m.SemiSkilled, Unskilled = m.Unskilled, Supervisors = m.Supervisors, Hours = m.Hours }));
                 d.Equipment.AddRange(prev.Equipment.Select(q => new EquipmentLine { Code = q.Code, Type = q.Type }));
                 d.Materials.AddRange(prev.Materials.Select(m => new MaterialLine { Code = m.Code, Description = m.Description, Unit = m.Unit, Opening = m.Closing }));
+                // Yesterday's activities that are still open, with quantity 0: the engineer only types today's numbers.
+                var open = db.Activities.Where(a => a.ProjectId == projectId && a.Status != ActivityStatus.Completed && a.Status != ActivityStatus.Cancelled)
+                    .Select(a => a.Id).ToHashSet();
+                d.Activities.AddRange(prev.Activities.Where(l => open.Contains(l.ActivityId)).Select(l => new DprActivityLine { ActivityId = l.ActivityId }));
                 db.SaveChanges();
             }
             id = d.Id;
@@ -474,7 +496,7 @@ public sealed class LocalApi(Func<AppDbContext> dbFactory, Caller caller, AppFea
             (dto.Weather, dto.SiteConditions, dto.WorkCompleted, dto.DelayReasons, dto.TomorrowPlan, dto.SafetyNotes);
 
         var actIds = db.Activities.Where(a => a.ProjectId == projectId).Select(a => a.Id).ToHashSet();
-        var wanted = dto.Activities.Where(l => actIds.Contains(l.ActivityId)).DistinctBy(l => l.ActivityId).ToList();
+        var wanted = dto.Activities.Where(l => actIds.Contains(l.ActivityId)).GroupBy(l => l.ActivityId).Select(g => g.Last()).ToList(); // a repeated activity: the latest entry counts
         foreach (var gone in d.Activities.Where(l => wanted.All(w => w.ActivityId != l.ActivityId)).ToList()) d.Activities.Remove(gone);
         foreach (var w in wanted)
         {
@@ -655,6 +677,17 @@ public sealed class LocalApi(Func<AppDbContext> dbFactory, Caller caller, AppFea
     }
 
     // ───────────────────────────── audit & reports ─────────────────────────────
+
+    public Task<FileDownload> PeriodReportAsync(int projectId, DateOnly from, DateOnly to, bool excel)
+    {
+        using var db = dbFactory();
+        Require(db, projectId, Module.Reports, Act.Export);
+        var summary = new PeriodService(db).Build(projectId, from, to);
+        var name = $"{summary.ProjectCode}-progress-{from:yyyyMMdd}-{to:yyyyMMdd}";
+        return Done(excel
+            ? new FileDownload(name + ".xlsx", Xlsx, ExcelService.ExportPeriod(summary))
+            : new FileDownload(name + ".pdf", Pdf, PeriodPdfReport.Generate(summary)));
+    }
 
     public Task<List<AuditEntry>> AuditAsync(int projectId, int take = 50)
     {

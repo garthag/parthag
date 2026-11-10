@@ -27,6 +27,14 @@ public sealed class DemoDb : IDisposable
             caller ?? new ConstructDpr.Core.Caller("local", "", "planning.engineer", IsLocalOwner: true),
             new ConstructDpr.Shared.Api.AppFeatures(adminPortal, true, "test"), c => live?.Add(c), () => Today);
 
+    /// <summary>Sets today's quantity on the line of an activity, adding the line if the report does not have it yet.</summary>
+    public static void SetQty(Dpr d, int activityId, decimal qty)
+    {
+        var line = d.Activities.FirstOrDefault(l => l.ActivityId == activityId);
+        if (line is null) d.Activities.Add(line = new DprActivityLine { ActivityId = activityId });
+        line.QtyToday = qty;
+    }
+
     public int ActivityId(string code) => Db.Activities.Single(a => a.ProjectId == Project.Id && a.Code == code).Id;
 
     public void Dispose()
@@ -43,7 +51,7 @@ public class WorkflowTests
     public void Demo_project_is_complete()
     {
         using var t = new DemoDb();
-        Assert.Equal(7, t.Db.Dprs.Count(d => d.Status == DprStatus.Approved));
+        Assert.InRange(t.Db.Dprs.Count(d => d.Status == DprStatus.Approved), 15, 30); // about three weeks of working days
         Assert.Equal(1, t.Db.Dprs.Count(d => d.Status == DprStatus.Submitted));
         Assert.Contains(t.Db.Activities, a => a.Critical);
         Assert.All(t.Db.Activities.ToList(), a => Assert.NotNull(a.BaselineFinish));
@@ -57,11 +65,17 @@ public class WorkflowTests
     public void Cumulative_quantities_come_from_approved_reports_only()
     {
         using var t = new DemoDb();
-        var a1000 = t.Db.Activities.Single(a => a.Code == "A1000");
-        Assert.Equal(6 * 85 + 40, a1000.AcceptedQty); // pending report not counted yet
-        var pending = new DprService(t.Db, "planning.engineer").Load(t.Db.Dprs.Single(d => d.Status == DprStatus.Submitted).Id);
-        var line = pending.Activities.Single(l => l.ActivityId == a1000.Id);
-        Assert.Equal(550, line.PrevCum);
+        var pendingId = t.Db.Dprs.Single(d => d.Status == DprStatus.Submitted).Id;
+        var approvedIds = t.Db.Dprs.Where(d => d.Status == DprStatus.Approved).Select(d => d.Id).ToList();
+        var pending = new DprService(t.Db, "planning.engineer").Load(pendingId);
+        Assert.NotEmpty(pending.Activities);
+        foreach (var line in pending.Activities)
+        {
+            var approvedSum = t.Db.DprActivityLines.Where(l => approvedIds.Contains(l.DprId) && l.ActivityId == line.ActivityId).ToList().Sum(l => l.QtyAccepted ?? l.QtyToday);
+            Assert.Equal(approvedSum, t.Db.Activities.Single(a => a.Id == line.ActivityId).AcceptedQty); // the pending report is not counted yet
+            new DprService(t.Db, "x").Recalculate(pending, false);
+            Assert.Equal(approvedSum, line.PrevCum);
+        }
     }
 
     [Fact]
@@ -70,14 +84,39 @@ public class WorkflowTests
         using var t = new DemoDb();
         var svc = new DprService(t.Db, "planning.engineer");
         var d = svc.Load(t.Db.Dprs.Single(x => x.Status == DprStatus.Submitted).Id);
-        d.Activities.Single(l => l.Activity!.Code == "A1000").QtyAccepted = 80; // reviewer accepts less than reported (90)
+        var line = d.Activities.First(l => l.QtyToday >= 2);
+        var before = t.Db.Activities.Single(a => a.Id == line.ActivityId).AcceptedQty;
+        var reported = line.QtyToday;
+        line.QtyAccepted = reported - 1; // reviewer accepts less than reported
         svc.Approve(d);
         Assert.Equal(DprStatus.Approved, d.Status);
         Assert.Equal("planning.engineer", d.ApprovedBy);
-        Assert.Equal(550 + 80, t.Db.Activities.Single(a => a.Code == "A1000").AcceptedQty);
-        Assert.Equal(90, d.Activities.Single(l => l.Activity!.Code == "A1000").QtyToday); // reported quantity kept
+        Assert.Equal(before + reported - 1, t.Db.Activities.Single(a => a.Id == line.ActivityId).AcceptedQty);
+        Assert.Equal(reported, line.QtyToday); // reported quantity kept
         Assert.True(svc.VerifyIntegrity(d));
         Assert.Throws<WorkflowException>(() => svc.Save(d));
+    }
+
+    [Fact]
+    public async Task New_report_starts_with_yesterdays_activities_and_needs_a_quantity()
+    {
+        using var t = new DemoDb();
+        var api = t.Api();
+        var latest = t.Db.Dprs.Where(x => x.ReportDate < t.Today).OrderByDescending(x => x.ReportDate).First();
+        var expected = t.Db.DprActivityLines.Where(l => l.DprId == latest.Id).Select(l => l.ActivityId).ToList()
+            .Where(id => t.Db.Activities.Single(a => a.Id == id).Status != ActivityStatus.Completed).OrderBy(x => x).ToList();
+        var d = await api.CreateDprAsync(t.Project.Id, t.Today, Shift.Night);
+        Assert.Equal(expected, d.Activities.Select(l => l.ActivityId).OrderBy(x => x).ToList());
+        Assert.All(d.Activities, l => Assert.Equal(0, l.QtyToday));
+        var empty = await Assert.ThrowsAsync<WorkflowException>(() => api.SubmitDprAsync(t.Project.Id, d));
+        Assert.Contains("quantity", empty.Message);
+
+        d = await api.DprAsync(t.Project.Id, d.Id);
+        d.Activities[0].QtyToday = 1;
+        d.Activities.Last().DelayReason = d.Activities.Count > 1 ? "Waiting for drawings" : d.Activities.Last().DelayReason;
+        var submitted = await api.SubmitDprAsync(t.Project.Id, d);
+        // Zero lines without a remark are dropped; the worked line and the line with a delay remark stay.
+        Assert.Equal(d.Activities.Count > 1 ? 2 : 1, submitted.Activities.Count);
     }
 
     [Fact]

@@ -74,7 +74,7 @@ public class ServerTests
 
         var d = await sup.CreateDprAsync(p.Id, DateOnly.FromDateTime(DateTime.UtcNow.AddHours(5.5)), Shift.Night);
         var a = (await sup.ActivitiesAsync(p.Id)).First(x => x.Code == "A1000");
-        d.Activities.Add(new DprActivityLine { ActivityId = a.Id, QtyToday = 99_999 });
+        DemoDb.SetQty(d, a.Id, 99_999);
         var overrun = await Assert.ThrowsAsync<WorkflowException>(() => sup.SubmitDprAsync(p.Id, d));
         Assert.Contains("exceeds", overrun.Message);
         await Assert.ThrowsAsync<ForbiddenException>(() => sup.RunScheduleAsync(p.Id));

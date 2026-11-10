@@ -48,7 +48,7 @@ public class LocalApiTests
         var d = await api.CreateDprAsync(pid, t.Today, Shift.Night);
         Assert.NotEmpty(d.Manpower); // crews copied from the previous report
         var act = (await api.ActivitiesAsync(pid)).First(a => a.Code == "A2000");
-        d.Activities.Add(new DprActivityLine { ActivityId = act.Id, QtyToday = 4 });
+        DemoDb.SetQty(d, act.Id, 4);
         d = await api.SubmitDprAsync(pid, d);
         Assert.Equal(DprStatus.Submitted, d.Status);
         Assert.Equal("sup@site.test", d.PreparedBy);
@@ -58,7 +58,7 @@ public class LocalApiTests
 
         var approved = await t.Api(admin).ApproveDprAsync(pid, d.Id, new() { [act.Id] = 3.5m });
         Assert.Equal(DprStatus.Approved, approved.Status);
-        Assert.Equal(3.5m, approved.Activities.Single().QtyAccepted);
+        Assert.Equal(3.5m, approved.Activities.Single(l => l.ActivityId == act.Id).QtyAccepted);
         Assert.True(await api.VerifyDprAsync(pid, d.Id));
     }
 

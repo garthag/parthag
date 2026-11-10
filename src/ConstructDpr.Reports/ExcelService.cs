@@ -140,6 +140,45 @@ public static class ExcelService
         return (list, errors);
     }
 
+    /// <summary>Progress report for a period as a workbook: one sheet per section, numbers ready for pivot tables.</summary>
+    public static byte[] ExportPeriod(ConstructDpr.Shared.Api.PeriodSummary s)
+    {
+        using var wb = new XLWorkbook();
+        void Sheet(string name, string[] head, IEnumerable<object?[]> rows)
+        {
+            var ws = wb.Worksheets.Add(name);
+            ws.Cell(1, 1).Value = $"{s.ProjectCode} — {s.ProjectName} · {s.From:dd MMM yyyy} – {s.To:dd MMM yyyy}";
+            ws.Cell(1, 1).Style.Font.SetBold();
+            for (var i = 0; i < head.Length; i++) ws.Cell(3, i + 1).Value = head[i];
+            var r = 4;
+            foreach (var row in rows) { for (var i = 0; i < row.Length; i++) ws.Cell(r, i + 1).Value = XLCellValue.FromObject(row[i]); r++; }
+            if (r > 4) ws.Range(3, 1, r - 1, head.Length).CreateTable(name.Replace(" ", ""));
+            else ws.Range(3, 1, 3, head.Length).Style.Font.SetBold().Fill.SetBackgroundColor(XLColor.FromHtml("#E6EEF4"));
+            ws.Columns().AdjustToContents();
+        }
+        Sheet("Summary", new[] { "Item", "Value" }, new object?[][]
+        {
+            new object?[] { "From", s.From.ToDateTime(TimeOnly.MinValue) }, new object?[] { "To", s.To.ToDateTime(TimeOnly.MinValue) },
+            new object?[] { "Approved daily reports", s.ApprovedReports }, new object?[] { "Not yet approved (not counted)", s.NotYetApproved },
+            new object?[] { "Planned progress %", s.PlannedPct }, new object?[] { "Actual progress %", s.ActualPct },
+            new object?[] { "Work done in period (INR)", s.ValueInPeriod }, new object?[] { "Work done to date (INR)", s.ValueToDate },
+        });
+        Sheet("Quantities", new[] { "Code", "Activity", "Unit", "BOQ qty", "This period", "Cumulative", "Actual %", "Plan %", "Days worked" },
+            s.Activities.Select(a => new object?[] { a.Code, a.Name, a.Unit, a.TotalQty, a.InPeriod, a.Cumulative, a.ActualPct, a.PlannedPct, a.WorkingDays }));
+        Sheet("Manpower", new[] { "Agency", "Trade", "Man-days", "Man-hours", "Peak headcount" },
+            s.Crews.Select(c => new object?[] { c.Agency, c.Trade, c.ManDays, c.ManHours, c.PeakHeadcount }));
+        Sheet("Equipment", new[] { "Code", "Type", "Working h", "Idle h", "Breakdown h", "Utilisation %" },
+            s.Equipment.Select(e => new object?[] { e.Code, e.Type, e.Working, e.Idle, e.Breakdown, e.UtilisationPct }));
+        Sheet("Materials", new[] { "Code", "Description", "Unit", "Received", "Issued", "Latest closing" },
+            s.Materials.Select(m => new object?[] { m.Code, m.Description, m.Unit, m.Received, m.Issued, m.LatestClosing }));
+        Sheet("Notes", new[] { "Date", "Type", "Report", "Note" },
+            s.Notes.Select(n => new object?[] { n.Date.ToDateTime(TimeOnly.MinValue), n.Kind, n.Number, n.Text }));
+        Sheet("Reports", new[] { "Report", "Revision", "Date", "Shift", "Prepared by", "Approved by" },
+            s.Reports.Select(d => new object?[] { d.Number, d.Revision, d.ReportDate.ToDateTime(TimeOnly.MinValue), d.Shift.ToString(), d.PreparedBy, d.ApprovedBy }));
+        foreach (var ws in wb.Worksheets) foreach (var c in ws.CellsUsed(c => c.DataType == XLDataType.DateTime)) c.Style.DateFormat.Format = "dd-mmm-yyyy";
+        return Save(wb);
+    }
+
     private static string? NullIfEmpty(string s) => s == "" ? null : s;
     private static DateTime? D(DateOnly? d) => d?.ToDateTime(TimeOnly.MinValue);
     private static byte[] Save(XLWorkbook wb) { using var ms = new MemoryStream(); wb.SaveAs(ms); return ms.ToArray(); }

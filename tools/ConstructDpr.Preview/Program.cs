@@ -21,6 +21,9 @@ using (var db = AppDbContext.OpenSqlite(dbPath))
     Write("sample-schedule.xlsx", ExcelService.ExportSchedule(p, acts));
     Write("sample-dpr.xlsx", ExcelService.ExportDpr(approved, p));
     Write("activity-import-template.xlsx", ExcelService.ActivityTemplate());
+    var period = new PeriodService(db).Build(p.Id, today.AddDays(-14), today);
+    Write("sample-progress-report.pdf", PeriodPdfReport.Generate(period));
+    Write("sample-progress-report.xlsx", ExcelService.ExportPeriod(period));
 }
 Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
 File.Delete(dbPath);

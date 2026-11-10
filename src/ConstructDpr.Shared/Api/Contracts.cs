@@ -40,6 +40,18 @@ public sealed record FileDownload(string FileName, string ContentType, byte[] Co
 /// <summary>A photo without its image bytes (fetch them with PhotoAsync).</summary>
 public sealed record PhotoInfo(int Id, int DprId, string FileName, string ContentType, string? Caption, string TakenBy, int Size, DateTime At);
 
+// ───────── progress report for a period (week, month, any dates) ─────────
+public sealed record PeriodActivityRow(string Code, string Name, string? Unit, decimal TotalQty, decimal InPeriod, decimal Cumulative, decimal? ActualPct, decimal? PlannedPct, int WorkingDays);
+public sealed record PeriodCrewRow(string Agency, string Trade, int ManDays, decimal ManHours, int PeakHeadcount);
+public sealed record PeriodEquipmentRow(string Code, string Type, decimal Working, decimal Idle, decimal Breakdown, decimal? UtilisationPct);
+public sealed record PeriodMaterialRow(string Code, string Description, string Unit, decimal Received, decimal Issued, decimal? LatestClosing);
+public sealed record PeriodNote(DateOnly Date, string Number, string Kind, string Text);
+public sealed record PeriodSummary(
+    string ProjectCode, string ProjectName, string? Client, string? Contractor, DateOnly From, DateOnly To,
+    int ApprovedReports, int NotYetApproved, double PlannedPct, double ActualPct, decimal ValueInPeriod, decimal ValueToDate,
+    IReadOnlyList<PeriodActivityRow> Activities, IReadOnlyList<PeriodCrewRow> Crews, IReadOnlyList<PeriodEquipmentRow> Equipment,
+    IReadOnlyList<PeriodMaterialRow> Materials, IReadOnlyList<PeriodNote> Notes, IReadOnlyList<DprSummary> Reports);
+
 public sealed record AppFeatures(bool AdminPortal, bool Registration, string ServerVersion);
 
 /// <summary>A change committed on the server; every app showing that project refreshes.</summary>
@@ -64,6 +76,8 @@ public interface IConstructDprApi
     Task<List<ProjectMember>> MembersAsync(int projectId);
     Task<ProjectMember> AddMemberAsync(int projectId, string email, ProjectRole role);
     Task RemoveMemberAsync(int projectId, int memberId);
+    /// <summary>Sets a temporary password for a project member who forgot theirs (project administrators only). Returns it once.</summary>
+    Task<string> ResetPasswordAsync(int projectId, int memberId);
 
     Task<List<Activity>> ActivitiesAsync(int projectId);
     Task<List<Dependency>> DependenciesAsync(int projectId);
@@ -94,6 +108,8 @@ public interface IConstructDprApi
     Task<FileDownload> PhotoAsync(int projectId, int photoId);
 
     Task<List<AuditEntry>> AuditAsync(int projectId, int take = 50);
+    /// <summary>Progress report for any period from approved reports (week, month, client meeting): PDF or Excel.</summary>
+    Task<FileDownload> PeriodReportAsync(int projectId, DateOnly from, DateOnly to, bool excel);
     Task<FileDownload> ReportAsync(int projectId, ReportKind kind, int? dprId = null);
 }
 
