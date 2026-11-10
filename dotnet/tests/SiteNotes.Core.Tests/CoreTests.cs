@@ -267,6 +267,7 @@ public class AndroidScreensPdf
         ["daily-reports"] = "Daily reports – search, period & status chips, sort, select for bulk actions",
         ["dpr-editor"] = "Daily progress report – live totals, sections, today's quantity → progress auto",
         ["progress-cost"] = "Progress & cost – overall %, activity cards with forecast and cost",
+        ["drawing-register"] = "Drawing register – quantity, allocated %, completed %, status per drawing",
         ["activities"] = "Activities",
         ["activity-form"] = "Activity – WBS, method, agency, schedule, calculated progress panel, resources",
         ["wbs"] = "WBS – plant / unit / area",

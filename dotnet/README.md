@@ -57,20 +57,49 @@ Project
 - **Assigned resources:** planned crew, machines and materials per activity, which give a **planned budget**.
 - **Subcontractor-wise:** man-days, man-hours, cost and quantity of work done per activity. **Department-wise:** the same for departments.
 
-### 3.3 Registers and masters
+### 3.3 Drawing register and work completion
+Many agencies often work on one drawing, and one item can be shared. For example, item 1457 on a drawing is 100 MT, given 60 MT to agency A and 40 MT to agency B, while another drawing goes entirely to one contractor.
+
+- **Drawings:** number, revision, title, discipline, status (Issued / For construction / Revised / Superseded / Cancelled), WBS (plant › unit › area) and issue date.
+- **Items on a drawing:** BOQ items, **equipment** and **parts**, each with its unit and drawing quantity. An item can also count towards a planned activity.
+- **Allocations:** each item is split between one or more agencies (quantity, work order no., date). Use **Allocate the rest…** to give the remaining quantity to an agency.
+- **Daily report:** **Add drawing work** lists every item and agency allocation. Type today's quantity; "to date", balance and % are worked out for that agency against its allocation.
+- **Calculated automatically:**
+  - per item: allocated, **unallocated**, **completed**, balance, %;
+  - per agency: allocated, done, balance, % and the last date worked;
+  - per drawing: quantity per unit, allocated %, completed %, and work status (*Not allocated → Partly allocated → Allocated → In progress → Completed*).
+- **Flags:** over-allocated items, **work done by an agency without an allocation**, **work beyond the drawing quantity** and **an agency beyond its allocation**.
+- **Report (PDF / Excel):**
+  - drawing summary;
+  - every drawing with its items and each agency's allocated → done;
+  - **subcontractor-wise drawing work** (allocated, done, balance per unit);
+  - a **needs attention** list.
+
+### 3.4 Where photos, videos, hindrances and notes are
+| What | Windows | Android |
+|---|---|---|
+| Photos & videos of a day | Daily report › tab **8 Photos & videos** (add files or drag & drop) | Daily report › **8. Photos & videos** › 📷 Photo / 🖼 Gallery / 🎥 Video |
+| Hindrance register | Ribbon **Home › Hindrances** (or Registers & masters) | Menu **⚠️ Hindrances** |
+| Hindrance photos / videos | Select a hindrance › **Photos & videos…** (or double-click it) | Open a hindrance › Photos & videos (evidence) |
+| Requirement attachments | Select a requirement › **Photos & attachments…** | Open a requirement › Photos & attachments |
+| Hindrances in a daily report | Daily report › tab **5 Hindrances** | Daily report › **5. Hindrances** |
+| Notes | Ribbon **Home › Notes** (insert pictures / video / scan from the note toolbox) | Menu **📝 Notes & scans** (📷 🖼 🎥 📄 in the toolbox) |
+| Scan to PDF | Ribbon **Home › Scan to PDF** | Notes & scans › 📄 Scan |
+
+### 3.5 Registers and masters
 - **Hindrance register:** dates, category, description, affected activity, responsibility, hours lost, status, action. Filters and bulk "mark resolved".
 - **Requirement register:** item, quantity, unit, required-by date, priority, status, overdue flag. Bulk status changes.
 - **Masters:** projects, subcontractors, departments, resources & rates.
 
-### 3.4 Notes and scanner
+### 3.6 Notes and scanner
 - **Rich notes:** headings H1–H3, normal text, quote, **bullets, numbering, arrows, checklists** (ticked items are struck through), indent, **bold / italic / underline / strike**, 6 font styles, 14 sizes, colours, highlight, alignment, divider lines, **pictures, videos, scanned documents**.
 - Notes live in folders and sub-folders, with search, pin, move, duplicate, PDF export and auto-save.
 - **Scan to PDF:** add pages one after another (camera on the phone, files or drag-and-drop on the PC). Clean-up options are Enhanced, Grayscale, or **Black & white** (adaptive, removes shadows). Rotate, reorder and add remarks per page. The result is saved as **one PDF plus each page as an image**, filed automatically in **Scans › yyyy-MM-dd**.
 
-### 3.5 Report manager (PDF and Excel)
+### 3.7 Report manager (PDF and Excel)
 | Choice | Options |
 |---|---|
-| Report | Daily report · all reports in one PDF · register summary · DPR workbook (Excel) · progress & cost (PDF / Excel) · manpower summary · hindrance register · requirement register |
+| Report | Daily report · all reports in one PDF · register summary · DPR workbook (Excel) · progress & cost (PDF / Excel) · manpower summary · **drawing register & work completion (PDF / Excel)** · hindrance register · requirement register |
 | Days | All, Today, Yesterday, This week, Last 7 days, This month, Last month, Custom from–to |
 | Filter | Status (multi-select), agency, search text |
 | Sort | Newest, oldest, report no., most manpower, status. Activity rows: as entered, name, most / least progress, most done today, agency, location. Manpower rows: agency, trade, most people, activity |
@@ -81,7 +110,7 @@ Project
 
 **Save as default** stores these settings per project. They sync, and every PDF the app makes uses them. Excel workbooks have frozen headers, auto-filters and `SUBTOTAL` totals that follow the filter.
 
-### 3.6 Lists everywhere
+### 3.8 Lists everywhere
 - **Search box**, filter list, **click a column header to sort**, **Ctrl / Shift + click to select many**.
 - Bulk actions on the selection: PDF, Excel, submit / approve / draft, resolve, change status, activate / deactivate, delete.
 - PC grids work like a spreadsheet (type, Tab, Enter). Every edited row saves itself.
@@ -107,6 +136,10 @@ All money uses `decimal` arithmetic, rounded to 2 places per row, so totals add 
 | Material / other cost | Consumed × rate, or lump sum |
 | Cost per unit / per day | Activity cost ÷ quantity done / ÷ days worked |
 | Earned value | Budget × % complete |
+| Drawing item completed | Σ today's quantity booked on the item in all reports (any agency) |
+| Agency done on an item | Σ that agency's quantities on the item. Planned = its allocation |
+| Unallocated | Drawing qty − Σ allocations (never below 0). Over-allocated = Σ allocations − drawing qty |
+| Drawing % | Quantity-weighted % of its items within each unit, averaged across units (MT and Nos are never added together) |
 | Unallocated cost | Rows not booked to an activity show as **General / overheads** |
 
 ## 5. Architecture

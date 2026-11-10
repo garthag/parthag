@@ -17,13 +17,13 @@ namespace SiteNotes.Desktop.Views;
 /// </summary>
 public class ReportManagerView : ViewBase
 {
-    private enum Kind { Day, AllInOne, Register, Workbook, ProgressPdf, ProgressXlsx, Manpower, HindrancePdf, HindranceXlsx, RequirementPdf, RequirementXlsx }
+    private enum Kind { Day, AllInOne, Register, Workbook, ProgressPdf, ProgressXlsx, Manpower, DrawingPdf, DrawingXlsx, HindrancePdf, HindranceXlsx, RequirementPdf, RequirementXlsx }
 
     private static readonly (Kind, string)[] Kinds =
     [
         (Kind.Day, "Daily report (PDF)"), (Kind.AllInOne, "All daily reports in one PDF"), (Kind.Register, "DPR register summary (PDF)"),
         (Kind.Workbook, "DPR workbook (Excel)"), (Kind.ProgressPdf, "Progress & cost (PDF)"), (Kind.ProgressXlsx, "Progress & cost (Excel)"),
-        (Kind.Manpower, "Manpower summary (PDF)"), (Kind.HindrancePdf, "Hindrance register (PDF)"), (Kind.HindranceXlsx, "Hindrance register (Excel)"),
+        (Kind.Manpower, "Manpower summary (PDF)"), (Kind.DrawingPdf, "Drawing register & work completion (PDF)"), (Kind.DrawingXlsx, "Drawing register (Excel)"), (Kind.HindrancePdf, "Hindrance register (PDF)"), (Kind.HindranceXlsx, "Hindrance register (Excel)"),
         (Kind.RequirementPdf, "Requirement register (PDF)"), (Kind.RequirementXlsx, "Requirement register (Excel)"),
     ];
 
@@ -238,6 +238,13 @@ public class ReportManagerView : ViewBase
             var pp = await Task.Run(() => new ProgressService(Desk.Db).ComputeAsync(f.ProjectId, f.From, f.To, f.To));
             if (_kind == Kind.ProgressPdf) await Dialogs.CreateAndOpenAsync($"Progress_cost_{stamp}.pdf", s => ProgressReports.Pdf(s, project, pp, desc, true, opt));
             else await Dialogs.CreateAndOpenAsync($"Progress_cost_{stamp}.xlsx", s => ProgressReports.Excel(s, project, pp, desc));
+            return;
+        }
+        if (_kind is Kind.DrawingPdf or Kind.DrawingXlsx)
+        {
+            var reg = await Task.Run(() => new DrawingService(Desk.Db).ComputeAsync(f.ProjectId, f.To));
+            if (_kind == Kind.DrawingPdf) await Dialogs.CreateAndOpenAsync($"Drawing_register_{stamp}.pdf", s => DrawingReports.Pdf(s, project, reg, desc, opt));
+            else await Dialogs.CreateAndOpenAsync($"Drawing_register_{stamp}.xlsx", s => DrawingReports.Excel(s, project, reg, desc));
             return;
         }
         if (_kind is Kind.HindrancePdf or Kind.HindranceXlsx)

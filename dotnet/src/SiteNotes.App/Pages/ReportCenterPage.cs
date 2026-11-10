@@ -13,7 +13,7 @@ namespace SiteNotes.App.Pages;
 /// </summary>
 public class ReportCenterPage : ContentPage
 {
-    private enum Kind { DayPdf, RegisterPdf, RegisterFullPdf, WorkbookXlsx, ProgressPdf, ProgressXlsx, ManpowerPdf, HindrancePdf, HindranceXlsx, RequirementPdf, RequirementXlsx }
+    private enum Kind { DayPdf, RegisterPdf, RegisterFullPdf, WorkbookXlsx, ProgressPdf, ProgressXlsx, ManpowerPdf, DrawingPdf, DrawingXlsx, HindrancePdf, HindranceXlsx, RequirementPdf, RequirementXlsx }
 
     private static readonly (Kind, string)[] Kinds =
     [
@@ -24,6 +24,8 @@ public class ReportCenterPage : ContentPage
         (Kind.ProgressPdf, "📈 Progress & cost (PDF)"),
         (Kind.ProgressXlsx, "📈 Progress & cost (Excel)"),
         (Kind.ManpowerPdf, "👷 Manpower summary (PDF)"),
+        (Kind.DrawingPdf, "📐 Drawing register & work completion (PDF)"),
+        (Kind.DrawingXlsx, "📐 Drawing register (Excel)"),
         (Kind.HindrancePdf, "⚠️ Hindrance register (PDF)"),
         (Kind.HindranceXlsx, "⚠️ Hindrance register (Excel)"),
         (Kind.RequirementPdf, "📦 Requirement register (PDF)"),
@@ -261,6 +263,7 @@ public class ReportCenterPage : ContentPage
         _preview.Text = K switch
         {
             Kind.HindrancePdf or Kind.HindranceXlsx => $"Hindrances · {_filter.Describe()}",
+            Kind.DrawingPdf or Kind.DrawingXlsx => $"Drawing register up to {(_filter.Filter.To ?? DateTime.Today):dd-MMM-yyyy}",
             Kind.RequirementPdf or Kind.RequirementXlsx => $"Requirements · {_filter.Describe()}",
             Kind.ProgressPdf or Kind.ProgressXlsx => $"Progress to {(_filter.Filter.To ?? DateTime.Today):dd-MMM-yyyy}",
             _ => $"{_matches.Count} report(s) · {_filter.Describe()}",
@@ -311,6 +314,14 @@ public class ReportCenterPage : ContentPage
                 path = K == Kind.ProgressPdf
                     ? await FileExport.CreateAsync($"Progress_cost_{stamp}.pdf", s => ProgressReports.Pdf(s, project, pp, desc, true, opt))
                     : await FileExport.CreateAsync($"Progress_cost_{stamp}.xlsx", s => ProgressReports.Excel(s, project, pp, desc));
+                break;
+            }
+            case Kind.DrawingPdf or Kind.DrawingXlsx:
+            {
+                var reg = await Task.Run(() => new DrawingService(AppServices.Db).ComputeAsync(f.ProjectId, f.To));
+                path = K == Kind.DrawingPdf
+                    ? await FileExport.CreateAsync($"Drawing_register_{stamp}.pdf", s => DrawingReports.Pdf(s, project, reg, desc, opt))
+                    : await FileExport.CreateAsync($"Drawing_register_{stamp}.xlsx", s => DrawingReports.Excel(s, project, reg, desc));
                 break;
             }
             case Kind.HindrancePdf or Kind.HindranceXlsx:

@@ -35,6 +35,7 @@ public class AppShell : Shell
         Add("📅  Daily reports", "reports", typeof(ReportsPage));
         Add("📝  Notes & scans", "notes", typeof(NotesPage));
         Add("📈  Progress & cost", "progress", typeof(ProgressPage));
+        Add("📐  Drawing register", "drawings", typeof(DrawingListPage));
         Add("⚠️  Hindrances", "hindrances", typeof(HindranceListPage));
         Add("📦  Requirements", "requirements", typeof(RequirementListPage));
         Add("🖨️  Report centre", "reportcentre", typeof(ReportCenterPage));

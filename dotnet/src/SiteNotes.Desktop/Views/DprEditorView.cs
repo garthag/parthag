@@ -24,7 +24,8 @@ public class ActRow(ReportActivity r, double doneBefore) : LiveRow
 {
     public ReportActivity R { get; } = r;
     public double DoneBefore { get; set; } = doneBefore;
-    public bool Linked => R.ActivityId != "";
+    public bool Linked => R.ProgressKey != "";
+    public string Source => R.DrawingItemId != "" ? "Drawing" : R.ActivityId != "" ? "Plan" : "Unplanned";
     public double ToDate => Math.Round((Linked ? DoneBefore : 0) + R.TodayQty, 4);
     public double Balance => R.PlannedQty > 0 ? Math.Max(0, R.PlannedQty - ToDate) : 0;
     public double Percent => R.PlannedQty > 0 ? Math.Min(100, ToDate / R.PlannedQty * 100) : 0;
@@ -91,7 +92,6 @@ public class DprEditorView : ViewBase, ISaveable, IPrintable
     private readonly WrapPanel _summary = new();
     private readonly TabControl _tabs = new() { Margin = new Thickness(10, 0, 10, 10) };
     private readonly TextBlock _statusBadge = new() { FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(10, 0, 0, 0) };
-    private readonly WrapPanel _photos = new();
 
     public DprEditorView(string? reportId, DateTime? newDate = null)
     {
@@ -137,9 +137,9 @@ public class DprEditorView : ViewBase, ISaveable, IPrintable
             .Where(x => x.Id != r.Id && (x.Date.Date < r.Date.Date || (x.Date.Date == r.Date.Date && x.ReportNo < r.ReportNo)))
             .Select(x => x.Id).ToHashSet();
         _doneBefore = (await Desk.Db.ListForProjectAsync<ReportActivity>(r.ProjectId))
-            .Where(x => x.ActivityId != "" && earlier.Contains(x.ReportId))
-            .GroupBy(x => x.ActivityId).ToDictionary(g => g.Key, g => g.Sum(x => x.TodayQty));
-        foreach (var a in _acts) { a.DoneBefore = _doneBefore.GetValueOrDefault(a.R.ActivityId); a.Notify(); }
+            .Where(x => x.ProgressKey != "" && earlier.Contains(x.ReportId))
+            .GroupBy(x => x.ProgressKey).ToDictionary(g => g.Key, g => g.Sum(x => x.TodayQty));
+        foreach (var a in _acts) { a.DoneBefore = _doneBefore.GetValueOrDefault(a.R.ProgressKey); a.Notify(); }
     }
 
     private string ActName(string id) => _activities.FirstOrDefault(a => a.Id == id)?.ToString() ?? "";
@@ -149,7 +149,7 @@ public class DprEditorView : ViewBase, ISaveable, IPrintable
 
     private void Fill()
     {
-        _acts.Clear(); foreach (var a in _b.Activities) _acts.Add(new ActRow(a, _doneBefore.GetValueOrDefault(a.ActivityId)));
+        _acts.Clear(); foreach (var a in _b.Activities) _acts.Add(new ActRow(a, _doneBefore.GetValueOrDefault(a.ProgressKey)));
         _men.Clear(); foreach (var m in _b.Manpower) _men.Add(new ManRow(m, () => _cal, ActName, Party));
         _machines.Clear(); foreach (var m in _b.Machines) _machines.Add(new MachineRow(m, () => _cal, ActName));
         _materials.Clear(); foreach (var m in _b.Materials) _materials.Add(new MaterialRow(m, ActName));
@@ -220,7 +220,6 @@ public class DprEditorView : ViewBase, ISaveable, IPrintable
         foreach (var top in new UIElement[] { tb, header, _summary }) { DockPanel.SetDock(top, Dock.Top); dock.Children.Add(top); }
         dock.Children.Add(_tabs);
         Content = dock;
-        _ = LoadPhotosAsync();
     }
 
     private static TabItem Tab(string header, UIElement content, bool locked) =>
@@ -251,7 +250,8 @@ public class DprEditorView : ViewBase, ISaveable, IPrintable
     private UIElement ActivitiesTab()
     {
         var grid = Editable(new GridBuilder(_acts)
-            .Text("Activity", "R.ActivityName", 260)
+            .Text("From", nameof(ActRow.Source), 70, readOnly: true)
+            .Text("Activity / drawing item", "R.ActivityName", 260)
             .Text("Location", "R.Location", 130)
             .Lookup("Agency", "R.SubcontractorId", SubPicks(), 150)
             .Text("Unit", "R.Unit", 60)
@@ -268,6 +268,7 @@ public class DprEditorView : ViewBase, ISaveable, IPrintable
         };
         return WithButtons(grid,
             (Glyph.Add, "Add activities from plan…", AddActivitiesAsync),
+            (Glyph.Hierarchy, "Add drawing work…", AddDrawingWorkAsync),
             (Glyph.Add, "Add unplanned work", () => { _acts.Add(new ActRow(new ReportActivity { ActivityName = "Unplanned work" }, 0)); Dirty(); return Task.CompletedTask; }),
             (Glyph.Delete, "Remove selected", () => Remove(grid, _acts)),
             null,
@@ -276,14 +277,14 @@ public class DprEditorView : ViewBase, ISaveable, IPrintable
 
     private Task AddActivitiesAsync()
     {
-        var open = _activities.Where(a => _acts.All(x => x.R.ActivityId != a.Id) && (a.PlannedQty <= 0 || _doneBefore.GetValueOrDefault(a.Id) < a.PlannedQty)).ToList();
+        var open = _activities.Where(a => _acts.All(x => x.R.ActivityId != a.Id || x.R.DrawingItemId != "") && (a.PlannedQty <= 0 || _doneBefore.GetValueOrDefault("A:" + a.Id) < a.PlannedQty)).ToList();
         if (open.Count == 0)
         {
             Dialogs.Info(_activities.Count == 0 ? "No activities planned yet. Add them in Planning › Activities & progress." : "All open activities are already in this report.");
             return Task.CompletedTask;
         }
         var chosen = PickMany("Add activities", "Tick the activities worked on (not yet 100 %):",
-            open.Select(a => $"{a}   ({PdfReports.N(_doneBefore.GetValueOrDefault(a.Id))} of {PdfReports.N(a.PlannedQty)} {a.Unit})").ToList());
+            open.Select(a => $"{a}   ({PdfReports.N(_doneBefore.GetValueOrDefault("A:" + a.Id))} of {PdfReports.N(a.PlannedQty)} {a.Unit})").ToList());
         foreach (var i in chosen)
         {
             var a = open[i];
@@ -291,10 +292,39 @@ public class DprEditorView : ViewBase, ISaveable, IPrintable
             {
                 ActivityId = a.Id, ActivityName = a.ToString(), Location = a.Location, Unit = a.Unit, PlannedQty = a.PlannedQty,
                 SubcontractorId = a.SubcontractorId, SubcontractorName = _subs.FirstOrDefault(s => s.Id == a.SubcontractorId)?.Name ?? "",
-            }, _doneBefore.GetValueOrDefault(a.Id)));
+            }, _doneBefore.GetValueOrDefault("A:" + a.Id)));
         }
         if (chosen.Count > 0) Dirty();
         return Task.CompletedTask;
+    }
+
+    /// <summary>Work on drawing items: one line per agency allocation (and any agency for unallocated items).</summary>
+    private async Task AddDrawingWorkAsync()
+    {
+        var pid = Desk.ProjectId;
+        var drawings = (await Desk.Db.ListForProjectAsync<Drawing>(pid)).ToDictionary(d => d.Id);
+        var items = (await Desk.Db.ListForProjectAsync<DrawingItem>(pid)).Where(i => drawings.ContainsKey(i.DrawingId)).ToDictionary(i => i.Id);
+        var allocs = await Desk.Db.ListForProjectAsync<DrawingAllocation>(pid);
+        if (items.Count == 0) { Dialogs.Info("No drawings yet. Add them in Planning › Drawing register (items + allocations to agencies)."); return; }
+        var options = allocs.Where(a => items.ContainsKey(a.DrawingItemId))
+            .Select(a => (Item: items[a.DrawingItemId], Sub: a.SubcontractorId, Name: a.SubcontractorName, Qty: a.AllocatedQty))
+            .GroupBy(x => (x.Item.Id, x.Sub)).Select(g => (g.First().Item, g.Key.Sub, g.First().Name, Qty: g.Sum(x => x.Qty)))
+            .Where(x => _acts.All(a => a.R.DrawingItemId != x.Item.Id || a.R.SubcontractorId != x.Sub))
+            .Where(x => _doneBefore.GetValueOrDefault($"D:{x.Item.Id}:{x.Sub}") < x.Qty)
+            .OrderBy(x => drawings[x.Item.DrawingId].Number).ThenBy(x => x.Item.SortOrder).ThenBy(x => x.Name).ToList();
+        if (options.Count == 0) { Dialogs.Info("Every allocated drawing item is either complete or already in this report."); return; }
+        var chosen = PickMany("Add drawing work", "Tick the drawing items worked on today (one line per agency allocation):",
+            options.Select(o => $"{drawings[o.Item.DrawingId].Number} · {o.Item}  –  {o.Name}: {PdfReports.N(_doneBefore.GetValueOrDefault($"D:{o.Item.Id}:{o.Sub}"))} of {PdfReports.N(o.Qty)} {o.Item.Unit}").ToList());
+        foreach (var o in chosen.Select(i => options[i]))
+        {
+            var r = new ReportActivity
+            {
+                DrawingItemId = o.Item.Id, ActivityId = o.Item.ActivityId, ActivityName = $"{drawings[o.Item.DrawingId].Number} / {o.Item}",
+                Unit = o.Item.Unit, PlannedQty = o.Qty, SubcontractorId = o.Sub, SubcontractorName = o.Name,
+            };
+            _acts.Add(new ActRow(r, _doneBefore.GetValueOrDefault(r.ProgressKey)));
+        }
+        if (chosen.Count > 0) Dirty();
     }
 
     /// <summary>Check-list dialog: tick several items at once.</summary>
@@ -468,44 +498,9 @@ public class DprEditorView : ViewBase, ISaveable, IPrintable
 
     private UIElement PhotosTab()
     {
-        var add = W.Button("Add photos / videos…", async () =>
-        {
-            foreach (var f in Dialogs.OpenMedia())
-            {
-                var video = Path.GetExtension(f).ToLowerInvariant() is ".mp4" or ".mov" or ".avi" or ".wmv";
-                _b.Media.Add(await Desk.ImportMediaAsync(f, MediaOwner.Report, _b.Report.Id, video ? MediaKind.Video : MediaKind.Photo));
-            }
-            await LoadPhotosAsync();
-        }, Glyph.Photo, true);
-        return W.Scroll(W.Stack(W.Wrap(add, W.Muted("  Double-click a photo to open it, right-click to caption or remove. Photos print in the PDF with captions and time.")), _photos), 4);
-    }
-
-    private async Task LoadPhotosAsync()
-    {
-        var id = _b.Report.Id;
-        _b.Media = (await Desk.Db.ListAsync<MediaItem>(m => m.OwnerId == id)).OrderBy(m => m.CapturedAtUtc).ToList();
-        _photos.Children.Clear();
-        foreach (var m in _b.Media)
-        {
-            var path = Desk.Db.MediaPath(m.FileName);
-            UIElement visual = m.Kind == MediaKind.Video || !File.Exists(path)
-                ? new TextBlock { Text = m.Kind == MediaKind.Video ? "▶ Video" : "(syncing…)", Foreground = Brushes.White, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center }
-                : new Image { Source = Thumb(path), Stretch = Stretch.UniformToFill };
-            var caption = new TextBlock { Text = m.Caption, TextTrimming = TextTrimming.CharacterEllipsis, Width = 160, FontSize = 11 };
-            var tile = new StackPanel { Margin = new Thickness(0, 0, 10, 10), Width = 160 };
-            tile.Children.Add(new Border { Width = 160, Height = 120, Background = Theme.PrimaryDark, Child = visual, CornerRadius = new CornerRadius(4), ClipToBounds = true });
-            tile.Children.Add(caption);
-            var item = m;
-            tile.MouseLeftButtonDown += (_, e) => { if (e.ClickCount == 2) Dialogs.Open(path); };
-            var menu = new ContextMenu();
-            var cap = new MenuItem { Header = "Caption…" };
-            cap.Click += async (_, _) => { var t = Dialogs.Prompt("Caption", "Caption for this photo", item.Caption); if (t != null) { item.Caption = t; await Desk.Db.SaveAsync(item); caption.Text = t; } };
-            var del = new MenuItem { Header = "Remove" };
-            del.Click += async (_, _) => { if (Dialogs.Confirm("Remove this photo/video from the report?")) { await Desk.Db.DeleteAsync(item); await LoadPhotosAsync(); } };
-            menu.Items.Add(cap); menu.Items.Add(del);
-            tile.ContextMenu = menu;
-            _photos.Children.Add(tile);
-        }
+        var panel = new MediaPanel(MediaOwner.Report, () => _b.Report.Id);
+        panel.CountChanged += n => { if (_tabs.Items.Count > 7) ((TabItem)_tabs.Items[7]).Header = $"8  Photos & videos ({n})"; };
+        return panel;
     }
 
     /// <summary>Decodes a small thumbnail only (fast and light on memory).</summary>

@@ -52,6 +52,7 @@ public static class Tour
             await Go("reports", "daily-reports");
             await Push(() => new DprEditorPage(report.Id), "dpr-editor");
             await Go("progress", "progress-cost");
+            await Go("drawings", "drawing-register");
             await Go("activities", "activities");
             await Push(() => EntityForms.ActivityForm(activity), "activity-form");
             await Go("wbs", "wbs");

@@ -82,6 +82,7 @@ public class ScreenTour
                 if (g?.Items.Count > 0) g.SelectedIndex = 1;
                 await Task.CompletedTask;
             });
+        await Show(new DrawingsView(), "04b-drawing-register", "Drawing register – drawings → items (BOQ / equipment / parts) → allocations to agencies; allocated, unallocated, completed, balance");
         await Show(new WbsView(), "05-wbs", "WBS – Project › Plant › Unit › Area › System › Work package",
             async () => { var t = Find<TreeView>(main.CurrentView as DependencyObject); if (t?.Items.Count > 0 && t.Items[0] is TreeViewItem ti) ti.IsSelected = true; await Task.CompletedTask; });
         await Show(MasterViews.Resources(), "06-resources-rates", "Resources & rates – manpower, machinery, material, non-material; per hour / day / unit / lump sum");

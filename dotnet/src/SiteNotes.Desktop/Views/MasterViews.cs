@@ -37,6 +37,8 @@ public class GridView<T> : ViewBase where T : SyncEntity, new()
     private readonly TextBlock _count = W.Muted("");
     private readonly ComboBox _filter = new() { Width = 170, Margin = new Thickness(8, 0, 0, 0) };
     private readonly bool _projectScoped;
+    private readonly ToolBar _toolbar;
+    private bool _actionsAdded;
 
     public Func<IEnumerable<T>, IEnumerable<T>> Order { get; init; } = x => x;
     public (string Name, Func<T, bool> Match)[] Filters { get; init; } = [];
@@ -45,6 +47,8 @@ public class GridView<T> : ViewBase where T : SyncEntity, new()
     public Func<List<T>, string, Task>? Excel { get; init; }
     public Func<T, Task>? AfterSave { get; init; }
     public Func<T, Task>? OpenDetail { get; init; }
+    /// <summary>Extra toolbar buttons acting on the selected row(s).</summary>
+    public (string Glyph, string Text, Func<List<T>, Task> Run)[] RowActions { get; init; } = [];
 
     public override string Title => _title;
     public override string Key => "grid:" + _title;
@@ -68,7 +72,7 @@ public class GridView<T> : ViewBase where T : SyncEntity, new()
         _search.TextChanged += (_, _) => Refilter();
         _filter.SelectionChanged += (_, _) => Refilter();
 
-        var top = W.ToolBar(
+        _toolbar = W.ToolBar(
             (Glyph.Add, "Add", AddAsync),
             (Glyph.Delete, "Delete selected", DeleteAsync),
             (Glyph.Accept, "Actions on selected…", BulkAsync),
@@ -86,8 +90,8 @@ public class GridView<T> : ViewBase where T : SyncEntity, new()
         bar.Children.Add(_count);
 
         var dock = new DockPanel();
-        DockPanel.SetDock(top, Dock.Top);
-        dock.Children.Add(top);
+        DockPanel.SetDock(_toolbar, Dock.Top);
+        dock.Children.Add(_toolbar);
         DockPanel.SetDock(bar, Dock.Top);
         dock.Children.Add(bar);
         if (hint != null)
@@ -102,6 +106,23 @@ public class GridView<T> : ViewBase where T : SyncEntity, new()
         Content = dock;
         Loaded += (_, _) =>
         {
+            if (!_actionsAdded)
+            {
+                _actionsAdded = true;
+                if (RowActions.Length > 0) _toolbar.Items.Insert(3, new Separator());
+                var at = 4;
+                foreach (var (glyph, text, run) in RowActions)
+                {
+                    var btn = new Button { Content = W.IconText(glyph, text), Padding = new Thickness(8, 4, 8, 4) };
+                    btn.Click += async (_, _) => await Dialogs.Guard(async () =>
+                    {
+                        var sel = Selected();
+                        if (sel.Count == 0) { Dialogs.Info("Select a row first."); return; }
+                        await run(sel);
+                    });
+                    _toolbar.Items.Insert(at++, btn);
+                }
+            }
             if (_filter.Items.Count == 0)
             {
                 _filter.Items.Add("All");
@@ -301,7 +322,8 @@ public static class RegisterViews
               .Number("Hrs lost", nameof(Hindrance.HoursLost), 70)
               .Enum<HindranceStatus>("Status", nameof(Hindrance.Status), 95)
               .Text("Action taken", nameof(Hindrance.ActionTaken), 200),
-        h => $"{h.SerialNo} {h.Category} {h.Description} {h.AffectedActivity} {h.ResponsibleParty} {h.ActionTaken}")
+        h => $"{h.SerialNo} {h.Category} {h.Description} {h.AffectedActivity} {h.ResponsibleParty} {h.ActionTaken}",
+        hint: "Type in the grid. Select a hindrance and click “Photos & videos…” (or double-click it) to attach evidence photos and videos.")
     {
         Order = l => l.OrderByDescending(h => h.FromDate).ThenByDescending(h => h.SerialNo),
         AfterSave = async h => { if (h.SerialNo == 0) { h.SerialNo = await Desk.Db.NextSerialAsync<Hindrance>(h.ProjectId); await Desk.Db.SaveAsync(h); } },
@@ -309,6 +331,8 @@ public static class RegisterViews
                    .. Lists.ResponsibleParties.Select(p => (p, (Func<Hindrance, bool>)(h => h.ResponsibleParty == p)))],
         BulkActions = [("Mark resolved today", l => l.ForEach(h => { h.Status = HindranceStatus.Resolved; h.ToDate ??= DateTime.Today; })),
                        ("Mark open", l => l.ForEach(h => { h.Status = HindranceStatus.Open; h.ToDate = null; }))],
+        OpenDetail = h => { MediaPanel.ShowWindow($"H-{h.SerialNo:000} {h.Category}", MediaOwner.Hindrance, h.Id); return Task.CompletedTask; },
+        RowActions = [(Glyph.Photo, "Photos & videos…", l => { MediaPanel.ShowWindow($"H-{l[0].SerialNo:000} {l[0].Category}", MediaOwner.Hindrance, l[0].Id); return Task.CompletedTask; })],
         Pdf = async (rows, desc) => { var o = await Desk.ReportOptionsAsync(); await Dialogs.CreateAndOpenAsync($"Hindrance_register_{DateTime.Now:yyyyMMdd_HHmm}.pdf", s => PdfReports.HindranceRegister(s, Desk.Project, rows, desc, o)); },
         Excel = (rows, desc) => Dialogs.CreateAndOpenAsync($"Hindrance_register_{DateTime.Now:yyyyMMdd_HHmm}.xlsx", s => ExcelReports.HindranceRegister(s, Desk.Project, rows, desc)),
     };
@@ -332,6 +356,8 @@ public static class RegisterViews
         Filters = [("Open (not received)", r => r.Status is RequirementStatus.Pending or RequirementStatus.Approved or RequirementStatus.Ordered), ("Overdue", r => r.IsOverdue),
                    .. Enum.GetValues<RequirementStatus>().Select(st => (st.ToString(), (Func<Requirement, bool>)(r => r.Status == st)))],
         BulkActions = Enum.GetValues<RequirementStatus>().Select(st => ($"Mark {st}", (Action<List<Requirement>>)(l => l.ForEach(r => r.Status = st)))).ToArray(),
+        OpenDetail = r => { MediaPanel.ShowWindow($"R-{r.SerialNo:000} {r.Item}", MediaOwner.Requirement, r.Id); return Task.CompletedTask; },
+        RowActions = [(Glyph.Photo, "Photos & attachments…", l => { MediaPanel.ShowWindow($"R-{l[0].SerialNo:000} {l[0].Item}", MediaOwner.Requirement, l[0].Id); return Task.CompletedTask; })],
         Pdf = async (rows, desc) => { var o = await Desk.ReportOptionsAsync(); await Dialogs.CreateAndOpenAsync($"Requirement_register_{DateTime.Now:yyyyMMdd_HHmm}.pdf", s => PdfReports.RequirementRegister(s, Desk.Project, rows, desc, o)); },
         Excel = (rows, desc) => Dialogs.CreateAndOpenAsync($"Requirement_register_{DateTime.Now:yyyyMMdd_HHmm}.xlsx", s => ExcelReports.RequirementRegister(s, Desk.Project, rows, desc)),
     };

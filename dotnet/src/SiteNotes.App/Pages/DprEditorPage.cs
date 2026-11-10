@@ -131,9 +131,11 @@ public class DprEditorPage : ContentPage
             .Where(x => x.Id != r.Id && (x.Date.Date < r.Date.Date || (x.Date.Date == r.Date.Date && x.ReportNo < r.ReportNo)))
             .Select(x => x.Id).ToHashSet();
         _doneBefore = (await AppServices.Db.ListForProjectAsync<ReportActivity>(r.ProjectId))
-            .Where(x => x.ActivityId != "" && earlier.Contains(x.ReportId))
-            .GroupBy(x => x.ActivityId).ToDictionary(g => g.Key, g => g.Sum(x => x.TodayQty));
+            .Where(x => x.ProgressKey != "" && earlier.Contains(x.ReportId))
+            .GroupBy(x => x.ProgressKey).ToDictionary(g => g.Key, g => g.Sum(x => x.TodayQty));
     }
+
+    private double DoneBefore(ReportActivity a) => a.ProgressKey == "" ? 0 : _doneBefore.GetValueOrDefault(a.ProgressKey);
 
     private void Changed()
     {
@@ -184,7 +186,7 @@ public class DprEditorPage : ContentPage
         _secActivities.ClearBody();
         _secActivities.With(new RowList<ReportActivity>(_b.Activities, ActivityRow, ActivitiesChanged,
             "No activities yet. Add from the activity list (progress then sums up automatically).",
-            ("＋ Activity from list", AddActivityAsync), ("＋ Unplanned work", RowList<ReportActivity>.Now(() => new ReportActivity()))));
+            ("＋ Activity from list", AddActivityAsync), ("＋ Drawing work", AddDrawingWorkAsync), ("＋ Unplanned work", RowList<ReportActivity>.Now(() => new ReportActivity()))));
         _form.Children.Add(_secActivities);
 
         _secManpower.ClearBody();
@@ -233,6 +235,37 @@ public class DprEditorPage : ContentPage
 
     // ------------------------------------------------------------------ "add from list" pickers
 
+    /// <summary>Work on a drawing item for one agency (picked from the item's allocations).</summary>
+    private async Task<ReportActivity?> AddDrawingWorkAsync()
+    {
+        var pid = AppServices.ProjectId;
+        var drawings = (await AppServices.Db.ListForProjectAsync<Drawing>(pid)).ToDictionary(d => d.Id);
+        var items = (await AppServices.Db.ListForProjectAsync<DrawingItem>(pid)).Where(i => drawings.ContainsKey(i.DrawingId)).ToDictionary(i => i.Id);
+        var options = (await AppServices.Db.ListForProjectAsync<DrawingAllocation>(pid)).Where(a => items.ContainsKey(a.DrawingItemId))
+            .GroupBy(a => (a.DrawingItemId, a.SubcontractorId))
+            .Select(g => (Item: items[g.Key.DrawingItemId], Sub: g.Key.SubcontractorId, Name: g.First().SubcontractorName, Qty: g.Sum(x => x.AllocatedQty)))
+            .Where(o => _b.Activities.All(a => a.DrawingItemId != o.Item.Id || a.SubcontractorId != o.Sub))
+            .Where(o => _doneBefore.GetValueOrDefault($"D:{o.Item.Id}:{o.Sub}") < o.Qty)
+            .OrderBy(o => drawings[o.Item.DrawingId].Number).ThenBy(o => o.Item.SortOrder).ToList();
+        if (options.Count == 0)
+        {
+            await DisplayAlertAsync("Drawing work", items.Count == 0 ? "No drawings yet. Add them in the menu › Drawing register." : "Every allocated drawing item is complete or already in this report.", "OK");
+            return null;
+        }
+        var labels = options.Select(o => $"{drawings[o.Item.DrawingId].Number} · {o.Item} – {o.Name} ({PdfReports.N(_doneBefore.GetValueOrDefault($"D:{o.Item.Id}:{o.Sub}"))}/{PdfReports.N(o.Qty)} {o.Item.Unit})").ToArray();
+        var choice = await DisplayActionSheetAsync("Drawing item · agency", "Cancel", null, labels);
+        var i = Array.IndexOf(labels, choice);
+        if (i < 0) return null;
+        var c = options[i];
+        var row = new ReportActivity
+        {
+            DrawingItemId = c.Item.Id, ActivityId = c.Item.ActivityId, ActivityName = $"{drawings[c.Item.DrawingId].Number} / {c.Item}",
+            Unit = c.Item.Unit, PlannedQty = c.Qty, SubcontractorId = c.Sub, SubcontractorName = c.Name,
+        };
+        row.CumulativeQty = DoneBefore(row);
+        return row;
+    }
+
     private async Task<ReportActivity?> AddActivityAsync()
     {
         var a = await PickActivityAsync();
@@ -242,7 +275,7 @@ public class DprEditorPage : ContentPage
         {
             ActivityId = a.Id, ActivityName = a.ToString(), Location = a.Location, Unit = a.Unit, PlannedQty = a.PlannedQty,
             SubcontractorId = a.SubcontractorId, SubcontractorName = _subs.FirstOrDefault(s => s.Id == a.SubcontractorId)?.Name ?? "",
-            CumulativeQty = _doneBefore.GetValueOrDefault(a.Id),
+            CumulativeQty = _doneBefore.GetValueOrDefault("A:" + a.Id),
         };
     }
 
@@ -306,8 +339,8 @@ public class DprEditorPage : ContentPage
                 await AppShell.Push(EntityForms.ActivityForm(new Activity { ProjectId = AppServices.ProjectId }));
             return null;
         }
-        var open = _activities.Where(a => a.PlannedQty <= 0 || _doneBefore.GetValueOrDefault(a.Id) < a.PlannedQty).ToList();
-        var labels = open.Select(a => $"{a} ({PdfReports.N(_doneBefore.GetValueOrDefault(a.Id))}/{PdfReports.N(a.PlannedQty)} {a.Unit})").ToArray();
+        var open = _activities.Where(a => a.PlannedQty <= 0 || _doneBefore.GetValueOrDefault("A:" + a.Id) < a.PlannedQty).ToList();
+        var labels = open.Select(a => $"{a} ({PdfReports.N(_doneBefore.GetValueOrDefault("A:" + a.Id))}/{PdfReports.N(a.PlannedQty)} {a.Unit})").ToArray();
         var choice = await DisplayActionSheetAsync("Activity (not yet 100 %)", "Cancel", null, labels);
         var i = Array.IndexOf(labels, choice);
         return i < 0 ? null : open[i];
@@ -337,7 +370,7 @@ public class DprEditorPage : ContentPage
         var info = Ui.Caption("");
         void Update()
         {
-            a.CumulativeQty = Math.Round((a.ActivityId != "" ? _doneBefore.GetValueOrDefault(a.ActivityId) : 0) + a.TodayQty, 4);
+            a.CumulativeQty = Math.Round(DoneBefore(a) + a.TodayQty, 4);
             var pct = a.PlannedQty > 0 ? a.CumulativeQty / a.PlannedQty * 100 : 0;
             progress.Progress = Math.Min(1, pct / 100);
             progress.ProgressColor = pct >= 100 ? Ui.Success : Ui.Primary;
@@ -354,7 +387,7 @@ public class DprEditorPage : ContentPage
         agency.SelectedItem = subs.FirstOrDefault(s => s.Id == a.SubcontractorId) ?? subs[0];
         agency.SelectedIndexChanged += (_, _) => { if (agency.SelectedItem is Subcontractor s) { a.SubcontractorId = s.Id; a.SubcontractorName = s.Id == "" ? "" : s.Name; Changed(); } };
 
-        View name = a.ActivityId != ""
+        View name = a.ProgressKey != ""
             ? Ui.Label(a.ActivityName, 15, true)
             : Ui.Entry(a.ActivityName, "Unplanned work description", changed: v => { a.ActivityName = v; Changed(); });
         Update();

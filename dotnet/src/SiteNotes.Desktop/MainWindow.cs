@@ -124,6 +124,7 @@ public class MainWindow : Window
         home.Items.Add(Group("Site",
             Large("Dashboard", Glyph.Home, () => Open(new DashboardView())),
             Large("Progress & cost", Glyph.Chart, () => Open(new ActivitiesView())),
+            Large("Drawing register", Glyph.Document, () => Open(new DrawingsView())),
             Large("Hindrances", Glyph.Warning, () => Open(RegisterViews.Hindrances())),
             Large("Requirements", Glyph.Package, () => Open(RegisterViews.Requirements()))));
         home.Items.Add(Group("Notes", Large("Notes", Glyph.Note, () => Open(new NotesView())), Large("Scan to PDF", Glyph.Scan, () => Open(new ScannerView(null)))));
@@ -131,6 +132,7 @@ public class MainWindow : Window
 
         planning.Items.Add(Group("Plan",
             Large("Activities & progress", Glyph.Chart, () => Open(new ActivitiesView())),
+            Large("Drawing register", Glyph.Document, () => Open(new DrawingsView())),
             Large("WBS (plant / unit)", Glyph.Hierarchy, () => Open(new WbsView())),
             Large("Resources & rates", Glyph.Calculator, () => Open(MasterViews.Resources())),
             Large("Work calendar", Glyph.Calendar, () => Open(new CalendarView()))));

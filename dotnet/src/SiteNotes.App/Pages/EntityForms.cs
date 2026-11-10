@@ -281,7 +281,8 @@ public static class EntityForms
             F("Priority", Ui.EnumPicker(r.Priority, v => r.Priority = v)),
             F("Raised by", Ui.Entry(r.RaisedBy, "", changed: v => r.RaisedBy = v)),
             F("Status", Ui.EnumPicker(r.Status, v => r.Status = v))),
-        F("Remarks", Ui.Memo(r.Remarks, "PO no., supplier, follow-up…", v => r.Remarks = v, 50)));
+        F("Remarks", Ui.Memo(r.Remarks, "PO no., supplier, follow-up…", v => r.Remarks = v, 50)),
+        Ui.SectionHeader("Photos & attachments"), new MediaStrip(MediaOwner.Requirement, () => r.Id));
 }
 
 /// <summary>Picker item with an id and a display name.</summary>

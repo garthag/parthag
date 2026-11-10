@@ -64,6 +64,24 @@ public static class SampleData
             new ActivityResource { ProjectId = pid, ActivityId = shut.Id, ResourceId = helper.Id, ResourceName = helper.Name, Type = helper.Type, PlannedQty = 8, Rate = helper.Rate, Basis = helper.Basis },
         });
 
+        // drawing register: steel drawing whose items are split between agencies, one equipment item partly allocated
+        var dwg = new Drawing { ProjectId = pid, Number = "WTP-ST-1001", Title = "Clarifier bridge – structural steel", Revision = "R2", Discipline = "Structural", WbsId = clarifier.Id, IssueDate = t.AddDays(-20) };
+        var dwg2 = new Drawing { ProjectId = pid, Number = "WTP-ME-2001", Title = "Filter house – pumps & piping", Revision = "R0", Discipline = "Mechanical", WbsId = filter.Id, IssueDate = t.AddDays(-10) };
+        await db.SaveAllAsync([dwg, dwg2]);
+        var mainSteel = new DrawingItem { ProjectId = pid, DrawingId = dwg.Id, ItemNo = "1457", Description = "Main steel – bridge girders", Unit = "MT", Qty = 100, SortOrder = 0 };
+        var grating = new DrawingItem { ProjectId = pid, DrawingId = dwg.Id, ItemNo = "1458", Description = "Grating & handrail", Unit = "m²", Qty = 240, SortOrder = 1 };
+        var pumps = new DrawingItem { ProjectId = pid, DrawingId = dwg2.Id, ItemNo = "EQ-01", Description = "Backwash pump set", Kind = DrawingItemKind.Equipment, Unit = "Nos", Qty = 4, SortOrder = 0 };
+        var piping = new DrawingItem { ProjectId = pid, DrawingId = dwg2.Id, ItemNo = "2105", Description = "DI piping 300 mm", Unit = "Rm", Qty = 180, SortOrder = 1 };
+        await db.SaveAllAsync([mainSteel, grating, pumps, piping]);
+        var allocs = new[]
+        {
+            new DrawingAllocation { ProjectId = pid, DrawingId = dwg.Id, DrawingItemId = mainSteel.Id, SubcontractorId = steel.Id, SubcontractorName = steel.Name, AllocatedQty = 60, WorkOrderNo = "WO-114" },
+            new DrawingAllocation { ProjectId = pid, DrawingId = dwg.Id, DrawingItemId = mainSteel.Id, SubcontractorId = formwork.Id, SubcontractorName = formwork.Name, AllocatedQty = 40, WorkOrderNo = "WO-121" },
+            new DrawingAllocation { ProjectId = pid, DrawingId = dwg.Id, DrawingItemId = grating.Id, SubcontractorId = formwork.Id, SubcontractorName = formwork.Name, AllocatedQty = 240 },
+            new DrawingAllocation { ProjectId = pid, DrawingId = dwg2.Id, DrawingItemId = pumps.Id, SubcontractorId = steel.Id, SubcontractorName = steel.Name, AllocatedQty = 2 },
+        };
+        await db.SaveAllAsync(allocs);
+
         var rnd = new Random(7);
         for (var d = -5; d <= -1; d++)
         {
@@ -92,6 +110,10 @@ public static class SampleData
                 b.Hindrances.Add(new Hindrance { ProjectId = pid, FromDate = date, ToDate = date, Category = "Weather", Description = "Rain stopped excavation for 2 hours", ResponsibleParty = "Force majeure", HoursLost = 2, Status = HindranceStatus.Resolved, AffectedActivity = exc.Name });
             if (d == -1)
                 b.Requirements.Add(new Requirement { ProjectId = pid, RaisedDate = date, Item = "Plywood 12 mm for wall shuttering", Quantity = 120, Unit = "Nos", RequiredBy = t.AddDays(2), Priority = Priority.High, RaisedBy = "R. Patil" });
+            // drawing work booked per agency against its allocation
+            b.Activities.Add(new ReportActivity { DrawingItemId = allocs[0].DrawingItemId, ActivityName = $"{dwg.Number} / 1457 Main steel", Unit = "MT", SubcontractorId = allocs[0].SubcontractorId, SubcontractorName = allocs[0].SubcontractorName, TodayQty = 6.5 });
+            if (d >= -3) b.Activities.Add(new ReportActivity { DrawingItemId = allocs[1].DrawingItemId, ActivityName = $"{dwg.Number} / 1457 Main steel", Unit = "MT", SubcontractorId = allocs[1].SubcontractorId, SubcontractorName = allocs[1].SubcontractorName, TodayQty = 4 });
+            if (d == -1) b.Activities.Add(new ReportActivity { DrawingItemId = pumps.Id, ActivityName = $"{dwg2.Number} / EQ-01 Backwash pump set", Unit = "Nos", SubcontractorId = steel.Id, SubcontractorName = steel.Name, TodayQty = 1 });
             b.Report.Remarks = "Work progressing as per plan.";
             b.Report.PlanForTomorrow = "Continue excavation and raft reinforcement; start wall shuttering.";
             await db.SaveReportAsync(b);
