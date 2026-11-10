@@ -25,6 +25,7 @@
 
   <PropertyGroup Condition="'$(Configuration)' == 'Release' And $([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">
     <AndroidPackageFormats>apk</AndroidPackageFormats>
+    <RuntimeIdentifiers>android-arm64;android-x64</RuntimeIdentifiers>
     <AndroidLinkTool>r8</AndroidLinkTool>
   </PropertyGroup>
 

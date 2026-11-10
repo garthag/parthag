@@ -55,8 +55,16 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '10.0.x'
-      - name: WPF screen tests
+      - name: WPF screen tests (also captures every screen)
+        env:
+          SCREENSHOT_DIR: ${{ github.workspace }}\screens-windows
         run: dotnet test dotnet/tests/SiteNotes.Desktop.Tests -c Release
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: screens-windows
+          path: screens-windows
+          if-no-files-found: ignore
       - name: Publish Windows desktop app (WPF)
         run: dotnet publish dotnet/src/SiteNotes.Desktop -c Release -r win-x64 --self-contained -o out/SiteNotes
       - name: Package
@@ -94,6 +102,43 @@ jobs:
           name: sitenotes-android
           path: SiteNotes-android.apk
 
+  android-screens:
+    runs-on: ubuntu-latest
+    needs: android
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - uses: actions/download-artifact@v4
+        with:
+          name: sitenotes-android
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Run app on emulator and capture every screen
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          arch: x86_64
+          target: google_apis
+          profile: pixel_6
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-snapshot
+          script: bash dotnet/tools/android-tour.sh SiteNotes-android.apk screens-android
+      - name: Build PDF of the Android screens
+        env:
+          ANDROID_SHOTS_DIR: ${{ github.workspace }}/screens-android
+        run: dotnet test dotnet/tests/SiteNotes.Core.Tests -c Release --filter AndroidScreensPdf
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: screens-android
+          path: screens-android
+          if-no-files-found: ignore
+
   release:
     if: github.event_name == 'push'
     needs: [windows, android, server]
@@ -117,3 +162,23 @@ jobs:
             SiteNotes-windows.zip
             SiteNotesServer-windows.zip
             SiteNotesServer-linux.zip
+
+  publish-screens:
+    if: github.event_name == 'push' && always() && needs.release.result == 'success'
+    needs: [release, android-screens]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: screens-*
+          path: screens
+      - name: Collect PDFs and pictures
+        run: |
+          mkdir -p out
+          find screens -name '*.pdf' -exec cp {} out/ \;
+          (cd screens && zip -qr ../out/SiteNotes-Screens.zip . -i '*.png' '*.pdf')
+          ls -la out
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: sitenotes-${{ github.run_number }}
+          files: out/*

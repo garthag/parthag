@@ -256,3 +256,56 @@ public class SampleOutput
             PdfReports.Note(fs, new Note { Title = "Inspection notes", Tags = "QA, slab" }, blocks, "Inspections", id => bundle.Media.FirstOrDefault(m => m.Id == id), db.MediaPath);
     }
 }
+
+/// <summary>Builds the Android screens PDF from the emulator screenshots (CI, when ANDROID_SHOTS_DIR is set).</summary>
+public class AndroidScreensPdf
+{
+    private static readonly Dictionary<string, string> Titles = new()
+    {
+        ["dashboard"] = "Dashboard – project, quick actions, key figures, 14-day manpower",
+        ["menu"] = "Side menu – every module",
+        ["daily-reports"] = "Daily reports – search, period & status chips, sort, select for bulk actions",
+        ["dpr-editor"] = "Daily progress report – live totals, sections, today's quantity → progress auto",
+        ["progress-cost"] = "Progress & cost – overall %, activity cards with forecast and cost",
+        ["activities"] = "Activities",
+        ["activity-form"] = "Activity – WBS, method, agency, schedule, calculated progress panel, resources",
+        ["wbs"] = "WBS – plant / unit / area",
+        ["resources-rates"] = "Resources & rates",
+        ["work-calendar"] = "Work calendar",
+        ["hindrance-register"] = "Hindrance register",
+        ["requirement-register"] = "Requirement register",
+        ["notes"] = "Notes & scans – folders, pinned notes, scans",
+        ["note-editor"] = "Note editor – formatting toolbox, checklist, bullets, numbering, arrows",
+        ["scanner"] = "Scan to PDF – pages, filter, rotate, reorder, remarks",
+        ["report-manager"] = "Report manager – report, days, sections & order, header/footer, page numbers",
+        ["subcontractors"] = "Subcontractors",
+        ["projects"] = "Projects",
+        ["settings"] = "Settings & real-time sync",
+    };
+
+    [Fact]
+    public void Build_when_requested()
+    {
+        var dir = Environment.GetEnvironmentVariable("ANDROID_SHOTS_DIR");
+        if (string.IsNullOrEmpty(dir) || !Directory.Exists(dir)) return;
+        var shots = Directory.GetFiles(dir, "*.png").OrderBy(f => f).ToList();
+        Assert.NotEmpty(shots);
+        using var fs = File.Create(Path.Combine(dir, "SiteNotes-Android-Screens.pdf"));
+        PdfDoc.Render(fs, "SiteNotes DPR – Android app", "All screens", false, new PdfLayout { PageNumbers = PageNumberStyle.PageNofTotal, FooterText = "Captured on an Android emulator from the real app with the sample project" }, pdf =>
+        {
+            pdf.NewPage();
+            pdf.Text("SiteNotes DPR – Android screens", 20, bold: true, color: PdfDoc.Accent, spacingAfter: 8);
+            pdf.Text("Captured from the real Android app (emulator) with the built-in sample project.", 10, color: PdfDoc.Muted, spacingAfter: 10);
+            for (var i = 0; i < shots.Count; i += 2)
+            {
+                pdf.NewPage();
+                var pair = shots.Skip(i).Take(2).Select(f =>
+                {
+                    var key = string.Join('-', Path.GetFileNameWithoutExtension(f).Split('-').Skip(1));
+                    return (f, Titles.GetValueOrDefault(key, key));
+                });
+                pdf.ImageGrid(pair, 2, 640);
+            }
+        });
+    }
+}

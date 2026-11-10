@@ -259,7 +259,7 @@ public class ActivitiesView : ViewBase
             .Date("Plan finish", "A.PlannedFinish")
             .Number("Output / day (plan)", "A.PlannedRatePerDay", 100)
             .Number("Avg / day (actual)", nameof(ActivityRow.AvgPerDay), 100, readOnly: true)
-            .Date("Forecast finish", nameof(ActivityRow.Forecast))
+            .Date("Forecast finish", nameof(ActivityRow.Forecast), readOnly: true)
             .Status("Status", nameof(ActivityRow.State), 95)
             .Number("Cost", nameof(ActivityRow.Cost), 100, "#,0.00", readOnly: true)
             .Number("Cost / unit", nameof(ActivityRow.CostPerUnit), 90, "#,0.00", readOnly: true)
@@ -269,7 +269,6 @@ public class ActivitiesView : ViewBase
             .Text("Location", "A.Location", 120);
         _grid = gb.OnEdited(async o => await Dialogs.Guard(() => SaveAsync((ActivityRow)o))).Grid;
         _grid.FrozenColumnCount = 2;
-        foreach (var c in _grid.Columns.Where(c => c.Header is "Forecast finish")) c.IsReadOnly = true;
         _grid.SelectionChanged += (_, _) => ShowDetail();
         _grid.GroupStyle.Add(new GroupStyle { HeaderTemplate = GroupHeader() });
 

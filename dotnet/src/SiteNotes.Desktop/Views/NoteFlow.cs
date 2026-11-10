@@ -183,9 +183,25 @@ public static class NoteFlow
         }
     }
 
+    /// <summary>The paragraph's own text (a TextRange would also include the list bullet "•\t").</summary>
+    public static string InlineText(InlineCollection inlines)
+    {
+        var sb = new System.Text.StringBuilder();
+        foreach (var i in inlines)
+        {
+            switch (i)
+            {
+                case Run r: sb.Append(r.Text); break;
+                case LineBreak: sb.Append('\n'); break;
+                case Span s: sb.Append(InlineText(s.Inlines)); break;
+            }
+        }
+        return sb.ToString();
+    }
+
     private static NoteBlock FromParagraph(Paragraph p, int indent)
     {
-        var text = new TextRange(p.ContentStart, p.ContentEnd).Text.TrimEnd('\r', '\n');
+        var text = InlineText(p.Inlines).TrimEnd('\r', '\n');
         var first = p.Inlines.FirstInline as Run;
         double size = first?.ReadLocalValue(TextElement.FontSizeProperty) is double fs ? fs : p.FontSize;
         var weight = first?.ReadLocalValue(TextElement.FontWeightProperty) is FontWeight fw ? fw : p.FontWeight;

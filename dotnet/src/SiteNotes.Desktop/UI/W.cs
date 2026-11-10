@@ -232,9 +232,11 @@ public record Pick(string Id, string Name)
 public class GridBuilder
 {
     public DataGrid Grid { get; }
+    private readonly bool _editable;
 
     public GridBuilder(IEnumerable items, bool editable = true, bool multiSelect = true)
     {
+        _editable = editable;
         Grid = new DataGrid
         {
             ItemsSource = items, IsReadOnly = !editable, CanUserAddRows = false, CanUserDeleteRows = false,
@@ -253,6 +255,7 @@ public class GridBuilder
 
     public GridBuilder Text(string header, string path, double width = 0, bool readOnly = false, bool wrap = false)
     {
+        readOnly |= !_editable; // read-only grids never write back (computed properties have no setter)
         var col = new DataGridTextColumn { Header = header, Binding = readOnly ? new Binding(path) { Mode = BindingMode.OneWay } : Bind(path), Width = Len(width), IsReadOnly = readOnly };
         if (wrap) col.ElementStyle = new Style(typeof(TextBlock)) { Setters = { new Setter(TextBlock.TextWrappingProperty, TextWrapping.Wrap) } };
         Grid.Columns.Add(col);
@@ -261,6 +264,7 @@ public class GridBuilder
 
     public GridBuilder Number(string header, string path, double width = 80, string format = "#,0.###", bool readOnly = false)
     {
+        readOnly |= !_editable;
         var right = new Style(typeof(TextBlock)) { Setters = { new Setter(TextBlock.TextAlignmentProperty, TextAlignment.Right), new Setter(FrameworkElement.MarginProperty, new Thickness(0, 0, 4, 0)) } };
         Grid.Columns.Add(new DataGridTextColumn
         {
@@ -297,7 +301,7 @@ public class GridBuilder
     public GridBuilder Suggest(string header, string path, IEnumerable<string> options, double width = 140)
     {
         var display = new FrameworkElementFactory(typeof(TextBlock));
-        display.SetBinding(TextBlock.TextProperty, new Binding(path));
+        display.SetBinding(TextBlock.TextProperty, new Binding(path) { Mode = BindingMode.OneWay });
         display.SetValue(FrameworkElement.MarginProperty, new Thickness(4, 0, 4, 0));
         display.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Center);
         var edit = new FrameworkElementFactory(typeof(ComboBox));
@@ -313,19 +317,20 @@ public class GridBuilder
         return this;
     }
 
-    public GridBuilder Date(string header, string path, double width = 115)
+    public GridBuilder Date(string header, string path, double width = 115, bool readOnly = false)
     {
+        readOnly |= !_editable;
         var display = new FrameworkElementFactory(typeof(TextBlock));
-        display.SetBinding(TextBlock.TextProperty, new Binding(path) { StringFormat = "dd-MMM-yyyy" });
+        display.SetBinding(TextBlock.TextProperty, new Binding(path) { Mode = BindingMode.OneWay, StringFormat = "dd-MMM-yyyy" });
         display.SetValue(FrameworkElement.MarginProperty, new Thickness(4, 0, 4, 0));
         display.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Center);
         var edit = new FrameworkElementFactory(typeof(DatePicker));
         edit.SetBinding(DatePicker.SelectedDateProperty, new Binding(path) { Mode = BindingMode.TwoWay, UpdateSourceTrigger = UpdateSourceTrigger.PropertyChanged });
         Grid.Columns.Add(new DataGridTemplateColumn
         {
-            Header = header, Width = Len(width), SortMemberPath = path,
+            Header = header, Width = Len(width), SortMemberPath = path, IsReadOnly = readOnly,
             CellTemplate = new DataTemplate { VisualTree = display },
-            CellEditingTemplate = new DataTemplate { VisualTree = edit },
+            CellEditingTemplate = readOnly ? null : new DataTemplate { VisualTree = edit },
         });
         return this;
     }

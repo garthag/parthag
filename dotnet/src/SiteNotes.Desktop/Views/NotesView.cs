@@ -296,7 +296,7 @@ public class NotesView : ViewBase, ISaveable, IPrintable
     private static FlowDocument WrapCopy(Paragraph p)
     {
         var d = new FlowDocument();
-        var copy = new Paragraph(new Run(new TextRange(p.ContentStart, p.ContentEnd).Text))
+        var copy = new Paragraph(new Run(NoteFlow.InlineText(p.Inlines)))
         {
             FontSize = p.FontSize, FontWeight = p.FontWeight, FontStyle = p.FontStyle, FontFamily = p.FontFamily, Foreground = p.Foreground,
             Background = p.Background, TextAlignment = p.TextAlignment, TextDecorations = p.TextDecorations, BorderThickness = p.BorderThickness, Margin = p.Margin,
@@ -348,7 +348,7 @@ public class NotesView : ViewBase, ISaveable, IPrintable
         if (e.Key != System.Windows.Input.Key.Enter || Keyboard.Modifiers != ModifierKeys.None) return;
         var p = _editor.CaretPosition.Paragraph;
         if (p == null) return;
-        var text = new TextRange(p.ContentStart, p.ContentEnd).Text;
+        var text = NoteFlow.InlineText(p.Inlines);
         var prefix = text.StartsWith(NoteFlow.Unchecked) || text.StartsWith(NoteFlow.Checked) ? NoteFlow.Unchecked : text.StartsWith(NoteFlow.Arrow) ? NoteFlow.Arrow : null;
         if (prefix == null) return;
         if (text.Trim().Length <= 1)
@@ -364,7 +364,7 @@ public class NotesView : ViewBase, ISaveable, IPrintable
         {
             var np = _editor.CaretPosition.Paragraph;
             if (np == null || np == p) return;
-            var nt = new TextRange(np.ContentStart, np.ContentEnd).Text;
+            var nt = NoteFlow.InlineText(np.Inlines);
             if (nt.StartsWith(NoteFlow.Unchecked) || nt.StartsWith(NoteFlow.Checked) || nt.StartsWith(NoteFlow.Arrow)) return;
             np.ContentStart.InsertTextInRun(prefix);
             var b = new NoteBlock { Type = prefix == NoteFlow.Arrow ? BlockType.Arrow : BlockType.Checklist };

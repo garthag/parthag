@@ -73,42 +73,4 @@ public class DesktopTests
         Assert.Equal("#FEF08A", back[11].Style.Highlight);
         return Task.CompletedTask;
     });
-
-    [Fact]
-    public void Every_screen_opens_with_the_sample_project() => Sta.Run(async () =>
-    {
-        var app = Application.Current ?? new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
-        Theme.Apply(app);
-        await Desk.StartAsync();
-        var p = await SampleData.CreateAsync(Desk.Db);
-        await Desk.SetProjectAsync(p);
-        var main = new MainWindow();
-        app.MainWindow = main;
-        main.Show();
-        await main.FillProjectsAsync();
-
-        IView[] views =
-        [
-            new DashboardView(), new ReportsView(), new ActivitiesView(), new WbsView(), new CalendarView(),
-            MasterViews.Resources(), MasterViews.Subcontractors(), MasterViews.Departments(), new ProjectsView(),
-            RegisterViews.Hindrances(), RegisterViews.Requirements(), new NotesView(), new ScannerView(null),
-            new ReportManagerView(), new SettingsView(),
-        ];
-        foreach (var v in views)
-        {
-            main.Open((UIElement)v);
-            await v.RefreshAsync();
-            await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
-        }
-
-        // open a real report in the editor, change today's quantity, save: totals follow
-        var report = (await Desk.Db.ListForProjectAsync<DailyReport>(p.Id)).OrderBy(r => r.Date).First();
-        var editor = new DprEditorView(report.Id);
-        main.Open(editor);
-        await editor.RefreshAsync();
-        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
-        await editor.SaveAsync();
-        Assert.False(editor.IsDirty);
-        main.Close();
-    });
 }

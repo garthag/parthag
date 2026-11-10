@@ -70,5 +70,6 @@ public class LoadingPage : ContentPage
         await AppServices.StartAsync();
         SyncBadge.Attach();
         if (Window != null) Window.Page = new AppShell();
+        if (Tour.Enabled) _ = Task.Run(Tour.RunAsync);
     }
 }
