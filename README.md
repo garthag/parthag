@@ -20,9 +20,17 @@ Everything is **C# (.NET 10)**:
 ```
 Changes on any PC or phone appear on all others within a few seconds.
 
+**Windows (WPF)**
+
 | Report review | Site photos | Gantt chart |
 |---|---|---|
 | ![](docs/screenshots/windows-dpr-review.png) | ![](docs/screenshots/windows-dpr-photos.png) | ![](docs/screenshots/windows-gantt.png) |
+
+**Android (.NET MAUI)**
+
+| Home | Report review | Schedule |
+|---|---|---|
+| <img src="docs/screenshots/android-home.png" width="260"> | <img src="docs/screenshots/android-report-review.png" width="260"> | <img src="docs/screenshots/android-schedule.png" width="260"> |
 
 ## Get started
 
