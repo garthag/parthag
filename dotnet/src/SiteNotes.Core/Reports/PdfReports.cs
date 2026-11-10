@@ -251,7 +251,7 @@ public static class PdfReports
 
     private static void HindranceTable(PdfDoc pdf, IEnumerable<Hindrance> list) =>
         pdf.Table([
-                new("No.", 0.5f), new("From", 1.1f), new("To", 1.1f), new("Category", 1.4f), new("Description", 3),
+                new("No.", 0.5f), new("From", 1.35f), new("To", 1.35f), new("Category", 1.3f), new("Description", 2.8f),
                 new("Responsible", 1.3f), new("Hrs lost", 0.8f, true), new("Status", 0.9f), new("Action taken", 2.2f)
             ],
             list.OrderBy(h => h.SerialNo).Select(h => new[]
@@ -263,8 +263,8 @@ public static class PdfReports
 
     private static void RequirementTable(PdfDoc pdf, IEnumerable<Requirement> list) =>
         pdf.Table([
-                new("No.", 0.5f), new("Raised", 1.1f), new("Category", 1.2f), new("Item / description", 3),
-                new("Qty", 0.8f, true), new("Unit", 0.6f), new("Required by", 1.1f), new("Priority", 0.9f),
+                new("No.", 0.5f), new("Raised", 1.35f), new("Category", 1.1f), new("Item / description", 2.8f),
+                new("Qty", 0.7f, true), new("Unit", 0.6f), new("Required by", 1.35f), new("Priority", 0.9f),
                 new("Status", 1), new("Remarks", 1.8f)
             ],
             list.OrderBy(q => q.SerialNo).Select(q => new[]
