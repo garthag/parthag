@@ -96,7 +96,8 @@ public partial class MainWindow : Window
                 waiting = (await AppState.Api.DprsAsync(AppState.Pid)).Count(d => d.Status == ConstructDpr.Shared.Model.DprStatus.Submitted);
         }
         catch (Exception ex) when (ex is HttpRequestException or UnauthorizedAccessException or NotFoundException or InvalidOperationException) { }
-        item.Content = waiting > 0 ? $"✎   Daily reports   ● {waiting} to approve" : "✎   Daily reports";
+        item.Content = waiting > 0 ? $"✎   Daily reports  ● {waiting}" : "✎   Daily reports";
+        item.ToolTip = waiting > 0 ? $"{waiting} report(s) waiting for your approval" : null;
     }
 
     private async void OnProjectPicked(object sender, SelectionChangedEventArgs e)

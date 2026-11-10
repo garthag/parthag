@@ -59,9 +59,18 @@ public sealed class SCurveChart : FrameworkElement
         {
             var last = actual[^1];
             dc.DrawEllipse(Actual.Brush, null, new Point(X(last.Date), Y(last.Actual!.Value)), 4, 4);
-            Text(dc, $"{last.Actual:0.0}% actual", X(last.Date) + 7, Y(last.Actual.Value) - 18, dip, Actual.Brush);
             var planNow = pts.LastOrDefault(c => c.Date <= last.Date);
-            if (planNow is not null) Text(dc, $"{planNow.Planned:0.0}% planned", X(last.Date) + 7, Y(planNow.Planned) - 4, dip, Planned.Brush);
+            var yActual = Y(last.Actual.Value);
+            var yPlan = planNow is null ? double.NaN : Y(planNow.Planned);
+            // Keep the two labels apart: the lower curve's label goes below its line, the higher one above.
+            double actualLabel = yActual - 18, planLabel = yPlan - 18;
+            if (planNow is not null && Math.Abs(yActual - yPlan) < 30)
+            {
+                if (yActual >= yPlan) { actualLabel = yActual + 4; planLabel = yPlan - 18; }
+                else { planLabel = yPlan + 4; actualLabel = yActual - 18; }
+            }
+            Text(dc, $"{last.Actual:0.0}% actual", X(last.Date) + 7, actualLabel, dip, Actual.Brush);
+            if (planNow is not null) Text(dc, $"{planNow.Planned:0.0}% planned", X(last.Date) + 7, planLabel, dip, Planned.Brush);
         }
 
         // Legend
