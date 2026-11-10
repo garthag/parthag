@@ -58,9 +58,10 @@ public class ScannerView : ViewBase, IPrintable
             _doc = d;
             _folderId = d.FolderId;
             _filter = d.Filter;
-            _pages.Clear();
-            foreach (var p in await new ScanService(Desk.Db, RawFolder).LoadPagesAsync(d)) _pages.Add(new PageVm { Input = p, Preview = p.RawPath });
-            await PreviewAllAsync();
+            var loaded = (await new ScanService(Desk.Db, RawFolder).LoadPagesAsync(d)).Select(p => new PageVm { Input = p, Preview = p.RawPath }).ToList();
+            await Parallel.ForEachAsync(loaded, async (p, _) => await PreviewAsync(p));
+            _pages.Clear();                       // swap in one go: a second refresh can never see a half-filled list
+            foreach (var p in loaded) _pages.Add(p);
         }
         else _doc = new ScanDocument { ProjectId = Desk.ProjectId, FolderId = _folderId };
         _title.Text = _doc.Title;
@@ -111,7 +112,7 @@ public class ScannerView : ViewBase, IPrintable
         return Task.Run(() => { if (ScanProcessor.Process(p.Input.RawPath, dest, filter, p.Input.Rotation, 900)) p.Preview = dest; });
     }
 
-    private Task PreviewAllAsync() => Parallel.ForEachAsync(_pages, async (p, _) => await PreviewAsync(p));
+    private Task PreviewAllAsync() => Parallel.ForEachAsync(_pages.ToList(), async (p, _) => await PreviewAsync(p));
 
     private void Render()
     {

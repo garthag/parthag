@@ -109,3 +109,50 @@ public class ReportProfile : SyncEntity
     public string Name { get; set; } = "Default";
     public string OptionsJson { get; set; } = "";
 }
+
+public enum DrawingStatus { Issued, ForConstruction, Revised, Superseded, Cancelled }
+
+public enum DrawingItemKind { BoqItem, Equipment, Part }
+
+/// <summary>Drawing register entry (GFC / construction drawing).</summary>
+public class Drawing : SyncEntity
+{
+    public string Number { get; set; } = "";
+    public string Title { get; set; } = "";
+    public string Revision { get; set; } = "R0";
+    public string Discipline { get; set; } = "Civil";
+    public string WbsId { get; set; } = "";
+    public DrawingStatus Status { get; set; } = DrawingStatus.ForConstruction;
+    public DateTime? IssueDate { get; set; }
+    public string Remarks { get; set; } = "";
+    public override string ToString() => string.IsNullOrWhiteSpace(Title) ? $"{Number} {Revision}" : $"{Number} {Revision} – {Title}";
+}
+
+/// <summary>A BOQ item, equipment or part shown on a drawing, with its total quantity (e.g. item 1457: 100 MT).</summary>
+public class DrawingItem : SyncEntity
+{
+    [Indexed] public string DrawingId { get; set; } = "";
+    public string ItemNo { get; set; } = "";
+    public string Description { get; set; } = "";
+    public DrawingItemKind Kind { get; set; } = DrawingItemKind.BoqItem;
+    public string Unit { get; set; } = "MT";
+    public double Qty { get; set; }
+    /// <summary>Optional: progress on this item also counts for this planned activity.</summary>
+    public string ActivityId { get; set; } = "";
+    public string Remarks { get; set; } = "";
+    public int SortOrder { get; set; }
+    public override string ToString() => string.IsNullOrWhiteSpace(ItemNo) ? Description : $"{ItemNo} {Description}";
+}
+
+/// <summary>Part of a drawing item given to one agency (an item can be split between several agencies).</summary>
+public class DrawingAllocation : SyncEntity
+{
+    [Indexed] public string DrawingItemId { get; set; } = "";
+    public string DrawingId { get; set; } = "";
+    public string SubcontractorId { get; set; } = "";
+    public string SubcontractorName { get; set; } = "";
+    public double AllocatedQty { get; set; }
+    public DateTime AllocatedOn { get; set; } = DateTime.Today;
+    public string WorkOrderNo { get; set; } = "";
+    public string Remarks { get; set; } = "";
+}

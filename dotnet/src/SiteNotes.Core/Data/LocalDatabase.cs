@@ -28,8 +28,11 @@ public sealed class LocalDatabase
         Directory.CreateDirectory(dataFolder);
         MediaFolder = Path.Combine(dataFolder, "media");
         Directory.CreateDirectory(MediaFolder);
+        // No FullMutex / SharedCache: then sqlite-net serialises every read and write on the connection itself.
+        // (With FullMutex it skips that lock, and a background sync writing while a screen reads could make the
+        // read return a row twice – found by the heavy demo.)
         _db = new SQLiteAsyncConnection(Path.Combine(dataFolder, "sitenotes.db3"),
-            SQLiteOpenFlags.ReadWrite | SQLiteOpenFlags.Create | SQLiteOpenFlags.FullMutex);
+            SQLiteOpenFlags.ReadWrite | SQLiteOpenFlags.Create);
     }
 
     public SQLiteAsyncConnection Connection => _db;
@@ -164,12 +167,13 @@ public sealed class LocalDatabase
         var rank = order.Select((id, i) => (id, i)).ToDictionary(x => x.id, x => x.i);
         var running = new Dictionary<string, double>();
         var cumulative = new Dictionary<string, double>(); // row id -> cumulative
-        foreach (var row in allActs.Where(a => a.ActivityId != "" && rank.ContainsKey(a.ReportId))
+        foreach (var row in allActs.Where(a => a.ProgressKey != "" && rank.ContainsKey(a.ReportId))
                      .GroupBy(a => a.ReportId).OrderBy(g => rank[g.Key]).SelectMany(g => g))
         {
-            running[row.ActivityId] = running.GetValueOrDefault(row.ActivityId) + row.TodayQty;
-            cumulative[row.Id] = running[row.ActivityId];
+            running[row.ProgressKey] = running.GetValueOrDefault(row.ProgressKey) + row.TodayQty;
+            cumulative[row.Id] = running[row.ProgressKey];
         }
+        var drawingPlan = await DrawingPlanAsync(projectId);
 
         var list = new List<DprBundle>(reports.Count);
         foreach (var r in reports)
@@ -185,11 +189,16 @@ public sealed class LocalDatabase
                 Requirements = rq[r.Id].ToList(),
                 Media = md[r.Id].OrderBy(x => x.CapturedAtUtc).ToList(),
             };
-            // all rows of the same activity in one report share the report's final cumulative
-            foreach (var a in b.Activities.Where(a => a.ActivityId != ""))
+            // all rows of the same activity / drawing item+agency in one report share the report's final cumulative
+            foreach (var a in b.Activities.Where(a => a.ProgressKey != ""))
             {
-                a.CumulativeQty = Math.Round(b.Activities.Where(x => x.ActivityId == a.ActivityId).Select(x => cumulative.GetValueOrDefault(x.Id)).Max(), 4);
-                if (master.TryGetValue(a.ActivityId, out var m)) { a.PlannedQty = m.PlannedQty; a.Unit = m.Unit; }
+                a.CumulativeQty = Math.Round(b.Activities.Where(x => x.ProgressKey == a.ProgressKey).Select(x => cumulative.GetValueOrDefault(x.Id)).Max(), 4);
+                if (a.DrawingItemId != "" && drawingPlan.TryGetValue(a.DrawingItemId, out var item))
+                {
+                    a.PlannedQty = item.Allocations.GetValueOrDefault(a.SubcontractorId, item.Qty);
+                    a.Unit = item.Unit;
+                }
+                else if (master.TryGetValue(a.ActivityId, out var m)) { a.PlannedQty = m.PlannedQty; a.Unit = m.Unit; }
             }
             list.Add(b);
         }
@@ -276,27 +285,44 @@ public sealed class LocalDatabase
     /// Planned quantity and unit come from the activity master, so the report always matches it.</summary>
     public async Task RefreshCumulativeAsync(DprBundle b)
     {
-        var linked = b.Activities.Where(a => a.ActivityId != "").ToList();
+        var linked = b.Activities.Where(a => a.ProgressKey != "").ToList();
         if (linked.Count == 0) return;
         var r = b.Report;
         var earlier = (await ListForProjectAsync<DailyReport>(r.ProjectId))
             .Where(x => x.Id != r.Id && (x.Date.Date < r.Date.Date || (x.Date.Date == r.Date.Date && x.ReportNo < r.ReportNo)))
             .Select(x => x.Id).ToHashSet();
-        var ids = linked.Select(a => a.ActivityId).ToHashSet();
+        var keys = linked.Select(a => a.ProgressKey).ToHashSet();
         var before = (await ListForProjectAsync<ReportActivity>(r.ProjectId))
-            .Where(x => ids.Contains(x.ActivityId) && earlier.Contains(x.ReportId))
-            .GroupBy(x => x.ActivityId).ToDictionary(g => g.Key, g => g.Sum(x => x.TodayQty));
+            .Where(x => earlier.Contains(x.ReportId) && keys.Contains(x.ProgressKey))
+            .GroupBy(x => x.ProgressKey).ToDictionary(g => g.Key, g => g.Sum(x => x.TodayQty));
         var master = (await ListForProjectAsync<Activity>(r.ProjectId)).ToDictionary(a => a.Id);
+        var plan = await DrawingPlanAsync(r.ProjectId);
         foreach (var a in linked)
         {
-            a.CumulativeQty = Math.Round(before.GetValueOrDefault(a.ActivityId) + b.Activities.Where(x => x.ActivityId == a.ActivityId).Sum(x => x.TodayQty), 4);
-            if (master.TryGetValue(a.ActivityId, out var m))
+            a.CumulativeQty = Math.Round(before.GetValueOrDefault(a.ProgressKey) + b.Activities.Where(x => x.ProgressKey == a.ProgressKey).Sum(x => x.TodayQty), 4);
+            if (a.DrawingItemId != "" && plan.TryGetValue(a.DrawingItemId, out var item))
+            {
+                // planned for this agency = its allocation (or the whole item if nothing is allocated to it)
+                a.PlannedQty = item.Allocations.GetValueOrDefault(a.SubcontractorId, item.Qty);
+                a.Unit = item.Unit;
+            }
+            else if (master.TryGetValue(a.ActivityId, out var m))
             {
                 a.PlannedQty = m.PlannedQty;
                 a.Unit = m.Unit;
                 if (string.IsNullOrWhiteSpace(a.ActivityName)) a.ActivityName = m.ToString();
             }
         }
+    }
+
+    /// <summary>Drawing item quantity, unit and allocated quantity per agency.</summary>
+    public async Task<Dictionary<string, (double Qty, string Unit, Dictionary<string, double> Allocations)>> DrawingPlanAsync(string projectId)
+    {
+        var items = await ListForProjectAsync<DrawingItem>(projectId);
+        if (items.Count == 0) return [];
+        var allocs = (await ListForProjectAsync<DrawingAllocation>(projectId)).ToLookup(x => x.DrawingItemId);
+        return items.ToDictionary(i => i.Id, i => (i.Qty, i.Unit,
+            allocs[i.Id].GroupBy(x => x.SubcontractorId).ToDictionary(g => g.Key, g => g.Sum(x => x.AllocatedQty))));
     }
 
     private async Task AssignSerialsAsync(string projectId, List<Hindrance> hs, List<Requirement> rs)
@@ -364,7 +390,7 @@ public sealed class LocalDatabase
         {
             ActivityId = a.ActivityId, ActivityName = a.ActivityName, Location = a.Location, Unit = a.Unit,
             PlannedQty = a.PlannedQty, CumulativeQty = a.CumulativeQty, SubcontractorId = a.SubcontractorId,
-            SubcontractorName = a.SubcontractorName,
+            SubcontractorName = a.SubcontractorName, DrawingItemId = a.DrawingItemId,
         }).Where(a => a.PlannedQty <= 0 || a.CumulativeQty < a.PlannedQty).ToList();
         AddRunning();
         var open = b.Activities.Select(a => a.ActivityId).ToHashSet();

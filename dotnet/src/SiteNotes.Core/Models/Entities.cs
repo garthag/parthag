@@ -116,6 +116,8 @@ public class ReportActivity : SyncEntity
 {
     [Indexed] public string ReportId { get; set; } = "";
     public string ActivityId { get; set; } = "";
+    /// <summary>Work done against a drawing item (BOQ / equipment / part); counted for the agency in SubcontractorId.</summary>
+    [Indexed] public string DrawingItemId { get; set; } = "";
     public string ActivityName { get; set; } = "";
     public string Location { get; set; } = "";
     public string Unit { get; set; } = "Nos";
@@ -129,6 +131,10 @@ public class ReportActivity : SyncEntity
 
     [JsonIgnore, Ignore]
     public double PercentComplete => PlannedQty <= 0 ? 0 : Math.Round(CumulativeQty / PlannedQty * 100, 1);
+
+    /// <summary>What "to date" adds up over: the drawing item for this agency, or else the activity.</summary>
+    [JsonIgnore, Ignore]
+    public string ProgressKey => DrawingItemId != "" ? $"D:{DrawingItemId}:{SubcontractorId}" : ActivityId != "" ? "A:" + ActivityId : "";
 }
 
 public class ReportManpower : SyncEntity

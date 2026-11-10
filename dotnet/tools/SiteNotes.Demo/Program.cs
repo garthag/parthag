@@ -67,6 +67,9 @@ await Demo.EditHistoryAsync(office, big, log);
 await Demo.EditHistoryAsync(phoneA, hosp, log);
 log.Time("Edit / delete earlier reports", sw);
 
+// concurrency: writes and reads on the same database at the same time (like a background sync while a screen loads)
+await Verify.ConcurrencyAsync(office, big, log);
+
 // ---------- 2. verify every project on its own device ----------
 foreach (var (db, p) in new[] { (office, big), (phoneA, hosp), (phoneB, sample) })
     await Verify.ProjectAsync(db, p, log);
@@ -241,6 +244,55 @@ static class Demo
         await db.SaveAllAsync(wbs);
         await db.SaveAllAsync(activities);
         await db.SaveAllAsync(plan);
+        // drawing register: each area has a GFC drawing with BOQ items / equipment / parts; items are allocated
+        // to one agency, split between two or three agencies, or only partly allocated
+        var drawings = new List<Drawing>();
+        var dItems = new List<DrawingItem>();
+        var dAllocs = new List<DrawingAllocation>();
+        foreach (var area in wbs.Where(w => w.Level == WbsLevel.Area).Take(Math.Max(4, s.Plants * 2)))
+        {
+            var dwg = new Drawing { ProjectId = p.Id, Number = $"DWG-{area.Code}-S-{drawings.Count + 101}", Title = $"Structural steel & equipment – {area.Name}", Revision = "R1", WbsId = area.Id, IssueDate = start.AddDays(drawings.Count * 9), Discipline = "Structural" };
+            drawings.Add(dwg);
+            var its = new (string No, string Desc, DrawingItemKind Kind, string Unit, double Qty)[]
+            {
+                ($"{1450 + drawings.Count}", "Main steel – columns & beams", DrawingItemKind.BoqItem, "MT", 100),
+                ($"{1460 + drawings.Count}", "Secondary steel – bracings", DrawingItemKind.Part, "MT", 35),
+                ($"{1470 + drawings.Count}", "Grating & handrail", DrawingItemKind.BoqItem, "m²", 420),
+                ($"EQ-{drawings.Count:00}", "Pump set with motor", DrawingItemKind.Equipment, "Nos", 4),
+            };
+            var order = 0;
+            foreach (var (no, desc, kind, unit, qty) in its)
+            {
+                var item = new DrawingItem { ProjectId = p.Id, DrawingId = dwg.Id, ItemNo = no, Description = desc, Kind = kind, Unit = unit, Qty = qty, SortOrder = order++ };
+                dItems.Add(item);
+                var a = subs[rnd.Next(subs.Count)];
+                var b2 = subs[(subs.IndexOf(a) + 1) % subs.Count];
+                var c3 = subs[(subs.IndexOf(a) + 2) % subs.Count];
+                switch (order % 4)
+                {
+                    case 1: // split: 60 % / 40 %
+                        dAllocs.Add(new DrawingAllocation { ProjectId = p.Id, DrawingId = dwg.Id, DrawingItemId = item.Id, SubcontractorId = a.Id, SubcontractorName = a.Name, AllocatedQty = Math.Round(qty * 0.6, 2), WorkOrderNo = $"WO-{rnd.Next(100, 999)}" });
+                        dAllocs.Add(new DrawingAllocation { ProjectId = p.Id, DrawingId = dwg.Id, DrawingItemId = item.Id, SubcontractorId = b2.Id, SubcontractorName = b2.Name, AllocatedQty = Math.Round(qty * 0.4, 2), WorkOrderNo = $"WO-{rnd.Next(100, 999)}" });
+                        break;
+                    case 2: // single agency
+                        dAllocs.Add(new DrawingAllocation { ProjectId = p.Id, DrawingId = dwg.Id, DrawingItemId = item.Id, SubcontractorId = a.Id, SubcontractorName = a.Name, AllocatedQty = qty });
+                        break;
+                    case 3: // three agencies, 20 % not yet allocated
+                        foreach (var (x, f) in new[] { (a, 0.3), (b2, 0.3), (c3, 0.2) })
+                            dAllocs.Add(new DrawingAllocation { ProjectId = p.Id, DrawingId = dwg.Id, DrawingItemId = item.Id, SubcontractorId = x.Id, SubcontractorName = x.Name, AllocatedQty = Math.Round(qty * f, 2) });
+                        break;
+                    default: // equipment: one per agency of two, rest unallocated
+                        dAllocs.Add(new DrawingAllocation { ProjectId = p.Id, DrawingId = dwg.Id, DrawingItemId = item.Id, SubcontractorId = a.Id, SubcontractorName = a.Name, AllocatedQty = 2 });
+                        break;
+                }
+            }
+        }
+        await db.SaveAllAsync(drawings);
+        await db.SaveAllAsync(dItems);
+        await db.SaveAllAsync(dAllocs);
+        var drawingWindow = drawings.ToDictionary(x => x.Id, x => x.IssueDate!.Value);
+        var drawingDone = new Dictionary<string, double>();
+
         var speed = activities.ToDictionary(a => a.Id, _ => 0.6 + rnd.NextDouble() * 0.7);
         var overshoot = activities.Take(2).Select(a => a.Id).ToHashSet();
         var templateOf = activities.ToDictionary(a => a.Id, a => Templates.First(t => t.Name == a.Name));
@@ -269,6 +321,7 @@ static class Demo
                     if (b.Activities.All(x => x.ActivityId != a.Id))
                         b.Activities.Add(new ReportActivity { ActivityId = a.Id, ActivityName = a.ToString(), Unit = a.Unit, PlannedQty = a.PlannedQty, SubcontractorId = a.SubcontractorId, SubcontractorName = subs.First(x => x.Id == a.SubcontractorId).Name });
                 b.Manpower.Clear(); b.Machines.Clear(); b.Materials.Clear();
+                b.Activities.RemoveAll(x => x.DrawingItemId != "");   // drawing rows are added fresh below
                 foreach (var row in b.Activities.Where(x => x.ActivityId != ""))
                 {
                     var a = activities.First(x => x.Id == row.ActivityId);
@@ -292,6 +345,27 @@ static class Demo
                         b.Materials.Add(new ReportMaterial { Material = mat.Name, Unit = mat.Unit, Consumed = consumed, Received = rnd.NextDouble() < 0.3 ? consumed * 2 : 0, Rate = mat.Rate, Basis = RateBasis.PerUnit, ActivityId = a.Id, ActivityName = a.ToString() });
                     }
                 }
+                // drawing work: every allocated agency reports its share; now and then an agency works without allocation
+                if (shift == 0)
+                    foreach (var al in dAllocs.Where(al => date >= drawingWindow[al.DrawingId] && rnd.NextDouble() < 0.35))
+                    {
+                        var item = dItems.First(i => i.Id == al.DrawingItemId);
+                        var doneSoFar = drawingDone.GetValueOrDefault(al.Id);
+                        var excessAllowed = al.DrawingItemId == dItems[0].Id; // one item gets deliberate excess, to prove it is flagged
+                        if (doneSoFar >= al.AllocatedQty && !excessAllowed) continue;
+                        var rate = item.Kind == DrawingItemKind.Equipment ? 1 : Math.Round(al.AllocatedQty / 25 * (0.6 + rnd.NextDouble()), 2);
+                        if (!excessAllowed) rate = Math.Min(rate, Math.Round(al.AllocatedQty - doneSoFar, 2));
+                        if (rate <= 0) continue;
+                        drawingDone[al.Id] = doneSoFar + rate;
+                        b.Activities.Add(new ReportActivity { DrawingItemId = item.Id, ActivityName = $"{drawings.First(x => x.Id == al.DrawingId).Number} / {item}", Unit = item.Unit, SubcontractorId = al.SubcontractorId, SubcontractorName = al.SubcontractorName, TodayQty = rate });
+                    }
+                if (shift == 0 && rnd.NextDouble() < 0.03 && dItems.Count > 0)
+                {
+                    var item = dItems[rnd.Next(dItems.Count)];
+                    var stranger = subs.Last();
+                    if (dAllocs.All(al => al.DrawingItemId != item.Id || al.SubcontractorId != stranger.Id) && date >= drawingWindow[item.DrawingId])
+                        b.Activities.Add(new ReportActivity { DrawingItemId = item.Id, ActivityName = item.ToString(), Unit = item.Unit, SubcontractorId = stranger.Id, SubcontractorName = stranger.Name, TodayQty = 0.5 });
+                }
                 // own staff (not booked to an activity → overheads) and a crane by the day
                 b.Manpower.Add(new ReportManpower { Source = ManpowerSource.Department, PartyId = depts[0].Id, PartyName = depts[0].Name, Trade = "Site engineer", Count = 3, Hours = 9, Rate = 2500, Basis = RateBasis.PerDay });
                 b.Manpower.Add(new ReportManpower { Source = ManpowerSource.Department, PartyId = depts[4].Id, PartyName = depts[4].Name, Trade = "Safety officer", Count = 1, Hours = 8, Rate = 16.5m * 8, Basis = RateBasis.PerDay });
@@ -307,7 +381,7 @@ static class Demo
                 reports++;
             }
         }
-        log.Line($"Built {s.Name}: {wbs.Count} WBS nodes, {activities.Count} activities, {resources.Count} resources, {reports} daily reports");
+        log.Line($"Built {s.Name}: {wbs.Count} WBS nodes, {activities.Count} activities, {drawings.Count} drawings with {dItems.Count} items / {dAllocs.Count} allocations, {resources.Count} resources, {reports} daily reports");
         return p;
     }
 
@@ -458,6 +532,45 @@ static class Verify
         var f4 = await q.FindAsync(new ReportFilter { ProjectId = p.Id, Search = search });
         log.Check($"Search “{search}”", f4.Count > 0 && f4.All(r => acts.Any(a => a.ReportId == r.Id && a.ActivityName.Contains(search, StringComparison.OrdinalIgnoreCase)) || r.Remarks.Contains(search, StringComparison.OrdinalIgnoreCase)), $"{f4.Count} reports");
 
+        // drawing register: completed = Σ daily work on the item; per agency = Σ its rows; allocated + unallocated = qty
+        var reg = await new DrawingService(db).ComputeAsync(p.Id);
+        if (reg.Drawings.Count > 0)
+        {
+            var dRows = acts.Where(a => a.DrawingItemId != "").ToList();
+            var allocRows = await db.ListForProjectAsync<DrawingAllocation>(p.Id);
+            var items = reg.AllItems.ToList();
+            log.Check("Drawing items: completed = Σ daily quantities on the item", items.All(i => Math.Abs(i.Completed - Math.Round(dRows.Where(r => r.DrawingItemId == i.Item.Id).Sum(r => r.TodayQty), 4)) < 1e-6), $"{items.Count} items, {dRows.Count} daily rows");
+            log.Check("Drawing items: each agency's done = Σ its own rows", items.All(i => i.Agencies.All(a => Math.Abs(a.Done - Math.Round(dRows.Where(r => r.DrawingItemId == i.Item.Id && r.SubcontractorId == a.SubcontractorId).Sum(r => r.TodayQty), 4)) < 1e-6)));
+            log.Check("Drawing items: allocated = Σ allocations, allocated + unallocated = qty", items.All(i =>
+                Math.Abs(i.Allocated - allocRows.Where(x => x.DrawingItemId == i.Item.Id).Sum(x => x.AllocatedQty)) < 1e-6 && (i.OverAllocated > 0 || Math.Abs(i.Allocated + i.Unallocated - i.Qty) < 1e-6)),
+                $"{items.Count(i => i.Unallocated > 0)} items partly unallocated");
+            log.Check("Drawing items: work by agencies without allocation is flagged", items.Where(i => i.CompletedWithoutAllocation > 0).All(i => i.Agencies.Any(a => a.Unallocated && a.Done > 0)),
+                $"{items.Count(i => i.CompletedWithoutAllocation > 0)} items");
+            log.Check("Drawing % and balance consistent (capped at 100)", items.All(i => i.Percent <= 100 && Math.Abs(i.Balance - Math.Max(0, i.Qty - i.Completed)) < 1e-9));
+            log.Check("Work beyond drawing qty / allocation is flagged", items.All(i => Math.Abs(i.Excess - Math.Max(0, Math.Round(i.Completed - i.Qty, 4))) < 1e-9)
+                && items.SelectMany(i => i.Agencies).All(a => a.Unallocated || Math.Abs(a.Excess - Math.Max(0, Math.Round(a.Done - a.Allocated, 4))) < 1e-9),
+                $"{items.Count(i => i.Excess > 0)} items beyond drawing qty, {items.SelectMany(i => i.Agencies).Count(a => a.Excess > 0)} agency shares beyond allocation");
+            var bySub = reg.ByAgency.GroupBy(x => x.Unit).ToDictionary(g => g.Key, g => g.Sum(x => x.Done));
+            var byItem = items.GroupBy(i => i.Item.Unit).ToDictionary(g => g.Key, g => g.Sum(i => i.Completed));
+            log.Check("Subcontractor-wise drawing work adds up to the item totals (per unit)", byItem.All(kv => Math.Abs(bySub.GetValueOrDefault(kv.Key) - kv.Value) < 1e-3), string.Join(", ", byItem.Select(kv => $"{kv.Value:#,0.##} {kv.Key}")));
+            // the 'to date' of a drawing row in the reports = that agency's running total on that item
+            var running2 = new Dictionary<string, double>();
+            var dOk = true;
+            foreach (var bb in bundles)
+            {
+                foreach (var g in bb.Activities.Where(a => a.DrawingItemId != "").GroupBy(a => a.ProgressKey)) running2[g.Key] = running2.GetValueOrDefault(g.Key) + g.Sum(x => x.TodayQty);
+                foreach (var a in bb.Activities.Where(a => a.DrawingItemId != ""))
+                {
+                    var alloc = allocRows.Where(x => x.DrawingItemId == a.DrawingItemId && x.SubcontractorId == a.SubcontractorId).Sum(x => x.AllocatedQty);
+                    var item = items.First(i => i.Item.Id == a.DrawingItemId);
+                    dOk &= Math.Abs(a.CumulativeQty - Math.Round(running2[a.ProgressKey], 4)) < 1e-6 && Math.Abs(a.PlannedQty - (alloc > 0 ? alloc : item.Qty)) < 1e-9;
+                }
+            }
+            log.Check("DPR drawing rows: to date = agency's running total, planned = its allocation", dOk);
+            log.Fact($"{p.Name}: {reg.Drawings.Count} drawings · {items.Count} items · {reg.Drawings.Count(d => d.State == DrawingState.Completed)} drawings completed · " +
+                     $"{items.Count(i => i.Unallocated > 0)} items partly unallocated · {items.Count(i => i.CompletedWithoutAllocation > 0)} items worked without allocation");
+        }
+
         // registers
         var hs = await db.ListForProjectAsync<Hindrance>(p.Id);
         var rq = await db.ListForProjectAsync<Requirement>(p.Id);
@@ -468,6 +581,45 @@ static class Verify
         log.Fact($"{p.Name}: {reports.Count} reports · {activities.Count} activities · overall {pp.OverallPercent:0.#} % (plan {pp.PlannedPercent:0.#} %) · " +
                  $"{pp.Activities.Count(a => a.State == WorkState.Completed)} completed, {pp.Activities.Count(a => a.State == WorkState.Delayed)} delayed · " +
                  $"{mdAll:#,0} man-days · cost ₹ {PdfReports.M(projectCost)} · {hs.Count} hindrances · {rq.Count} requirements");
+    }
+
+    public static async Task ConcurrencyAsync(LocalDatabase db, Project p, Log log)
+    {
+        log.Line("\n▶ Concurrency stress: 40 saves and 40 full reads at the same time");
+        var sw = Stopwatch.StartNew();
+        var reports = (await db.ListForProjectAsync<DailyReport>(p.Id)).OrderBy(r => r.Date).ToList();
+        var errors = new System.Collections.Concurrent.ConcurrentBag<string>();
+        var writer = Task.Run(async () =>
+        {
+            var rnd = new Random(5);
+            for (var i = 0; i < 40; i++)
+            {
+                try
+                {
+                    var b = await db.LoadReportAsync(reports[rnd.Next(reports.Count)].Id);
+                    b.Report.Remarks += ".";
+                    await db.SaveReportAsync(b);
+                }
+                catch (Exception ex) { errors.Add("write: " + ex.Message); }
+            }
+        });
+        var readers = Enumerable.Range(0, 2).Select(_ => Task.Run(async () =>
+        {
+            for (var i = 0; i < 20; i++)
+            {
+                try
+                {
+                    var acts = await db.ListForProjectAsync<Activity>(p.Id);
+                    if (acts.Select(a => a.Id).Distinct().Count() != acts.Count) errors.Add("duplicate activity rows in a read");
+                    var bundles = await db.LoadReportsAsync(p.Id, reports);
+                    if (bundles.SelectMany(b => b.Manpower).GroupBy(m => m.Id).Any(g => g.Count() > 1)) errors.Add("duplicate manpower rows in a read");
+                    await new ProgressService(db).ComputeAsync(p.Id);
+                }
+                catch (Exception ex) { errors.Add("read: " + ex.Message); }
+            }
+        })).ToList();
+        await Task.WhenAll(readers.Append(writer));
+        log.Check("Reads during writes never fail or see a row twice", errors.IsEmpty, errors.IsEmpty ? $"{sw.Elapsed.TotalSeconds:0.0} s" : string.Join("; ", errors.Distinct().Take(3)));
     }
 
     public static async Task ConvergedAsync(Log log, params (string Name, LocalDatabase Db)[] devices)
@@ -589,6 +741,12 @@ static class Reports
             await Make("10-Hindrance-register.xlsx", s => ExcelReports.HindranceRegister(s, p, hs, "All"), false);
             await Make("11-Requirement-register.pdf", s => PdfReports.RequirementRegister(s, p, rq, "All", opt), true);
             await Make("12-Requirement-register.xlsx", s => ExcelReports.RequirementRegister(s, p, rq, "All"), false);
+            var dreg = await new DrawingService(db).ComputeAsync(p.Id);
+            if (dreg.Drawings.Count > 0)
+            {
+                await Make("15-Drawing-register-work-completion.pdf", s => DrawingReports.Pdf(s, p, dreg, "All drawings", opt), true);
+                await Make("16-Drawing-register-work-completion.xlsx", s => DrawingReports.Excel(s, p, dreg, "All drawings"), false);
+            }
 
             // Excel totals must equal the database
             using (var wb = new XLWorkbook(Path.Combine(folder, "05-DPR-workbook-whole-project.xlsx")))

@@ -27,6 +27,9 @@ public static class EntityRegistry
         [nameof(ActivityResource)] = typeof(ActivityResource),
         [nameof(WorkCalendar)] = typeof(WorkCalendar),
         [nameof(ReportProfile)] = typeof(ReportProfile),
+        [nameof(Drawing)] = typeof(Drawing),
+        [nameof(DrawingItem)] = typeof(DrawingItem),
+        [nameof(DrawingAllocation)] = typeof(DrawingAllocation),
     };
 
     public static string NameOf(Type t) => t.Name;
