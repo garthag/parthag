@@ -7,11 +7,11 @@ namespace SiteNotes.Core.Reports;
 /// <summary>Activity progress, cost per activity / day / hour, subcontractor-wise and department-wise reports.</summary>
 public static class ProgressReports
 {
-    public static string StateText(ActivityState s) => s switch
+    public static string StateText(WorkState s) => s switch
     {
-        ActivityState.NotStarted => "Not started",
-        ActivityState.InProgress => "In progress",
-        ActivityState.Completed => "Completed",
+        WorkState.NotStarted => "Not started",
+        WorkState.InProgress => "In progress",
+        WorkState.Completed => "Completed",
         _ => "Delayed",
     };
 
@@ -29,9 +29,9 @@ public static class ProgressReports
             pdf.Tiles([
                 ("Overall progress", P(pp.OverallPercent) + " %"),
                 ("Planned to date", P(pp.PlannedPercent) + " %"),
-                ("Completed", $"{acts.Count(a => a.State == ActivityState.Completed)} / {acts.Count}"),
-                ("In progress", acts.Count(a => a.State == ActivityState.InProgress).ToString()),
-                ("Delayed", acts.Count(a => a.State == ActivityState.Delayed).ToString()),
+                ("Completed", $"{acts.Count(a => a.State == WorkState.Completed)} / {acts.Count}"),
+                ("In progress", acts.Count(a => a.State == WorkState.InProgress).ToString()),
+                ("Delayed", acts.Count(a => a.State == WorkState.Delayed).ToString()),
                 ("Man-hours", N(pp.Actual.ManHours)),
             ]);
 

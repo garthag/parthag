@@ -248,9 +248,9 @@ public class ProgressPage : ContentPage
     {
         var color = a.State switch
         {
-            ActivityState.Completed => Ui.Success,
-            ActivityState.Delayed => Ui.Danger,
-            ActivityState.InProgress => Ui.Primary,
+            WorkState.Completed => Ui.Success,
+            WorkState.Delayed => Ui.Danger,
+            WorkState.InProgress => Ui.Primary,
             _ => Ui.Muted,
         };
         var head = new Grid { ColumnDefinitions = [new(GridLength.Star), new(GridLength.Auto)] };

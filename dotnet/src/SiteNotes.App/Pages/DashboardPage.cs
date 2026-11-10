@@ -98,14 +98,14 @@ public class DashboardPage : ContentPage
             Ui.Stat("Pending requirements", reqs.Count(r => r.Status is RequirementStatus.Pending or RequirementStatus.Approved or RequirementStatus.Ordered) + (reqs.Any(r => r.IsOverdue) ? $" ({reqs.Count(r => r.IsOverdue)} late)" : ""), Ui.Accent),
             Ui.Stat("Man-days this month", PdfReports.N(month.Sum(r => r.TotalManpower))),
             Ui.Stat($"Cost this month ({cur})", PdfReports.M(month.Sum(r => r.TotalCost)), Ui.Accent),
-            Ui.Stat("Activities completed", $"{pp.Activities.Count(a => a.State == ActivityState.Completed)} / {pp.Activities.Count}", Ui.Success),
-            Ui.Stat("Activities delayed", pp.Activities.Count(a => a.State == ActivityState.Delayed).ToString(), Ui.Danger)));
+            Ui.Stat("Activities completed", $"{pp.Activities.Count(a => a.State == WorkState.Completed)} / {pp.Activities.Count}", Ui.Success),
+            Ui.Stat("Activities delayed", pp.Activities.Count(a => a.State == WorkState.Delayed).ToString(), Ui.Danger)));
 
         _body.Children.Add(Ui.SectionHeader("Manpower – last 14 days"));
         _body.Children.Add(Ui.Card(Chart(reports)));
 
         var attention = new VerticalStackLayout { Spacing = 4 };
-        foreach (var a in pp.Activities.Where(a => a.State == ActivityState.Delayed).Take(5))
+        foreach (var a in pp.Activities.Where(a => a.State == WorkState.Delayed).Take(5))
             attention.Children.Add(Ui.Label($"⏱ {a.Activity} – {a.Percent:0.#} % (plan {a.PlannedPercentToday:0.#} %), forecast {PdfReports.D(a.ForecastFinish)}", 13, false, Ui.Danger));
         foreach (var r in reqs.Where(r => r.IsOverdue).Take(5))
             attention.Children.Add(Ui.Label($"📦 R-{r.SerialNo:000} {r.Item} – needed by {r.RequiredBy:dd-MMM}", 13, false, Ui.Accent));

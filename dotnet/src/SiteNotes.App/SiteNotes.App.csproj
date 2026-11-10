@@ -1,8 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <!-- Android phones/tablets and Windows 10/11 PCs from one C# code base. -->
+    <!-- Android phones and tablets (site use). Windows PCs use the WPF app in SiteNotes.Desktop. -->
     <TargetFrameworks>net10.0-android</TargetFrameworks>
-    <TargetFrameworks Condition="$([MSBuild]::IsOSPlatform('windows'))">$(TargetFrameworks);net10.0-windows10.0.19041.0</TargetFrameworks>
     <OutputType>Exe</OutputType>
     <RootNamespace>SiteNotes.App</RootNamespace>
     <UseMaui>true</UseMaui>

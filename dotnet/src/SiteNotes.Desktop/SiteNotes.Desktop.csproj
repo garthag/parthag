@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Windows desktop app: WPF, written entirely in C# (no XAML files). -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <RootNamespace>SiteNotes.Desktop</RootNamespace>
+    <AssemblyName>SiteNotes</AssemblyName>
+    <ApplicationIcon>sitenotes.ico</ApplicationIcon>
+    <StartupObject>SiteNotes.Desktop.Program</StartupObject>
+    <ServerGarbageCollection>false</ServerGarbageCollection>
+    <TieredPGO>true</TieredPGO>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\SiteNotes.Core\SiteNotes.Core.csproj" />
+    <Resource Include="sitenotes.ico" />
+  </ItemGroup>
+</Project>

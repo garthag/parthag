@@ -4,7 +4,7 @@ using SiteNotes.Core.Models;
 
 namespace SiteNotes.Core;
 
-public enum ActivityState { NotStarted, InProgress, Completed, Delayed }
+public enum WorkState { NotStarted, InProgress, Completed, Delayed }
 
 /// <summary>Everything known about one activity: quantities, dates, forecast and cost.</summary>
 public class ActivityProgress
@@ -26,7 +26,7 @@ public class ActivityProgress
     public int PlannedDurationDays { get; set; }
     /// <summary>Planned % that should be done by today according to the planned dates and calendar.</summary>
     public double PlannedPercentToday { get; set; }
-    public ActivityState State { get; set; }
+    public WorkState State { get; set; }
     public CostBreakdown Actual { get; } = new();
     public decimal PlannedCost { get; set; }
     public decimal CostPerUnit => DoneQty <= 0 ? 0 : CostCalculator.Round(Actual.Total / (decimal)DoneQty);
@@ -140,10 +140,10 @@ public class ProgressService(LocalDatabase db)
             else if (p.AvgPerDay > 0) p.ForecastFinish = cal.AddWorkingDays(today.AddDays(1), (int)Math.Ceiling(p.RemainingQty / p.AvgPerDay));
             else if (a.PlannedRatePerDay > 0) p.ForecastFinish = cal.AddWorkingDays(today.AddDays(1), (int)Math.Ceiling(p.RemainingQty / a.PlannedRatePerDay));
 
-            p.State = p.Percent >= 100 ? ActivityState.Completed
-                : (a.PlannedFinish is { } fin && (p.ForecastFinish ?? today) > fin.Date) || p.Percent + 0.001 < p.PlannedPercentToday - 10 ? ActivityState.Delayed
-                : p.DoneQty > 0 ? ActivityState.InProgress
-                : ActivityState.NotStarted;
+            p.State = p.Percent >= 100 ? WorkState.Completed
+                : (a.PlannedFinish is { } fin && (p.ForecastFinish ?? today) > fin.Date) || p.Percent + 0.001 < p.PlannedPercentToday - 10 ? WorkState.Delayed
+                : p.DoneQty > 0 ? WorkState.InProgress
+                : WorkState.NotStarted;
             bag.Add(p);
         });
 

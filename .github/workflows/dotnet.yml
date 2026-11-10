@@ -22,10 +22,12 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '10.0.x'
-      - name: Unit & sync tests
+      - name: Core, report and sync tests
         run: dotnet test dotnet/tests/SiteNotes.Core.Tests -c Release
-      - name: Compile-check app UI code
+      - name: Compile-check Android UI code
         run: dotnet build dotnet/tests/SiteNotes.App.CompileCheck -c Release
+      - name: Compile WPF desktop app
+        run: dotnet build dotnet/src/SiteNotes.Desktop -c Release
 
   server:
     runs-on: ubuntu-latest
@@ -45,7 +47,27 @@ jobs:
           name: sitenotes-server
           path: SiteNotesServer-*.zip
 
-  app:
+  windows:
+    runs-on: windows-latest
+    needs: test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - name: WPF screen tests
+        run: dotnet test dotnet/tests/SiteNotes.Desktop.Tests -c Release
+      - name: Publish Windows desktop app (WPF)
+        run: dotnet publish dotnet/src/SiteNotes.Desktop -c Release -r win-x64 --self-contained -o out/SiteNotes
+      - name: Package
+        shell: pwsh
+        run: Compress-Archive -Path out/SiteNotes -DestinationPath SiteNotes-windows.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sitenotes-windows
+          path: SiteNotes-windows.zip
+
+  android:
     runs-on: windows-latest
     needs: test
     steps:
@@ -57,29 +79,24 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
-      - name: Install .NET MAUI workload
-        run: dotnet workload install maui
+      - name: Install .NET MAUI Android workload
+        run: dotnet workload install maui-android
       - name: Build Android APK
         run: dotnet publish dotnet/src/SiteNotes.App -f net10.0-android -c Release -o out/android
-      - name: Build Windows app
-        run: dotnet publish dotnet/src/SiteNotes.App -f net10.0-windows10.0.19041.0 -c Release -r win-x64 --self-contained -p:WindowsPackageType=None -o out/SiteNotes
       - name: Package
         shell: pwsh
         run: |
           $apk = Get-ChildItem out/android -Filter *-Signed.apk | Select-Object -First 1
           if (-not $apk) { $apk = Get-ChildItem out/android -Filter *.apk | Select-Object -First 1 }
           Copy-Item $apk.FullName SiteNotes-android.apk
-          Compress-Archive -Path out/SiteNotes -DestinationPath SiteNotes-windows.zip
       - uses: actions/upload-artifact@v4
         with:
-          name: sitenotes-app
-          path: |
-            SiteNotes-android.apk
-            SiteNotes-windows.zip
+          name: sitenotes-android
+          path: SiteNotes-android.apk
 
   release:
     if: github.event_name == 'push'
-    needs: [app, server]
+    needs: [windows, android, server]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
@@ -92,9 +109,9 @@ jobs:
           name: SiteNotes DPR (C#) build ${{ github.run_number }}
           make_latest: false
           body: |
-            **Android:** install `SiteNotes-android.apk`.
-            **Windows:** extract `SiteNotes-windows.zip` and run `SiteNotes.App.exe`.
-            **Sync server (optional):** extract `SiteNotesServer-windows.zip` or `SiteNotesServer-linux.zip`, set the site key in `appsettings.json` and run `SiteNotes.Server`.
+            **Windows PC:** extract `SiteNotes-windows.zip` and run `SiteNotes.exe` (WPF desktop app).
+            **Android:** install `SiteNotes-android.apk` on the phone.
+            **Sync server (optional):** extract `SiteNotesServer-windows.zip` or `SiteNotesServer-linux.zip`, set the site key in `appsettings.json`, run `SiteNotes.Server`.
           files: |
             SiteNotes-android.apk
             SiteNotes-windows.zip

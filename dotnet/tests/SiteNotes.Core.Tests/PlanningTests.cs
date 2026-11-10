@@ -87,7 +87,7 @@ public class PlanningTests : IDisposable
         var a = pp.Activities.Single();
         Assert.Equal(115, a.DoneQty);
         Assert.Equal(100, a.Percent);
-        Assert.Equal(ActivityState.Completed, a.State);
+        Assert.Equal(WorkState.Completed, a.State);
         Assert.Equal("P1 Boiler plant › U1 Unit 1", a.WbsPath);
         Assert.Equal(3, a.DaysWorked);
         Assert.Equal(32 * 800m, a.Actual.Manpower);
@@ -222,5 +222,41 @@ public class ReportOptionsTests
             opt.Sections = [.. Enum.GetValues<DprSection>()];
             PdfReports.DailyReport(fs, bulk[0], db.MediaPath, await db.CalendarAsync(p.Id), opt);
         }
+    }
+}
+
+public class ScanServiceTests
+{
+    [Fact]
+    public async Task Saves_pages_separately_and_one_pdf_in_dated_folder()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "sitenotes-scan-" + Guid.NewGuid().ToString("N"));
+        var db = new LocalDatabase(dir);
+        await db.InitAsync();
+        var p = new Project { Name = "P" };
+        await db.SaveAsync(p);
+        var pages = new List<ScanPageInput>();
+        for (var i = 0; i < 3; i++)
+        {
+            var f = Path.Combine(dir, $"raw{i}.jpg");
+            using var bmp = new SkiaSharp.SKBitmap(300, 400);
+            using (var c = new SkiaSharp.SKCanvas(bmp)) c.Clear(new SkiaSharp.SKColor((byte)(100 + i * 40), 180, 160));
+            Imaging.ImageTools.SaveJpeg(bmp, f);
+            pages.Add(new ScanPageInput { RawPath = f, Remarks = $"page {i + 1}", Rotation = i == 1 ? 90 : 0 });
+        }
+        var svc = new ScanService(db, Path.Combine(dir, "raw"));
+        var doc = await svc.SaveAsync(new ScanDocument { ProjectId = p.Id, Title = "Challan" }, pages, ScanFilter.BlackWhite);
+        Assert.Equal(3, doc.PageCount);
+        Assert.True(File.Exists(db.MediaPath(doc.PdfFileName)));
+        var media = (await db.ListAsync<MediaItem>(m => m.OwnerId == doc.Id)).OrderBy(m => m.PageNo).ToList();
+        Assert.Equal(3, media.Count);
+        Assert.Equal("page 2", media[1].Remarks);
+        var folder = await db.GetAsync<Folder>(doc.FolderId);
+        Assert.Equal(DateTime.Today.ToString("yyyy-MM-dd"), folder!.Name);
+        // re-open and save again with a different filter: same media rows, new files
+        var again = await svc.LoadPagesAsync(doc);
+        Assert.Equal(3, again.Count);
+        await svc.SaveAsync(doc, again, ScanFilter.Grayscale);
+        Assert.Equal(3, (await db.ListAsync<MediaItem>(m => m.OwnerId == doc.Id)).Count);
     }
 }

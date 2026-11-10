@@ -5,3 +5,9 @@ namespace SiteNotes.App
 {
     internal static partial class Resource { }
 }
+
+// Android-only MAUI type that shares a common name; mirrors the clash the Android build would hit.
+namespace Microsoft.Maui.ApplicationModel
+{
+    public enum ActivityState { Created, Resumed, Paused, Destroyed, SaveInstanceState, Started, Stopped }
+}

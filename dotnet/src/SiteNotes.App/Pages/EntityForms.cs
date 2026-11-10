@@ -75,10 +75,10 @@ public static class EntityForms
                     Ui.Stat("Done", $"{PdfReports.N(p.DoneQty)} {a.Unit}"),
                     Ui.Stat("Progress", $"{p.Percent:0.##} %", p.Percent >= 100 ? Ui.Success : Ui.Primary),
                     Ui.Stat("Balance", $"{PdfReports.N(p.RemainingQty)} {a.Unit}", Ui.Muted),
-                    Ui.Stat("Status", ProgressReports.StateText(p.State), p.State == ActivityState.Delayed ? Ui.Danger : Ui.Primary),
+                    Ui.Stat("Status", ProgressReports.StateText(p.State), p.State == WorkState.Delayed ? Ui.Danger : Ui.Primary),
                     Ui.Stat("Days worked", p.DaysWorked.ToString(), Ui.Muted),
                     Ui.Stat("Average / day", $"{PdfReports.N(p.AvgPerDay)} {a.Unit}", Ui.Muted),
-                    Ui.Stat("Forecast finish", PdfReports.D(p.ForecastFinish), p.State == ActivityState.Delayed ? Ui.Danger : Ui.Muted),
+                    Ui.Stat("Forecast finish", PdfReports.D(p.ForecastFinish), p.State == WorkState.Delayed ? Ui.Danger : Ui.Muted),
                     Ui.Stat($"Cost ({cur})", PdfReports.M(p.Actual.Total), Ui.Accent)));
                 body.Children.Add(Ui.Caption($"Done = sum of 'today' quantities in all daily reports. % = done ÷ planned × 100 (max 100). " +
                                              $"Forecast = balance ÷ average per day, on the work calendar. Cost/unit {PdfReports.M(p.CostPerUnit)} · cost/day {PdfReports.M(p.CostPerDay)}."));
