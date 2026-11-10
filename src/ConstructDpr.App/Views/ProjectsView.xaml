@@ -23,9 +23,9 @@
           <DataGrid x:Name="ProjectGrid" IsReadOnly="True" MouseDoubleClick="OnOpen" SelectionChanged="OnProjectSelected">
             <DataGrid.Columns>
               <DataGridTextColumn Header="Code" Binding="{Binding Code}" Width="110"/>
-              <DataGridTextColumn Header="Project" Binding="{Binding Name}" Width="*"/>
+              <DataGridTextColumn Header="Project" Binding="{Binding Name}" Width="260"/>
               <DataGridTextColumn Header="Client" Binding="{Binding Client}" Width="140"/>
-              <DataGridTextColumn Header="Your role" Binding="{Binding RoleLabel}" Width="150"/>
+              <DataGridTextColumn Header="Your role" Binding="{Binding RoleLabel}" Width="170"/>
               <DataGridTextColumn Header="" Binding="{Binding Open}" Width="60"/>
             </DataGrid.Columns>
           </DataGrid>
@@ -48,8 +48,8 @@
           </StackPanel>
           <DataGrid x:Name="People" IsReadOnly="True" SelectionChanged="OnPersonSelected">
             <DataGrid.Columns>
-              <DataGridTextColumn Header="Name" Binding="{Binding DisplayName}" Width="*"/>
-              <DataGridTextColumn Header="E-mail" Binding="{Binding Email}" Width="*"/>
+              <DataGridTextColumn Header="Name" Binding="{Binding DisplayName}" Width="170"/>
+              <DataGridTextColumn Header="E-mail" Binding="{Binding Email}" Width="220"/>
               <DataGridTextColumn Header="Role" Binding="{Binding RoleLabel}" Width="170"/>
             </DataGrid.Columns>
           </DataGrid>

@@ -20,9 +20,9 @@ All devices signed in to the same server stay in **live sync**. An approval on a
 |---|---|---|
 | ![](docs/screenshots/web-11-phone-dpr-entry.png) | ![](docs/screenshots/web-10-phone-dashboard.png) | ![](docs/screenshots/web-12-phone-gantt.png) |
 
-| Windows app: daily report review | Windows app: native Gantt chart |
-|---|---|
-| ![](docs/screenshots/windows-dpr-review.png) | ![](docs/screenshots/windows-gantt.png) |
+| Windows app: daily report review | Windows app: site photos | Windows app: native Gantt chart |
+|---|---|---|
+| ![](docs/screenshots/windows-dpr-review.png) | ![](docs/screenshots/windows-dpr-photos.png) | ![](docs/screenshots/windows-gantt.png) |
 
 ## Get started
 
