@@ -95,7 +95,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : IdentityUser
         switch (provider)
         {
             case DbProvider.Sqlite: b.UseSqlite(connectionString); break;
-            case DbProvider.SqlServer: b.UseSqlServer(connectionString, o => o.EnableRetryOnFailure(3)); break;
+            // No automatic retries: the rules engine uses explicit transactions (approve = several changes, all or nothing).
+            case DbProvider.SqlServer: b.UseSqlServer(connectionString); break;
             default: b.UseNpgsql(connectionString); break;
         }
         b.ReplaceService<IModelCacheKeyFactory, ProviderModelCacheKey>();
