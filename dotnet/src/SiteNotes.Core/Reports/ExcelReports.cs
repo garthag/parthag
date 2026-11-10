@@ -10,15 +10,16 @@ public static class ExcelReports
     private static readonly XLColor Band = XLColor.FromHtml("#DCE8F5");
 
     /// <summary>One workbook with every section of the filtered reports on its own sheet.</summary>
-    public static void ReportWorkbook(Stream output, Project? project, IReadOnlyList<DprBundle> bundles, string filterText)
+    public static void ReportWorkbook(Stream output, Project? project, IReadOnlyList<DprBundle> bundles, string filterText, WorkCalendar? cal = null)
     {
+        cal ??= new WorkCalendar();
         using var wb = new XLWorkbook();
         var title = project?.Name ?? "Daily Progress Reports";
 
         Sheet(wb, "DPR Summary", title, filterText,
             ["DPR No", "Date", "Day", "Status", "Shift", "Weather AM", "Weather PM", "Temp °C", "Rain mm",
              "Subcontractor manpower", "Department manpower", "Total manpower", "Man-hours", "Machines",
-             "Activities", "Hindrances", "Toolbox talk", "Prepared by", "Plan for tomorrow", "Remarks"],
+             "Activities", "Hindrances", "Toolbox talk", "Prepared by", "Plan for tomorrow", "Remarks", "Cost of the day"],
             bundles.Select(b =>
             {
                 var r = b.Report;
@@ -29,9 +30,10 @@ public static class ExcelReports
                     DprCalculator.Total(b.Manpower, ManpowerSource.Subcontractor),
                     DprCalculator.Total(b.Manpower, ManpowerSource.Department),
                     b.Manpower.Sum(m => m.Count), b.Manpower.Sum(m => m.ManHours), b.Machines.Sum(m => m.Count),
-                    b.Activities.Count, b.Hindrances.Count, r.ToolboxTalkTopic, r.PreparedBy, r.PlanForTomorrow, r.Remarks
+                    b.Activities.Count, b.Hindrances.Count, r.ToolboxTalkTopic, r.PreparedBy, r.PlanForTomorrow, r.Remarks,
+                    CostCalculator.ForReport(b, cal).Total
                 };
-            }), sumColumns: [10, 11, 12, 13, 14, 15, 16]);
+            }), sumColumns: [10, 11, 12, 13, 14, 15, 16, 21]);
 
         Sheet(wb, "Activities", title, filterText,
             ["DPR No", "Date", "Activity", "Location", "Agency", "Unit", "Planned qty", "Today qty", "Cumulative qty", "% complete", "Remarks"],
@@ -42,27 +44,30 @@ public static class ExcelReports
             })), sumColumns: [8], percentColumns: [10]);
 
         Sheet(wb, "Manpower", title, filterText,
-            ["DPR No", "Date", "Type", "Subcontractor / Department", "Trade", "Nos", "Hours", "Man-hours", "Remarks"],
+            ["DPR No", "Date", "Type", "Subcontractor / Department", "Trade", "Activity", "Nos", "Hours", "Man-hours", "Rate", "Rate basis", "Cost", "Remarks"],
             bundles.SelectMany(b => b.Manpower.Select(m => new object?[]
             {
-                b.Report.ReportNo, b.Report.Date, m.Source.ToString(), m.PartyName, m.Trade, m.Count, m.Hours, m.ManHours, m.Remarks
-            })), sumColumns: [6, 8]);
+                b.Report.ReportNo, b.Report.Date, m.Source.ToString(), m.PartyName, m.Trade, m.ActivityName, m.Count, m.Hours, m.ManHours,
+                m.Rate, m.Basis.ToString(), CostCalculator.Cost(m, cal), m.Remarks
+            })), sumColumns: [7, 9, 12]);
 
         ManpowerPivot(wb, bundles, title, filterText);
 
         Sheet(wb, "Machinery", title, filterText,
-            ["DPR No", "Date", "Machine / equipment", "Own / Hired", "Nos", "Working hrs", "Idle hrs", "Fuel (L)", "Remarks"],
+            ["DPR No", "Date", "Machine / equipment", "Own / Hired", "Activity", "Nos", "Working hrs", "Idle hrs", "Fuel (L)", "Rate", "Rate basis", "Cost", "Remarks"],
             bundles.SelectMany(b => b.Machines.Select(m => new object?[]
             {
-                b.Report.ReportNo, b.Report.Date, m.Name, m.Ownership.ToString(), m.Count, m.WorkingHours, m.IdleHours, m.FuelLitres, m.Remarks
-            })), sumColumns: [5, 6, 7, 8]);
+                b.Report.ReportNo, b.Report.Date, m.Name, m.Ownership.ToString(), m.ActivityName, m.Count, m.WorkingHours, m.IdleHours,
+                m.FuelLitres, m.Rate, m.Basis.ToString(), CostCalculator.Cost(m, cal), m.Remarks
+            })), sumColumns: [6, 7, 8, 9, 12]);
 
         Sheet(wb, "Materials", title, filterText,
-            ["DPR No", "Date", "Material / resource", "Unit", "Received", "Consumed", "Remarks"],
+            ["DPR No", "Date", "Material / resource", "Type", "Activity", "Unit", "Received", "Consumed", "Rate", "Cost", "Remarks"],
             bundles.SelectMany(b => b.Materials.Select(m => new object?[]
             {
-                b.Report.ReportNo, b.Report.Date, m.Material, m.Unit, m.Received, m.Consumed, m.Remarks
-            })));
+                b.Report.ReportNo, b.Report.Date, m.Material, m.Kind == ResourceType.Other ? "Non-material" : "Material", m.ActivityName,
+                m.Unit, m.Received, m.Consumed, m.Rate, CostCalculator.Cost(m), m.Remarks
+            })), sumColumns: [10]);
 
         AddHindranceSheet(wb, bundles.SelectMany(b => b.Hindrances).ToList(), title, filterText);
         AddRequirementSheet(wb, bundles.SelectMany(b => b.Requirements).ToList(), title, filterText);
@@ -154,6 +159,7 @@ public static class ExcelReports
                     case DateTime d: cell.Value = d; cell.Style.DateFormat.Format = "dd-mmm-yyyy"; break;
                     case int i: cell.Value = i; break;
                     case double dbl: cell.Value = dbl; cell.Style.NumberFormat.Format = "#,##0.##"; break;
+                    case decimal dec: cell.Value = dec; cell.Style.NumberFormat.Format = "#,##0.00"; break;
                     default: cell.Value = row[c]!.ToString(); break;
                 }
             }

@@ -9,19 +9,24 @@ public static class PdfReports
 {
     private static readonly CultureInfo Inv = CultureInfo.InvariantCulture;
     public static string N(double v) => v == 0 ? "0" : v.ToString(v % 1 == 0 ? "#,0" : "#,0.##", Inv);
+    public static string M(decimal v) => v.ToString("#,0.00", Inv);
+    public static string P(double v) => v.ToString("0.##", Inv);
     public static string D(DateTime? d) => d?.ToString("dd-MMM-yyyy", Inv) ?? "-";
 
     // ================= single daily progress report =================
 
-    public static void DailyReport(Stream output, DprBundle b, Func<string, string> mediaPath)
+    public static void DailyReport(Stream output, DprBundle b, Func<string, string> mediaPath, WorkCalendar? cal = null)
     {
         using var pdf = new PdfDoc(output, b.Project?.Name ?? "Daily Progress Report",
             $"DPR #{b.Report.ReportNo} · {D(b.Report.Date)}");
-        WriteDailyReport(pdf, b, mediaPath);
+        WriteDailyReport(pdf, b, mediaPath, cal);
     }
 
-    public static void WriteDailyReport(PdfDoc pdf, DprBundle b, Func<string, string> mediaPath)
+    public static void WriteDailyReport(PdfDoc pdf, DprBundle b, Func<string, string> mediaPath, WorkCalendar? cal = null)
     {
+        cal ??= new WorkCalendar();
+        var cost = CostCalculator.ForReport(b, cal);
+        var showCost = cost.Total > 0;
         var r = b.Report;
         var p = b.Project;
         pdf.HeaderTitle = p?.Name ?? "Daily Progress Report";
@@ -51,24 +56,25 @@ public static class PdfReports
         pdf.Section("1. Work progress (activities)", $"{b.Activities.Count} items");
         pdf.Table([
                 new("#", 0.4f), new("Activity", 3), new("Location", 1.6f), new("Agency", 1.6f), new("Unit", 0.7f),
-                new("Planned", 1, true), new("Today", 1, true), new("Cumul.", 1, true), new("%", 0.7f, true), new("Remarks", 2)
+                new("Planned", 1, true), new("Today", 1, true), new("Cumul.", 1, true), new("Progress", 1.4f, false, true), new("Remarks", 1.8f)
             ],
             b.Activities.Select((a, i) => new[]
             {
                 (i + 1).ToString(), a.ActivityName, a.Location, a.SubcontractorName, a.Unit, N(a.PlannedQty),
-                N(a.TodayQty), N(a.CumulativeQty), a.PlannedQty > 0 ? N(a.PercentComplete) : "-", a.Remarks
+                N(a.TodayQty), N(a.CumulativeQty), a.PlannedQty > 0 ? P(Math.Min(100, a.PercentComplete)) : "-", a.Remarks
             }));
 
         pdf.Section("2. Manpower", $"Total {sub + dept} nos · {N(b.Manpower.Sum(m => m.ManHours))} man-hrs");
         pdf.Table([
-                new("#", 0.4f), new("Type", 1f), new("Subcontractor / Department", 2.8f), new("Trade", 1.6f),
-                new("Nos", 0.8f, true), new("Hrs", 0.7f, true), new("Man-hrs", 1, true), new("Remarks", 2)
+                new("#", 0.4f), new("Type", 1f), new("Subcontractor / Department", 2.4f), new("Trade", 1.4f), new("Activity", 2f),
+                new("Nos", 0.7f, true), new("Hrs", 0.6f, true), new("Man-hrs", 0.9f, true), new("Cost", 1.2f, true)
             ],
             b.Manpower.Select((m, i) => new[]
             {
-                (i + 1).ToString(), m.Source == ManpowerSource.Subcontractor ? "Subcon." : "Dept.", m.PartyName, m.Trade, N(m.Count), N(m.Hours), N(m.ManHours), m.Remarks
+                (i + 1).ToString(), m.Source == ManpowerSource.Subcontractor ? "Subcon." : "Dept.", m.PartyName, m.Trade, m.ActivityName,
+                N(m.Count), N(m.Hours), N(m.ManHours), m.Rate > 0 ? M(CostCalculator.Cost(m, cal)) : "-"
             }),
-            ["", "", "TOTAL", "", N(sub + dept), "", N(b.Manpower.Sum(m => m.ManHours)), ""]);
+            ["", "", "TOTAL", "", "", N(sub + dept), "", N(b.Manpower.Sum(m => m.ManHours)), showCost ? M(cost.Manpower) : ""]);
 
         var bySub = DprCalculator.ByParty(b.Manpower, ManpowerSource.Subcontractor);
         var byDept = DprCalculator.ByParty(b.Manpower, ManpowerSource.Department);
@@ -81,24 +87,58 @@ public static class PdfReports
 
         pdf.Section("3. Machinery & equipment", $"{b.Machines.Sum(m => m.Count)} nos");
         pdf.Table([
-                new("#", 0.4f), new("Machine / equipment", 2.6f), new("Own / Hired", 1.1f), new("Nos", 0.7f, true),
-                new("Working hrs", 1, true), new("Idle hrs", 1, true), new("Fuel (L)", 1, true), new("Remarks", 2.2f)
+                new("#", 0.4f), new("Machine / equipment", 2.2f), new("Own / Hired", 0.9f), new("Activity", 1.8f), new("Nos", 0.6f, true),
+                new("Working hrs", 0.9f, true), new("Idle hrs", 0.8f, true), new("Fuel (L)", 0.8f, true), new("Cost", 1.1f, true)
             ],
             b.Machines.Select((m, i) => new[]
             {
-                (i + 1).ToString(), m.Name, m.Ownership.ToString(), N(m.Count), N(m.WorkingHours), N(m.IdleHours),
-                N(m.FuelLitres), m.Remarks
+                (i + 1).ToString(), m.Name, m.Ownership.ToString(), m.ActivityName, N(m.Count), N(m.WorkingHours), N(m.IdleHours),
+                N(m.FuelLitres), m.Rate > 0 ? M(CostCalculator.Cost(m, cal)) : "-"
             }),
-            ["", "TOTAL", "", N(b.Machines.Sum(m => m.Count)), N(b.Machines.Sum(m => m.WorkingHours)),
-             N(b.Machines.Sum(m => m.IdleHours)), N(b.Machines.Sum(m => m.FuelLitres)), ""]);
+            ["", "TOTAL", "", "", N(b.Machines.Sum(m => m.Count)), N(b.Machines.Sum(m => m.WorkingHours)),
+             N(b.Machines.Sum(m => m.IdleHours)), N(b.Machines.Sum(m => m.FuelLitres)), showCost ? M(cost.Machinery) : ""]);
 
         pdf.Section("4. Materials & resources used");
         pdf.Table([
-                new("#", 0.4f), new("Material / resource", 3), new("Unit", 0.8f), new("Received", 1, true),
-                new("Consumed", 1, true), new("Remarks", 2.5f)
+                new("#", 0.4f), new("Material / resource", 2.4f), new("Type", 0.9f), new("Activity", 1.8f), new("Unit", 0.6f),
+                new("Received", 0.9f, true), new("Consumed", 0.9f, true), new("Cost", 1.1f, true)
             ],
             b.Materials.Select((m, i) => new[]
-                { (i + 1).ToString(), m.Material, m.Unit, N(m.Received), N(m.Consumed), m.Remarks }));
+            {
+                (i + 1).ToString(), m.Material + (string.IsNullOrWhiteSpace(m.Remarks) ? "" : $" ({m.Remarks})"),
+                m.Kind == ResourceType.Other ? "Non-material" : "Material", m.ActivityName, m.Unit, N(m.Received), N(m.Consumed),
+                m.Rate > 0 ? M(CostCalculator.Cost(m)) : "-"
+            }),
+            showCost ? ["", "TOTAL", "", "", "", "", "", M(cost.Material + cost.Other)] : null);
+
+        if (showCost)
+        {
+            pdf.Section("Cost of the day", $"{cal.Currency} {M(cost.Total)}");
+            pdf.Tiles([
+                ($"Manpower ({cal.Currency})", M(cost.Manpower)), ($"Machinery ({cal.Currency})", M(cost.Machinery)),
+                ($"Material ({cal.Currency})", M(cost.Material)), ($"Non-material ({cal.Currency})", M(cost.Other)),
+                ($"Total ({cal.Currency})", M(cost.Total)),
+            ]);
+            string Key(string id, string name) => id != "" ? id : string.IsNullOrWhiteSpace(name) ? "" : "name:" + name;
+            var names = b.Activities.GroupBy(a => Key(a.ActivityId, a.ActivityName)).ToDictionary(g => g.Key, g => g.First());
+            var byAct = b.Manpower.Select(m => (K: Key(m.ActivityId, m.ActivityName), N: m.ActivityName, Cost: CostCalculator.Cost(m, cal), Mh: m.ManHours))
+                .Concat(b.Machines.Select(m => (K: Key(m.ActivityId, m.ActivityName), N: m.ActivityName, Cost: CostCalculator.Cost(m, cal), Mh: 0.0)))
+                .Concat(b.Materials.Select(m => (K: Key(m.ActivityId, m.ActivityName), N: m.ActivityName, Cost: CostCalculator.Cost(m), Mh: 0.0)))
+                .GroupBy(x => x.K).OrderBy(g => g.Key == "")
+                .Select(g =>
+                {
+                    var act = names.GetValueOrDefault(g.Key);
+                    var label = g.Key == "" ? "General / overheads" : act?.ActivityName ?? g.First(x => x.N != "").N;
+                    var done = act?.TodayQty ?? 0;
+                    var unit = act?.Unit ?? "";
+                    var total = g.Sum(x => x.Cost);
+                    return new[] { label, N(g.Sum(x => x.Mh)), done > 0 ? $"{N(done)} {unit}" : "-", M(total),
+                        done > 0 ? M(CostCalculator.Round(total / (decimal)done)) : "-",
+                        cal.HoursPerDay > 0 ? M(CostCalculator.Round(total / (decimal)cal.HoursPerDay)) : "-" };
+                });
+            pdf.Table([new("Activity", 3), new("Man-hrs", 0.9f, true), new("Done today", 1.2f, true), new("Cost", 1.2f, true),
+                new("Cost / unit", 1.1f, true), new("Cost / hour", 1.1f, true)], byAct);
+        }
 
         pdf.Section("5. Hindrances", $"{N(b.Hindrances.Sum(h => h.HoursLost))} hrs lost");
         HindranceTable(pdf, b.Hindrances);
@@ -180,7 +220,7 @@ public static class PdfReports
 
     /// <summary>Summary table of the filtered reports, optionally followed by every full report.</summary>
     public static void ReportRegister(Stream output, Project? project, IReadOnlyList<DprBundle> bundles,
-        string filterText, bool includeFullReports, Func<string, string> mediaPath)
+        string filterText, bool includeFullReports, Func<string, string> mediaPath, WorkCalendar? cal = null)
     {
         using var pdf = new PdfDoc(output, project?.Name ?? "Daily Progress Reports", $"DPR register · {filterText}", landscape: true);
         pdf.NewPage();
@@ -219,7 +259,7 @@ public static class PdfReports
         ManpowerSummaryTables(pdf, bundles);
 
         if (!includeFullReports) return;
-        foreach (var b in bundles) WriteDailyReport(pdf, b, mediaPath);
+        foreach (var b in bundles) WriteDailyReport(pdf, b, mediaPath, cal);
     }
 
     /// <summary>Manpower by agency, department and trade for a period.</summary>

@@ -4,7 +4,8 @@ using SkiaSharp;
 
 namespace SiteNotes.Core.Reports;
 
-public record PdfColumn(string Title, float Weight, bool AlignRight = false);
+/// <summary>Table column. With Bar = true the cell text is a percentage (0–100) drawn as a progress bar.</summary>
+public record PdfColumn(string Title, float Weight, bool AlignRight = false, bool Bar = false);
 
 /// <summary>
 /// A small flowing-layout PDF writer on top of SkiaSharp (works the same on Android and Windows).
@@ -363,6 +364,21 @@ public sealed class PdfDoc : IDisposable
             for (var i = 0; i < cols.Count; i++)
             {
                 C.DrawRect(x, _y, widths[i], h, border);
+                if (cols[i].Bar && i < cells.Length && double.TryParse(cells[i], System.Globalization.NumberStyles.Float,
+                        System.Globalization.CultureInfo.InvariantCulture, out var pct))
+                {
+                    var bw = widths[i] - 2 * pad;
+                    var by = _y + h / 2 - 4.5f;
+                    using var track = Fill(SKColor.Parse("#E5E7EB"));
+                    C.DrawRoundRect(x + pad, by, bw, 9, 2, 2, track);
+                    using var fillBar = Fill(pct >= 100 ? SKColor.Parse("#15803D") : pct > 0 ? Accent : Muted);
+                    C.DrawRoundRect(x + pad, by, (float)(bw * Math.Clamp(pct, 0, 100) / 100), 9, 2, 2, fillBar);
+                    using var small = Font(6.5f, bold: true);
+                    using var pctInk = Fill(pct > 45 ? SKColors.White : Ink);
+                    C.DrawText($"{pct:0.#}%", x + pad + 3, by + 7, SKTextAlign.Left, small, pctInk);
+                    x += widths[i];
+                    continue;
+                }
                 var ly = _y + pad + fontSize;
                 foreach (var l in lines[i])
                 {
@@ -378,7 +394,13 @@ public sealed class PdfDoc : IDisposable
         Header();
         if (rowList.Count == 0 && emptyText != null)
         {
-            Row([emptyText], false, false);
+            EnsureSpace(lineH + 2 * pad);
+            using var border = Stroke(Grid, 0.5f);
+            using var muted = Fill(Muted);
+            using var ef = Font(fontSize, italic: true);
+            C.DrawRect(Margin, _y, ContentWidth, lineH + 2 * pad, border);
+            C.DrawText(emptyText, Margin + pad, _y + pad + fontSize, SKTextAlign.Left, ef, muted);
+            _y += lineH + 2 * pad;
         }
         for (var i = 0; i < rowList.Count; i++) Row(rowList[i], i % 2 == 1, false);
         if (totals != null && rowList.Count > 0) Row(totals, false, true);

@@ -61,6 +61,16 @@ public class Activity : SyncEntity
     public string SubcontractorId { get; set; } = "";
     public DateTime? PlannedStart { get; set; }
     public DateTime? PlannedFinish { get; set; }
+    /// <summary>WBS node (plant / unit / area / system…).</summary>
+    public string WbsId { get; set; } = "";
+    public string DepartmentId { get; set; } = "";
+    /// <summary>Construction method / statement (e.g. "Slip form", "Precast", "Conventional shuttering").</summary>
+    public string Method { get; set; } = "";
+    /// <summary>Weightage for overall project progress (e.g. budget share). 0 = equal weight.</summary>
+    public double Weightage { get; set; }
+    /// <summary>Planned output per working day (productivity norm), optional.</summary>
+    public double PlannedRatePerDay { get; set; }
+    public string Remarks { get; set; } = "";
     public override string ToString() => string.IsNullOrWhiteSpace(Code) ? Name : $"{Code} {Name}";
 }
 
@@ -91,6 +101,7 @@ public class DailyReport : SyncEntity
     public int TotalMachines { get; set; }
     public int ActivityCount { get; set; }
     public int HindranceCount { get; set; }
+    public decimal TotalCost { get; set; }
 
     [JsonIgnore, Ignore] public string Title => $"DPR #{ReportNo} · {Date:dd-MMM-yyyy}";
 }
@@ -117,6 +128,12 @@ public class ReportActivity : SyncEntity
 public class ReportManpower : SyncEntity
 {
     [Indexed] public string ReportId { get; set; } = "";
+    /// <summary>Activity this row was spent on (blank = general / overheads).</summary>
+    [Indexed] public string ActivityId { get; set; } = "";
+    public string ActivityName { get; set; } = "";
+    public string ResourceId { get; set; } = "";
+    public decimal Rate { get; set; }
+    public RateBasis Basis { get; set; } = RateBasis.PerDay;
     public ManpowerSource Source { get; set; } = ManpowerSource.Subcontractor;
     public string PartyId { get; set; } = "";
     public string PartyName { get; set; } = "";
@@ -132,6 +149,12 @@ public class ReportManpower : SyncEntity
 public class ReportMachine : SyncEntity
 {
     [Indexed] public string ReportId { get; set; } = "";
+    /// <summary>Activity this row was spent on (blank = general / overheads).</summary>
+    [Indexed] public string ActivityId { get; set; } = "";
+    public string ActivityName { get; set; } = "";
+    public string ResourceId { get; set; } = "";
+    public decimal Rate { get; set; }
+    public RateBasis Basis { get; set; } = RateBasis.PerHour;
     public string Name { get; set; } = "";
     public MachineOwnership Ownership { get; set; } = MachineOwnership.Own;
     public int Count { get; set; } = 1;
@@ -146,6 +169,14 @@ public class ReportMachine : SyncEntity
 public class ReportMaterial : SyncEntity
 {
     [Indexed] public string ReportId { get; set; } = "";
+    /// <summary>Activity this row was spent on (blank = general / overheads).</summary>
+    [Indexed] public string ActivityId { get; set; } = "";
+    public string ActivityName { get; set; } = "";
+    public string ResourceId { get; set; } = "";
+    public decimal Rate { get; set; }
+    public RateBasis Basis { get; set; } = RateBasis.PerUnit;
+    /// <summary>Material, or Other for non-material costs (hire, testing, transport…).</summary>
+    public ResourceType Kind { get; set; } = ResourceType.Material;
     public string Material { get; set; } = "";
     public string Unit { get; set; } = "Nos";
     public double Received { get; set; }

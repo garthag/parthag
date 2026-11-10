@@ -130,6 +130,7 @@ public sealed class LocalDatabase
             Requirements = await ListAsync<Requirement>(x => x.ReportId == reportId),
             Media = (await ListAsync<MediaItem>(x => x.OwnerId == reportId)).OrderBy(x => x.CapturedAtUtc).ToList(),
         };
+        await RefreshCumulativeAsync(b);
         return b;
     }
 
@@ -139,7 +140,9 @@ public sealed class LocalDatabase
     {
         var r = b.Report;
         if (r.ReportNo == 0) r.ReportNo = await NextReportNoAsync(r.ProjectId);
+        await RefreshCumulativeAsync(b);
         DprCalculator.UpdateTotals(b);
+        r.TotalCost = CostCalculator.ForReport(b, await CalendarAsync(r.ProjectId)).Total;
 
         var existing = new List<SyncEntity>();
         existing.AddRange(await ListAsync<ReportActivity>(x => x.ReportId == r.Id));
@@ -184,6 +187,37 @@ public sealed class LocalDatabase
         Changed?.Invoke(nameof(DailyReport));
     }
 
+    public async Task<WorkCalendar> CalendarAsync(string projectId) =>
+        (await ListForProjectAsync<WorkCalendar>(projectId)).OrderByDescending(c => c.UpdatedAtUtc).FirstOrDefault()
+        ?? new WorkCalendar { ProjectId = projectId };
+
+    /// <summary>Cumulative = sum of today's quantity in every earlier report (by date) + this report.
+    /// Planned quantity and unit come from the activity master, so the report always matches it.</summary>
+    public async Task RefreshCumulativeAsync(DprBundle b)
+    {
+        var linked = b.Activities.Where(a => a.ActivityId != "").ToList();
+        if (linked.Count == 0) return;
+        var r = b.Report;
+        var earlier = (await ListForProjectAsync<DailyReport>(r.ProjectId))
+            .Where(x => x.Id != r.Id && (x.Date.Date < r.Date.Date || (x.Date.Date == r.Date.Date && x.ReportNo < r.ReportNo)))
+            .Select(x => x.Id).ToHashSet();
+        var ids = linked.Select(a => a.ActivityId).ToHashSet();
+        var before = (await ListForProjectAsync<ReportActivity>(r.ProjectId))
+            .Where(x => ids.Contains(x.ActivityId) && earlier.Contains(x.ReportId))
+            .GroupBy(x => x.ActivityId).ToDictionary(g => g.Key, g => g.Sum(x => x.TodayQty));
+        var master = (await ListForProjectAsync<Activity>(r.ProjectId)).ToDictionary(a => a.Id);
+        foreach (var a in linked)
+        {
+            a.CumulativeQty = Math.Round(before.GetValueOrDefault(a.ActivityId) + b.Activities.Where(x => x.ActivityId == a.ActivityId).Sum(x => x.TodayQty), 4);
+            if (master.TryGetValue(a.ActivityId, out var m))
+            {
+                a.PlannedQty = m.PlannedQty;
+                a.Unit = m.Unit;
+                if (string.IsNullOrWhiteSpace(a.ActivityName)) a.ActivityName = m.ToString();
+            }
+        }
+    }
+
     private async Task AssignSerialsAsync(string projectId, List<Hindrance> hs, List<Requirement> rs)
     {
         if (hs.Any(h => h.SerialNo == 0))
@@ -222,10 +256,24 @@ public sealed class LocalDatabase
         };
         if (!carryForward) return b;
 
+        // Activities planned for this date (or already started) and not yet 100 % are listed automatically.
+        var progress = await new ProgressService(this).ComputeAsync(projectId, asOf: date.Date.AddDays(-1));
+        var running = progress.Activities.Where(p => p.Percent < 100 && p.Activity.PlannedQty > 0 &&
+            (p.DoneQty > 0 || (p.Activity.PlannedStart is { } st && st.Date <= date.Date))).ToList();
+
         var last = await _db.Table<DailyReport>()
             .Where(r => r.ProjectId == projectId && !r.IsDeleted && r.Date < date.Date)
             .OrderByDescending(r => r.Date).FirstOrDefaultAsync();
-        if (last == null) return b;
+        void AddRunning()
+        {
+            foreach (var p in running.Where(p => b.Activities.All(a => a.ActivityId != p.Activity.Id)))
+                b.Activities.Add(new ReportActivity
+                {
+                    ActivityId = p.Activity.Id, ActivityName = p.Activity.ToString(), Location = p.Activity.Location, Unit = p.Activity.Unit,
+                    PlannedQty = p.Activity.PlannedQty, CumulativeQty = p.DoneQty, SubcontractorId = p.Activity.SubcontractorId, SubcontractorName = p.Agency,
+                });
+        }
+        if (last == null) { AddRunning(); return b; }
 
         var prev = await LoadReportAsync(last.Id);
         b.Report.Shift = prev.Report.Shift;
@@ -236,13 +284,20 @@ public sealed class LocalDatabase
             PlannedQty = a.PlannedQty, CumulativeQty = a.CumulativeQty, SubcontractorId = a.SubcontractorId,
             SubcontractorName = a.SubcontractorName,
         }).Where(a => a.PlannedQty <= 0 || a.CumulativeQty < a.PlannedQty).ToList();
+        AddRunning();
+        var open = b.Activities.Select(a => a.ActivityId).ToHashSet();
+        string Keep(string activityId) => activityId == "" || open.Contains(activityId) ? activityId : "";
         b.Manpower = prev.Manpower.Select(m => new ReportManpower
         {
             Source = m.Source, PartyId = m.PartyId, PartyName = m.PartyName, Trade = m.Trade, Count = m.Count, Hours = m.Hours,
+            ActivityId = Keep(m.ActivityId), ActivityName = Keep(m.ActivityId) == "" ? "" : m.ActivityName,
+            ResourceId = m.ResourceId, Rate = m.Rate, Basis = m.Basis,
         }).ToList();
         b.Machines = prev.Machines.Select(m => new ReportMachine
         {
             Name = m.Name, Ownership = m.Ownership, Count = m.Count, WorkingHours = m.WorkingHours,
+            ActivityId = Keep(m.ActivityId), ActivityName = Keep(m.ActivityId) == "" ? "" : m.ActivityName,
+            ResourceId = m.ResourceId, Rate = m.Rate, Basis = m.Basis,
         }).ToList();
         return b;
     }

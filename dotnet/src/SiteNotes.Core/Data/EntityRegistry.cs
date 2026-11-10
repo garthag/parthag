@@ -22,6 +22,10 @@ public static class EntityRegistry
         [nameof(Note)] = typeof(Note),
         [nameof(ScanDocument)] = typeof(ScanDocument),
         [nameof(MediaItem)] = typeof(MediaItem),
+        [nameof(Resource)] = typeof(Resource),
+        [nameof(WbsNode)] = typeof(WbsNode),
+        [nameof(ActivityResource)] = typeof(ActivityResource),
+        [nameof(WorkCalendar)] = typeof(WorkCalendar),
     };
 
     public static string NameOf(Type t) => t.Name;
