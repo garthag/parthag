@@ -218,3 +218,18 @@ public class ProjectMember : Entity
     public string DisplayName { get; set; } = "";
     public Security.ProjectRole Role { get; set; } = Security.ProjectRole.SiteEngineer;
 }
+
+/// <summary>A site photo attached to a daily report. The image itself is stored in the database (SQL), never on a device only.</summary>
+public class DprPhoto : Entity
+{
+    public int ProjectId { get; set; }
+    public int DprId { get; set; }
+    public string FileName { get; set; } = "";
+    public string ContentType { get; set; } = "image/jpeg";
+    public string? Caption { get; set; }
+    public string TakenBy { get; set; } = "";
+    public int Size { get; set; }
+    /// <summary>SHA-256 of the image; part of the approval snapshot, so a swapped photo is detected.</summary>
+    public string Sha256 { get; set; } = "";
+    [JsonIgnore] public byte[] Content { get; set; } = Array.Empty<byte>();
+}

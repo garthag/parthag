@@ -123,7 +123,7 @@ public sealed class DprService(AppDbContext db, string currentUser)
         dpr.Status = DprStatus.Approved;
         dpr.ApprovedBy = currentUser;
         dpr.ApprovedAt = DateTime.UtcNow;
-        dpr.SnapshotHash = Hash(dpr);
+        dpr.SnapshotHash = Hash(dpr, PhotoHashes(dpr.Id));
         foreach (var l in dpr.Activities)
         {
             var a = l.Activity ?? db.Activities.First(x => x.Id == l.ActivityId);
@@ -170,11 +170,14 @@ public sealed class DprService(AppDbContext db, string currentUser)
     }
 
     /// <summary>True when the stored approved content still matches its snapshot hash.</summary>
-    public bool VerifyIntegrity(Dpr dpr) => dpr.Status != DprStatus.Approved || dpr.SnapshotHash == Hash(dpr);
+    public bool VerifyIntegrity(Dpr dpr) => dpr.Status != DprStatus.Approved || dpr.SnapshotHash == Hash(dpr, PhotoHashes(dpr.Id));
 
-    private static string Hash(Dpr d)
+    private List<string> PhotoHashes(int dprId) =>
+        db.Photos.Where(p => p.DprId == dprId).OrderBy(p => p.Id).Select(p => p.Sha256).ToList();
+
+    private static string Hash(Dpr d, List<string> photos)
     {
-        var content = new
+        object content = new
         {
             d.Number, d.Revision, d.ReportDate, d.Shift, d.Weather, d.SiteConditions, d.WorkCompleted, d.DelayReasons, d.TomorrowPlan, d.SafetyNotes,
             Activities = d.Activities.OrderBy(l => l.ActivityId).Select(l => new { l.ActivityId, l.QtyToday, l.QtyAccepted, l.CumQty }),
@@ -182,6 +185,7 @@ public sealed class DprService(AppDbContext db, string currentUser)
             Equipment = d.Equipment.Select(e => new { e.Code, e.WorkingHours, e.IdleHours, e.BreakdownHours }),
             Materials = d.Materials.Select(m => new { m.Code, m.Opening, m.Received, m.Issued }),
         };
+        if (photos.Count > 0) content = new { Report = content, Photos = photos }; // reports without photos keep their original hash
         return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(content)))).ToLowerInvariant();
     }
 

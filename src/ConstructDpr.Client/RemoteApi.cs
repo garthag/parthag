@@ -123,6 +123,18 @@ public sealed class RemoteApi(AuthSession session) : IConstructDprApi
     public Task<Dpr> ReviseDprAsync(int projectId, int dprId, string reason) => Send<Dpr>(HttpMethod.Post, $"{P(projectId)}/dprs/{dprId}/revise", new { reason });
     public Task<bool> VerifyDprAsync(int projectId, int dprId) => Get<bool>($"{P(projectId)}/dprs/{dprId}/verify");
 
+    public Task<List<PhotoInfo>> PhotosAsync(int projectId, int dprId) => Get<List<PhotoInfo>>($"{P(projectId)}/dprs/{dprId}/photos");
+    public Task<PhotoInfo> AddPhotoAsync(int projectId, int dprId, string fileName, byte[] content, string? caption) =>
+        Send<PhotoInfo>(HttpMethod.Post, $"{P(projectId)}/dprs/{dprId}/photos", new { fileName, content, caption });
+    public Task DeletePhotoAsync(int projectId, int photoId) => Send(HttpMethod.Delete, $"{P(projectId)}/photos/{photoId}");
+
+    public async Task<FileDownload> PhotoAsync(int projectId, int photoId)
+    {
+        using var res = await SendAsync(HttpMethod.Get, $"{P(projectId)}/photos/{photoId}");
+        var name = res.Content.Headers.ContentDisposition?.FileNameStar ?? res.Content.Headers.ContentDisposition?.FileName?.Trim('"') ?? "photo";
+        return new FileDownload(name, res.Content.Headers.ContentType?.MediaType ?? "image/jpeg", await res.Content.ReadAsByteArrayAsync());
+    }
+
     public Task<List<AuditEntry>> AuditAsync(int projectId, int take = 50) => Get<List<AuditEntry>>($"{P(projectId)}/audit?take={take}");
 
     public async Task<FileDownload> ReportAsync(int projectId, ReportKind kind, int? dprId = null)

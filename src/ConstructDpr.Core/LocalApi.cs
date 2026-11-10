@@ -545,6 +545,9 @@ public sealed class LocalApi(Func<AppDbContext> dbFactory, Caller caller, AppFea
         {
             Require(db, projectId, Module.Dpr, Act.Create | Act.Edit);
             id = Service(db).StartRevision(Tracked(db, projectId, dprId), reason).Id;
+            foreach (var p in db.Photos.AsNoTracking().Where(p => p.DprId == dprId).ToList())
+                db.Photos.Add(new DprPhoto { ProjectId = projectId, DprId = id, FileName = p.FileName, ContentType = p.ContentType, Caption = p.Caption, TakenBy = p.TakenBy, Size = p.Size, Sha256 = p.Sha256, Content = p.Content });
+            db.SaveChanges();
         }
         Publish(projectId, "dpr", id, "revise");
         return DprAsync(projectId, id);
@@ -555,6 +558,100 @@ public sealed class LocalApi(Func<AppDbContext> dbFactory, Caller caller, AppFea
         using var db = dbFactory();
         Require(db, projectId, Module.Dpr, Act.View);
         return Done(new DprService(db, "").VerifyIntegrity(Tracked(db, projectId, dprId)));
+    }
+
+    // ───────────────────────────── photos ─────────────────────────────
+
+    private const int MaxPhotoBytes = 8 * 1024 * 1024, MaxPhotosPerReport = 40;
+
+    private static PhotoInfo Info(DprPhoto p) => new(p.Id, p.DprId, p.FileName, p.ContentType, p.Caption, p.TakenBy, p.Size, p.CreatedAt);
+
+    public Task<List<PhotoInfo>> PhotosAsync(int projectId, int dprId)
+    {
+        using var db = dbFactory();
+        Require(db, projectId, Module.Dpr, Act.View);
+        return Done(db.Photos.AsNoTracking().Where(p => p.ProjectId == projectId && p.DprId == dprId).OrderBy(p => p.Id)
+            .Select(p => new PhotoInfo(p.Id, p.DprId, p.FileName, p.ContentType, p.Caption, p.TakenBy, p.Size, p.CreatedAt)).ToList());
+    }
+
+    /// <summary>Recognises JPEG, PNG and WebP by their first bytes (the file name is not trusted).</summary>
+    public static string? ImageType(byte[] b) =>
+        b.Length > 12 && b[0] == 0xFF && b[1] == 0xD8 && b[2] == 0xFF ? "image/jpeg"
+        : b.Length > 12 && b[0] == 0x89 && b[1] == 0x50 && b[2] == 0x4E && b[3] == 0x47 ? "image/png"
+        : b.Length > 12 && b[0] == (byte)'R' && b[1] == (byte)'I' && b[2] == (byte)'F' && b[3] == (byte)'F' && b[8] == (byte)'W' && b[9] == (byte)'E' && b[10] == (byte)'B' && b[11] == (byte)'P' ? "image/webp"
+        : null;
+
+    private void RequireEditable(AppDbContext db, int projectId, Dpr d)
+    {
+        var role = RoleOn(db, projectId);
+        var own = string.Equals(d.PreparedBy, caller.Name, StringComparison.OrdinalIgnoreCase);
+        if (!Permissions.Can(role, Module.Dpr, Act.Edit) && !(own && Permissions.Can(role, Module.Dpr, Act.Create)))
+            throw new ForbiddenException($"Your role ({Permissions.Label(role)}) cannot change this report.");
+        if (!d.IsEditable) throw new WorkflowException($"{d.Number} is {d.Status}: photos can only be added or removed while it is a draft (start a revision to correct it).");
+    }
+
+    public Task<PhotoInfo> AddPhotoAsync(int projectId, int dprId, string fileName, byte[] content, string? caption)
+    {
+        DprPhoto photo;
+        using (var db = dbFactory())
+        {
+            var d = db.Dprs.FirstOrDefault(x => x.Id == dprId && x.ProjectId == projectId) ?? throw new NotFoundException("Report not found.");
+            RequireEditable(db, projectId, d);
+            if (content is null || content.Length == 0) throw new WorkflowException("The photo is empty.");
+            if (content.Length > MaxPhotoBytes) throw new WorkflowException($"The photo is {content.Length / 1048576.0:0.0} MB; the limit is 8 MB.");
+            var type = ImageType(content) ?? throw new WorkflowException("Only JPEG, PNG or WebP photos can be attached.");
+            if (db.Photos.Count(p => p.DprId == dprId) >= MaxPhotosPerReport) throw new WorkflowException($"A report can hold at most {MaxPhotosPerReport} photos.");
+            var raw = string.IsNullOrWhiteSpace(fileName) ? "photo" : fileName.Trim();
+            var name = raw[(raw.LastIndexOfAny(['/', '\\']) + 1)..]; // Windows and Android paths, whatever the server's OS
+            if (name.Length == 0) name = "photo";
+            photo = new DprPhoto
+            {
+                ProjectId = projectId, DprId = dprId, FileName = name.Length > 120 ? name[..120] : name, ContentType = type,
+                Caption = string.IsNullOrWhiteSpace(caption) ? null : caption.Trim(), TakenBy = caller.Name, Size = content.Length,
+                Sha256 = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(content)).ToLowerInvariant(), Content = content,
+            };
+            db.Photos.Add(photo);
+            db.SaveChanges();
+            Audit(db, projectId, "Photo", photo.Id, "add", $"{d.Number}: {photo.FileName}");
+        }
+        Publish(projectId, "dpr", dprId, "photo");
+        return Done(Info(photo));
+    }
+
+    public Task DeletePhotoAsync(int projectId, int photoId)
+    {
+        int dprId;
+        using (var db = dbFactory())
+        {
+            var p = db.Photos.FirstOrDefault(x => x.Id == photoId && x.ProjectId == projectId) ?? throw new NotFoundException("Photo not found.");
+            var d = db.Dprs.First(x => x.Id == p.DprId);
+            RequireEditable(db, projectId, d);
+            dprId = d.Id;
+            db.Photos.Remove(p);
+            db.SaveChanges();
+            Audit(db, projectId, "Photo", photoId, "delete", $"{d.Number}: {p.FileName}");
+        }
+        Publish(projectId, "dpr", dprId, "photo");
+        return Task.CompletedTask;
+    }
+
+    public Task<FileDownload> PhotoAsync(int projectId, int photoId)
+    {
+        using var db = dbFactory();
+        Require(db, projectId, Module.Dpr, Act.View);
+        var p = db.Photos.AsNoTracking().FirstOrDefault(x => x.Id == photoId && x.ProjectId == projectId) ?? throw new NotFoundException("Photo not found.");
+        return Done(new FileDownload(p.FileName, p.ContentType, p.Content));
+    }
+
+    /// <summary>
+    /// Latest change number of a project (the newest audit entry). Apps working straight on a shared SQL database
+    /// poll this every few seconds and reload when it moves: live updates without a server.
+    /// </summary>
+    public Task<int> ChangeStampAsync(int projectId)
+    {
+        using var db = dbFactory();
+        RoleOn(db, projectId);
+        return Done(db.Audit.Where(a => a.ProjectId == projectId).Select(a => (int?)a.Id).Max() ?? 0);
     }
 
     // ───────────────────────────── audit & reports ─────────────────────────────
@@ -581,7 +678,9 @@ public sealed class LocalApi(Func<AppDbContext> dbFactory, Caller caller, AppFea
             var d = LoadForView(db, projectId, dprId ?? throw new WorkflowException("Choose a report."));
             var name = $"{d.Number}-R{d.Revision}";
             return Done(kind == ReportKind.DprPdf
-                ? new FileDownload(name + ".pdf", Pdf, DprPdfReport.Generate(d, p))
+                ? new FileDownload(name + ".pdf", Pdf, DprPdfReport.Generate(d, p,
+                    db.Photos.AsNoTracking().Where(x => x.DprId == d.Id).OrderBy(x => x.Id).ToList()
+                        .Select(x => (x.Caption ?? x.FileName, x.Content)).ToList()))
                 : new FileDownload(name + ".xlsx", Xlsx, ExcelService.ExportDpr(d, p)));
         }
         var acts = db.Activities.AsNoTracking().Where(a => a.ProjectId == projectId).OrderBy(a => a.SortOrder).ToList();

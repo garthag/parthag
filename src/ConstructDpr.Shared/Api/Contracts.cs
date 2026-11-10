@@ -37,6 +37,9 @@ public enum ReportKind { DprPdf, DprExcel, SchedulePdf, ScheduleExcel, ActivityT
 
 public sealed record FileDownload(string FileName, string ContentType, byte[] Content);
 
+/// <summary>A photo without its image bytes (fetch them with PhotoAsync).</summary>
+public sealed record PhotoInfo(int Id, int DprId, string FileName, string ContentType, string? Caption, string TakenBy, int Size, DateTime At);
+
 public sealed record AppFeatures(bool AdminPortal, bool Registration, string ServerVersion);
 
 /// <summary>A change committed on the server; every app showing that project refreshes.</summary>
@@ -83,6 +86,12 @@ public interface IConstructDprApi
     Task<Dpr> RejectDprAsync(int projectId, int dprId, string reason);
     Task<Dpr> ReviseDprAsync(int projectId, int dprId, string reason);
     Task<bool> VerifyDprAsync(int projectId, int dprId);
+
+    Task<List<PhotoInfo>> PhotosAsync(int projectId, int dprId);
+    /// <summary>Attaches a JPEG/PNG/WebP photo (max 8 MB, 40 per report) to an editable report.</summary>
+    Task<PhotoInfo> AddPhotoAsync(int projectId, int dprId, string fileName, byte[] content, string? caption);
+    Task DeletePhotoAsync(int projectId, int photoId);
+    Task<FileDownload> PhotoAsync(int projectId, int photoId);
 
     Task<List<AuditEntry>> AuditAsync(int projectId, int take = 50);
     Task<FileDownload> ReportAsync(int projectId, ReportKind kind, int? dprId = null);

@@ -12,7 +12,7 @@ public static class DprPdfReport
 
     private static readonly string Brand = "#0F3D5E";
 
-    public static byte[] Generate(Dpr d, Project p)
+    public static byte[] Generate(Dpr d, Project p, IReadOnlyList<(string Caption, byte[] Image)>? photos = null)
     {
         return Document.Create(doc => doc.Page(page =>
         {
@@ -51,6 +51,17 @@ public static class DprPdfReport
                     Para("Tomorrow's plan", d.TomorrowPlan);
                     Para("Review comment", d.ReviewComment);
                 })));
+                if (photos is { Count: > 0 })
+                    col.Item().Element(c => Section(c, $"7. Site photos ({photos.Count})", t => t.Table(tb =>
+                    {
+                        tb.ColumnsDefinition(cd => { cd.RelativeColumn(); cd.RelativeColumn(); });
+                        foreach (var (caption, image) in photos)
+                            tb.Cell().Padding(3).Column(pc =>
+                            {
+                                pc.Item().Height(170).AlignCenter().Image(image).FitArea();
+                                pc.Item().PaddingTop(2).Text(caption).FontSize(7.5f).FontColor(Colors.Grey.Darken2);
+                            });
+                    })));
                 col.Item().PaddingTop(16).Row(r =>
                 {
                     void Sign(string role, string? name, DateTime? at) => r.RelativeItem().Border(0.5f).BorderColor(Colors.Grey.Medium).Padding(6).Column(s =>

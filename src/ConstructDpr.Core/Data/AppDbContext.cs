@@ -14,7 +14,7 @@ public class AppUser : IdentityUser
     public string DisplayName { get; set; } = "";
 }
 
-public enum DbProvider { Sqlite, PostgreSql }
+public enum DbProvider { Sqlite, PostgreSql, SqlServer }
 
 /// <summary>
 /// The one database of CONSTRUCT DPR. PostgreSQL for the shared server (tables in schema "cdpr", so an existing
@@ -36,10 +36,12 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : IdentityUser
     public DbSet<EquipmentLine> EquipmentLines => Set<EquipmentLine>();
     public DbSet<MaterialLine> MaterialLines => Set<MaterialLine>();
     public DbSet<AuditEntry> Audit => Set<AuditEntry>();
+    public DbSet<DprPhoto> Photos => Set<DprPhoto>();
     /// <summary>Server sign-in keys, kept in the database so tokens survive restarts and redeploys.</summary>
     public DbSet<DataProtectionKey> DataProtectionKeys => Set<DataProtectionKey>();
 
     private bool IsSqlite => Database.ProviderName?.Contains("Sqlite", StringComparison.OrdinalIgnoreCase) == true;
+    private bool IsSqlServer => Database.ProviderName?.Contains("SqlServer", StringComparison.OrdinalIgnoreCase) == true;
 
     protected override void OnModelCreating(ModelBuilder b)
     {
@@ -56,6 +58,11 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : IdentityUser
         b.Entity<EquipmentLine>().Ignore(e => e.UtilisationPct);
         b.Entity<MaterialLine>().Ignore(m => m.Closing);
         b.Entity<AuditEntry>().HasIndex(a => new { a.Entity, a.EntityId });
+        b.Entity<AuditEntry>().HasIndex(a => new { a.ProjectId, a.Id });
+        // One delete path only (SQL Server refuses several cascade paths): activities with report lines are never deleted anyway.
+        b.Entity<DprActivityLine>().HasOne(l => l.Activity).WithMany().HasForeignKey(l => l.ActivityId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<DprPhoto>().HasOne<Dpr>().WithMany().HasForeignKey(p => p.DprId).OnDelete(DeleteBehavior.Cascade);
+        b.Entity<DprPhoto>().HasIndex(p => new { p.ProjectId, p.DprId });
         foreach (var t in b.Model.GetEntityTypes())
             foreach (var p in t.GetProperties().Where(p => p.ClrType == typeof(decimal) || p.ClrType == typeof(decimal?)))
                 p.SetColumnType(IsSqlite ? "TEXT" : "numeric(20,6)"); // exact decimals, never binary floating point
@@ -85,8 +92,12 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : IdentityUser
     public static DbContextOptions<AppDbContext> Options(DbProvider provider, string connectionString)
     {
         var b = new DbContextOptionsBuilder<AppDbContext>();
-        if (provider == DbProvider.Sqlite) b.UseSqlite(connectionString);
-        else b.UseNpgsql(connectionString);
+        switch (provider)
+        {
+            case DbProvider.Sqlite: b.UseSqlite(connectionString); break;
+            case DbProvider.SqlServer: b.UseSqlServer(connectionString, o => o.EnableRetryOnFailure(3)); break;
+            default: b.UseNpgsql(connectionString); break;
+        }
         b.ReplaceService<IModelCacheKeyFactory, ProviderModelCacheKey>();
         return b.Options;
     }
@@ -108,16 +119,52 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : IdentityUser
     {
         var creator = (RelationalDatabaseCreator)Database.GetService<IDatabaseCreator>();
         if (!creator.Exists()) creator.Create();
-        if (IsSqlite)
+        if (!HasTable("Projects"))
         {
-            if (!TableExists("SELECT count(*) FROM sqlite_master WHERE type='table' AND name='Projects'")) creator.CreateTables();
+            if (!IsSqlite)
+                Database.ExecuteSqlRaw(IsSqlServer
+                    ? $"IF SCHEMA_ID(N'{Schema}') IS NULL EXEC(N'CREATE SCHEMA [{Schema}]')"
+                    : $"CREATE SCHEMA IF NOT EXISTS {Schema}");
+            creator.CreateTables();
+            return;
         }
-        else
+        AddMissingTables();
+    }
+
+    private bool HasTable(string name) => TableExists(IsSqlite
+        ? $"SELECT count(*) FROM sqlite_master WHERE type='table' AND name='{name}'"
+        : $"SELECT count(*) FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA='{Schema}' AND TABLE_NAME='{name}'");
+
+    /// <summary>
+    /// Upgrades a database made by an earlier version: creates every table (and its indexes) that the current
+    /// model has but the database lacks, using EF Core's own CREATE statements for this database type.
+    /// </summary>
+    private void AddMissingTables()
+    {
+        var script = Database.GenerateCreateScript();
+        var statements = (IsSqlServer
+                ? System.Text.RegularExpressions.Regex.Split(script, @"^\s*GO\s*$", System.Text.RegularExpressions.RegexOptions.Multiline)
+                : System.Text.RegularExpressions.Regex.Split(script, @";[ \t]*\r?\n"))
+            .Select(x => x.Trim().TrimEnd(';').Trim()).Where(x => x.Length > 0).ToList();
+        string? NameIn(string sql, string keyword)
         {
-            if (!TableExists($"SELECT count(*) FROM information_schema.tables WHERE table_schema='{Schema}' AND table_name='Projects'"))
+            var m = System.Text.RegularExpressions.Regex.Match(sql, keyword + @"\s+(?:[\[""]?\w+[\]""]?\.)?[\[""]?(\w+)[\]""]?");
+            return m.Success ? m.Groups[1].Value : null;
+        }
+        var created = new HashSet<string>();
+        foreach (var sql in statements)
+        {
+            if (sql.StartsWith("CREATE TABLE", StringComparison.OrdinalIgnoreCase))
             {
-                Database.ExecuteSqlRaw($"CREATE SCHEMA IF NOT EXISTS {Schema}");
-                creator.CreateTables();
+                var table = NameIn(sql, "CREATE TABLE");
+                if (table is null || HasTable(table)) continue;
+                Database.ExecuteSqlRaw(sql);
+                created.Add(table);
+            }
+            else if (sql.Contains("CREATE", StringComparison.OrdinalIgnoreCase) && sql.Contains("INDEX", StringComparison.OrdinalIgnoreCase)
+                     && NameIn(sql, " ON") is { } onTable && created.Contains(onTable))
+            {
+                Database.ExecuteSqlRaw(sql);
             }
         }
     }

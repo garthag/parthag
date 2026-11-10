@@ -202,6 +202,29 @@ else
         </div>
         @if (Editable) { <button class="btn sm" style="margin-top:8px" @onclick="() => { _d.Materials.Add(new MaterialLine()); Touched(); }">＋ Material</button> }
     }
+    else if (_tab == "photos")
+    {
+        @if (Editable)
+        {
+            <div class="row" style="margin-bottom:10px">
+                <input class="grow" placeholder="Caption for the next photo (optional)" @bind="_caption" />
+                <label class="btn primary" style="margin:0;color:#fff">📷 Add photos <InputFile OnChange="AddPhotos" accept="image/*" multiple class="hidden" /></label>
+            </div>
+        }
+        <div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(160px,1fr))">
+            @foreach (var ph in _photos)
+            {
+                <div class="card" style="padding:6px">
+                    @if (_thumbs.TryGetValue(ph.Id, out var src)) { <img src="@src" alt="@ph.Caption" style="width:100%;height:130px;object-fit:cover;border-radius:6px" /> }
+                    else { <div class="loading" style="height:130px;padding:50px 0"><span class="spinner"></span></div> }
+                    <div class="small" style="margin-top:4px">@(ph.Caption ?? ph.FileName)</div>
+                    <div class="small muted">@ph.TakenBy · @Fmt.Dt(ph.At)</div>
+                    @if (Editable) { <button class="btn ghost sm danger" @onclick="() => DeletePhoto(ph)">Remove</button> }
+                </div>
+            }
+        </div>
+        @if (_photos.Count == 0) { <p class="muted">No photos yet.@(Editable ? " On a phone, Add photos opens the camera or gallery." : "")</p> }
+    }
     else
     {
         <div class="card">
@@ -237,11 +260,13 @@ else
     private bool? _verified;
     private Dpr? _backup;
     private int _pick;
-    private string _tab = "work", _reason = "";
+    private string _tab = "work", _reason = "", _caption = "";
+    private List<PhotoInfo> _photos = new();
+    private readonly Dictionary<int, string> _thumbs = new();
     private bool Editable => _d?.IsEditable == true && (State.Can(Module.Dpr, Act.Edit) || (State.Can(Module.Dpr, Act.Create) && string.Equals(_d.PreparedBy, State.Me?.Email, StringComparison.OrdinalIgnoreCase)));
     private bool CanApprove => _d?.Status == DprStatus.Submitted && State.Can(Module.Dpr, Act.Approve);
     private string BackupKey => $"cdpr.draft.{Pid}.{Id}";
-    private (string, string)[] Tabs => [("work", $"Work ({_d?.Activities.Count})"), ("crew", $"Manpower ({_d?.Manpower.Sum(m => m.Headcount)})"), ("equipment", "Equipment"), ("materials", "Materials"), ("site", "Site & narrative")];
+    private (string, string)[] Tabs => [("work", $"Work ({_d?.Activities.Count})"), ("crew", $"Manpower ({_d?.Manpower.Sum(m => m.Headcount)})"), ("equipment", "Equipment"), ("materials", "Materials"), ("photos", $"Photos ({_photos.Count})"), ("site", "Site & narrative")];
 
     private int _loadedId;
     protected override async Task OnParametersSetAsync()
@@ -255,6 +280,8 @@ else
         var t1 = Api.DprAsync(Pid, Id);
         var t2 = Api.ActivitiesAsync(Pid);
         (_d, _acts) = (await t1, await t2);
+        _photos = await Api.PhotosAsync(Pid, Id);
+        _ = LoadThumbsAsync();
         (_dirty, _remoteChange, _verified) = (false, false, null);
         if (_d.Status == DprStatus.Approved) _verified = await Api.VerifyDprAsync(Pid, Id);
         _backup = null;
@@ -363,6 +390,46 @@ else
         _revising = false;
         await Run(() => Api.ReviseDprAsync(Pid, Id, _reason), "Revision started.");
         _reason = "";
+    }
+
+    private async Task LoadThumbsAsync()
+    {
+        foreach (var ph in _photos.Where(p => !_thumbs.ContainsKey(p.Id)).ToList())
+        {
+            try
+            {
+                var f = await Api.PhotoAsync(Pid, ph.Id);
+                _thumbs[ph.Id] = $"data:{f.ContentType};base64,{Convert.ToBase64String(f.Content)}";
+                await InvokeAsync(StateHasChanged);
+            }
+            catch (Exception ex) when (ex is HttpRequestException or NotFoundException) { }
+        }
+    }
+
+    private async Task AddPhotos(InputFileChangeEventArgs e)
+    {
+        _busy = true;
+        foreach (var file in e.GetMultipleFiles(20))
+        {
+            await Notes.TryAsync(async () =>
+            {
+                // Shrunk on the device first (max 1600 px, JPEG): quick to upload over a weak site connection.
+                var small = await file.RequestImageFileAsync("image/jpeg", 1600, 1600);
+                using var ms = new MemoryStream();
+                await small.OpenReadStream(8 * 1024 * 1024).CopyToAsync(ms);
+                await Api.AddPhotoAsync(Pid, Id, Path.ChangeExtension(file.Name, ".jpg"), ms.ToArray(), string.IsNullOrWhiteSpace(_caption) ? null : _caption);
+            });
+        }
+        _caption = "";
+        _photos = await Api.PhotosAsync(Pid, Id);
+        _busy = false;
+        _ = LoadThumbsAsync();
+    }
+
+    private async Task DeletePhoto(PhotoInfo ph)
+    {
+        if (await Notes.TryAsync(() => Api.DeletePhotoAsync(Pid, ph.Id), "Photo removed."))
+            _photos = await Api.PhotosAsync(Pid, Id);
     }
 
     private async Task Download(ReportKind kind)

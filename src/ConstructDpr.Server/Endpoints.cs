@@ -16,6 +16,7 @@ public sealed record NameRequest(string Name);
 public sealed record MemberRequest(string Email, ProjectRole Role);
 public sealed record ApproveRequest(Dictionary<int, decimal>? Accepted);
 public sealed record ImportRequest(byte[] Content);
+public sealed record PhotoRequest(string FileName, byte[] Content, string? Caption);
 
 public static class Endpoints
 {
@@ -93,6 +94,15 @@ public static class Endpoints
         project.MapPost("/dprs/{dprId:int}/reject", (int projectId, int dprId, ReasonRequest r, ApiFactory f) => Ok(f, a => a.RejectDprAsync(projectId, dprId, r.Reason)));
         project.MapPost("/dprs/{dprId:int}/revise", (int projectId, int dprId, ReasonRequest r, ApiFactory f) => Ok(f, a => a.ReviseDprAsync(projectId, dprId, r.Reason)));
         project.MapGet("/dprs/{dprId:int}/verify", (int projectId, int dprId, ApiFactory f) => Ok(f, a => a.VerifyDprAsync(projectId, dprId)));
+
+        project.MapGet("/dprs/{dprId:int}/photos", (int projectId, int dprId, ApiFactory f) => Ok(f, a => a.PhotosAsync(projectId, dprId)));
+        project.MapPost("/dprs/{dprId:int}/photos", (int projectId, int dprId, PhotoRequest r, ApiFactory f) => Ok(f, a => a.AddPhotoAsync(projectId, dprId, r.FileName, r.Content, r.Caption)));
+        project.MapDelete("/photos/{photoId:int}", (int projectId, int photoId, ApiFactory f) => NoContent(f, a => a.DeletePhotoAsync(projectId, photoId)));
+        project.MapGet("/photos/{photoId:int}", async (int projectId, int photoId, ApiFactory f) =>
+        {
+            var file = await (await f.ForCurrentUserAsync()).PhotoAsync(projectId, photoId);
+            return Results.File(file.Content, file.ContentType, file.FileName);
+        });
 
         project.MapGet("/audit", (int projectId, int? take, ApiFactory f) => Ok(f, a => a.AuditAsync(projectId, take ?? 50)));
         project.MapGet("/reports/{kind}", async (int projectId, ReportKind kind, int? dprId, ApiFactory f) =>
