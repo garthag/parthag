@@ -19,6 +19,11 @@ public sealed class MorePage : ContentPage
         Build();
     }
 
+    private static DateOnly Monday() => AppState.Today.AddDays(-(((int)AppState.Today.DayOfWeek + 6) % 7));
+
+    private async Task Period(DateOnly from, DateOnly to) =>
+        await Ui.TryAsync(this, async () => await AppState.ShareFileAsync(await AppState.Api.PeriodReportAsync(AppState.Pid, from, to, excel: false)));
+
     private void Build()
     {
         var projects = new Picker { Title = "Project", ItemsSource = AppState.Projects.Select(p => $"{p.Code} — {p.Name}").ToList(), FontSize = 15 };
@@ -48,6 +53,19 @@ public sealed class MorePage : ContentPage
                     await AppState.RefreshProjectsAsync();
                     await AppState.OpenProjectAsync(p.Id);
                 }, "Demo project loaded.")) } }),
+            Ui.Card(new VerticalStackLayout
+            {
+                Spacing = 6,
+                IsVisible = AppState.Can(ConstructDpr.Shared.Security.Module.Reports, ConstructDpr.Shared.Security.Act.Export),
+                Children =
+                {
+                    Ui.H2("Progress report (PDF)"),
+                    Ui.Small("From approved daily reports: quantities, manpower, equipment, materials, delays."),
+                    Ui.Plain("This week", async (_, _) => await Period(Monday(), AppState.Today)),
+                    Ui.Plain("Last week", async (_, _) => await Period(Monday().AddDays(-7), Monday().AddDays(-1))),
+                    Ui.Plain("This month", async (_, _) => await Period(new DateOnly(AppState.Today.Year, AppState.Today.Month, 1), AppState.Today)),
+                },
+            }),
             Ui.Card(new VerticalStackLayout
             {
                 Spacing = 6,

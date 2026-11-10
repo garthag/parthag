@@ -1,3 +1,4 @@
+using System.Text.Json;
 using ConstructDpr.Mobile.Services;
 using ConstructDpr.Shared.Api;
 using ConstructDpr.Shared.Calculations;
@@ -46,13 +47,50 @@ public sealed class DprPage : ProjectPage
         (_dirty, _remoteChange) = (false, false);
         Title = _d.Number + (_d.Revision > 0 ? $" R{_d.Revision}" : "");
         Build();
+        await OfferBackupAsync();
         if (_d.Status == DprStatus.Approved && !await AppState.Api.VerifyDprAsync(AppState.Pid, _id))
             await DisplayAlertAsync("Integrity warning", "The stored content of this approved report no longer matches its approval fingerprint (SHA-256).", "OK");
     }
 
-    private void Touched()
+    // ───────────── unsaved edits stay on the phone (weak signal on site) ─────────────
+
+    private string BackupKey => $"cdpr.draft.{AppState.Session.ServerUrl}.{AppState.Pid}.{_id}";
+
+    private void MarkDirty()
     {
         _dirty = true;
+        if (_d is { IsEditable: true })
+        {
+            try { Preferences.Default.Set(BackupKey, JsonSerializer.Serialize(_d, Json.Options)); }
+            catch (Exception ex) when (ex is NotSupportedException or InvalidOperationException) { }
+        }
+    }
+
+    private void ClearBackup() => Preferences.Default.Remove(BackupKey);
+
+    /// <summary>Offers to bring back edits that were kept on the phone (app closed or no signal before saving).</summary>
+    private async Task OfferBackupAsync()
+    {
+        if (_d is not { IsEditable: true } || Preferences.Default.Get<string?>(BackupKey, null) is not { } raw) return;
+        Dpr? kept = null;
+        try { kept = JsonSerializer.Deserialize<Dpr>(raw, Json.Options); } catch (JsonException) { }
+        if (kept is null || kept.Version != _d.Version) { ClearBackup(); return; }
+        if (!await DisplayAlertAsync("Unsaved changes", "Changes to this report that were not saved yet are kept on this phone. Restore them?", "Restore", "Discard"))
+        {
+            ClearBackup();
+            return;
+        }
+        foreach (var l in kept.Activities) l.Activity = _acts.FirstOrDefault(a => a.Id == l.ActivityId) ?? l.Activity;
+        kept.Activities.RemoveAll(l => l.Activity is null);
+        _d = kept;
+        _dirty = true;
+        Touched();
+        Build();
+    }
+
+    private void Touched()
+    {
+        MarkDirty();
         if (_d is null) return;
         foreach (var l in _d.Activities.Where(l => l.Activity is not null))
         {
@@ -129,7 +167,18 @@ public sealed class DprPage : ProjectPage
     private async Task Run(Func<Task<Dpr>> work, string done)
     {
         Dpr? result = null;
-        if (!await Ui.TryAsync(this, async () => result = await work())) return;
+        try { result = await work(); }
+        catch (HttpRequestException)
+        {
+            await DisplayAlertAsync("No connection", "The server cannot be reached. Your changes are kept on this phone: tap the button again when you have signal.", "OK");
+            return;
+        }
+        catch (Exception ex) when (ex is not HttpRequestException)
+        {
+            if (!await Ui.TryAsync(this, () => Task.FromException(ex))) return;
+        }
+        if (result is null) return;
+        ClearBackup();
         _dirty = false;
         if (result!.Id != _id) { _id = result.Id; } // a revision opens in place
         await ReloadAsync();
@@ -225,7 +274,7 @@ public sealed class DprPage : ProjectPage
             {
                 if (!Editable) return Pair(label, Fig(value.ToString()));
                 var e = Ui.Field(value.ToString(), "0", Keyboard.Numeric);
-                e.TextChanged += (_, a) => { if (int.TryParse(a.NewTextValue, out var v) && v >= 0) { set(v); _dirty = true; } };
+                e.TextChanged += (_, a) => { if (int.TryParse(a.NewTextValue, out var v) && v >= 0) { set(v); MarkDirty(); } };
                 return Ui.Labelled(label, e);
             }
             g.Add(Count("Skilled", m.Skilled, v => m.Skilled = v), 0, 0);
@@ -242,7 +291,7 @@ public sealed class DprPage : ProjectPage
                 if (string.IsNullOrWhiteSpace(agency)) return;
                 var trade = await DisplayPromptAsync("New crew", "Trade (e.g. Civil, Structural, Rigging):") ?? "";
                 d.Manpower.Add(new ManpowerLine { Agency = agency.Trim(), Trade = trade.Trim() });
-                _dirty = true;
+                MarkDirty();
                 Build();
             }));
         return box;
@@ -262,7 +311,7 @@ public sealed class DprPage : ProjectPage
             {
                 if (!Editable) return Pair(label, Fig(Ui.N(value, 1)));
                 var x = Ui.Number(value);
-                x.TextChanged += (_, a) => { if (Ui.ParseDec(a.NewTextValue) is { } v && v >= 0) { set(v); _dirty = true; } };
+                x.TextChanged += (_, a) => { if (Ui.ParseDec(a.NewTextValue) is { } v && v >= 0) { set(v); MarkDirty(); } };
                 return Ui.Labelled(label, x);
             }
             g.Add(Hours("Working", e.WorkingHours, v => e.WorkingHours = v), 0, 0);
@@ -272,7 +321,7 @@ public sealed class DprPage : ProjectPage
             if (Editable)
             {
                 var reason = Ui.Field(e.BreakdownReason, "Breakdown reason (needed with breakdown hours)");
-                reason.TextChanged += (_, a) => { e.BreakdownReason = a.NewTextValue; _dirty = true; };
+                reason.TextChanged += (_, a) => { e.BreakdownReason = a.NewTextValue; MarkDirty(); };
                 card.Children.Add(reason);
             }
             box.Children.Add(Ui.Card(card));
@@ -295,7 +344,7 @@ public sealed class DprPage : ProjectPage
             {
                 if (!Editable) return Pair(label, Fig(Ui.N(value)));
                 var x = Ui.Number(value);
-                x.TextChanged += (_, a) => { if (Ui.ParseDec(a.NewTextValue) is { } v && v >= 0) { set(v); _dirty = true; closing.Text = Ui.N(m.Closing); closing.TextColor = m.Closing < 0 ? Ui.Bad : Ui.Text; } };
+                x.TextChanged += (_, a) => { if (Ui.ParseDec(a.NewTextValue) is { } v && v >= 0) { set(v); MarkDirty(); closing.Text = Ui.N(m.Closing); closing.TextColor = m.Closing < 0 ? Ui.Bad : Ui.Text; } };
                 return Ui.Labelled(label, x);
             }
             g.Add(Pair("Opening", Fig(Ui.N(m.Opening))), 0, 0);
@@ -404,7 +453,7 @@ public sealed class DprPage : ProjectPage
             InputView input = multi
                 ? new Editor { Text = value, AutoSize = EditorAutoSizeOption.TextChanges, MinimumHeightRequest = 80, FontSize = 16, BackgroundColor = Colors.White }
                 : Ui.Field(value);
-            input.TextChanged += (_, e) => { set(e.NewTextValue); _dirty = true; };
+            input.TextChanged += (_, e) => { set(e.NewTextValue); MarkDirty(); };
             return Ui.Labelled(label, input);
         }
         box.Children.Add(Text("Weather", d.Weather, v => d.Weather = v));

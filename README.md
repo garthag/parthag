@@ -9,14 +9,15 @@ Everything is **C# (.NET 10)**:
 | **Windows app** | **WPF**, with a native Gantt chart | `CONSTRUCT-DPR-windows-setup.exe` |
 | **Android app** | **.NET MAUI**, native screens written in C# | `CONSTRUCT-DPR-android.apk`, installed directly |
 | **Database** | **Microsoft SQL Server** (SQL Server Express is free), or SQLite for one PC offline, through EF Core | your office PC/server |
-| **Sync server** (only for phones) | ASP.NET Core API + SignalR live updates, using the same SQL Server database | `CONSTRUCT-DPR-server-windows.zip` |
+| **Sync server** (only for phones) | ASP.NET Core API + SignalR. **Built into the Windows app** ("Let phones connect to this PC"), or standalone as a Windows service | nothing extra, or `CONSTRUCT-DPR-server-windows.zip` |
 | **Rules** | CPM scheduling, approvals, roles and checks, in one shared C# library | |
 | **Reports** | QuestPDF (PDF), ClosedXML (Excel) | |
 
 ```
- Office PCs ── Windows app (WPF) ──────────────┐
-                                               ├──►  Microsoft SQL Server  (one database)
- Phones ──── Android app (MAUI) ── Sync server ┘
+ Site office:   Phones ── Android app ──►  Windows app on the site PC  (built-in sync server + SQLite)
+
+ Office:        PCs ──── Windows app ───────────────────┐
+                Phones ── Android app ── sync server ───┴──►  Microsoft SQL Server
 ```
 Changes on any PC or phone appear on all others within a few seconds.
 
@@ -34,8 +35,11 @@ Changes on any PC or phone appear on all others within a few seconds.
 
 ## Get started
 
-* **One PC, no set-up:** install **CONSTRUCT-DPR-windows-setup.exe** from the *Releases* page. It opens offline with a demo project.
-* **Office and phones:** follow [docs/START_HERE.md](docs/START_HERE.md): SQL Server Express → Windows app → sync server → Android app.
+* **One PC:** install **CONSTRUCT-DPR-windows-setup.exe** from the *Releases* page. It opens with a demo project.
+* **One PC + phones:** in the Windows app tick *Settings → Phones → Let phones connect to this PC*, then install **CONSTRUCT-DPR-android.apk** on the phones.
+* **Office network:** Microsoft SQL Server Express + the Windows app on every PC.
+
+Step by step: [docs/START_HERE.md](docs/START_HERE.md).
 
 ## What it does
 
@@ -46,14 +50,16 @@ Changes on any PC or phone appear on all others within a few seconds.
 | **Approvals** | Draft → submit → approve (the reviewer may lower the *accepted* quantity) or reject (reason required) → revise. No self-approval unless allowed. Approved reports are locked with a SHA-256 fingerprint, and tampering is detected |
 | **Schedule** | Activities and BOQ, FS/SS/FF/SF with lag, CPM with data date and actual dates, critical path, numbered baselines, Gantt chart |
 | **Dashboard** | Physical progress against plan, S-curve, forecast finish, executed value (₹), approvals pending, delayed and critical activities |
-| **Reports & Excel** | DPR PDF (A4), schedule PDF with Gantt (A3), Excel exports, Excel import that rejects the whole file if any row is wrong, audit trail |
+| **Reports & Excel** | DPR PDF (A4), **progress report for any period** (week, month: PDF or Excel), schedule PDF with Gantt (A3), Excel exports, Excel import that rejects the whole file if any row is wrong, audit trail |
+| **Simple daily routine** | New reports start with yesterday's activities, so you only type today's numbers. Empty reports cannot be submitted. Unsaved phone edits survive a lost connection. "● n to approve" badges |
+| **Accounts** | Own accounts and roles. Administrators reset forgotten passwords |
 | **People & roles** | 13 roles × 7 modules × 8 actions ([docs/PERMISSIONS.md](docs/PERMISSIONS.md)), checked for every action |
 | **Two people, one record** | A stale copy is refused instead of silently overwriting a colleague's newer work |
 
 ## For developers
 
 ```bash
-dotnet test tests/ConstructDpr.Tests                  # 49 tests; set CDPR_SQLSERVER="Server=…" to include SQL Server
+dotnet test tests/ConstructDpr.Tests                  # 55 tests; set CDPR_SQLSERVER="Server=…" to include SQL Server
 dotnet run --project src/ConstructDpr.App             # Windows app (on Windows)
 dotnet build src/ConstructDpr.Mobile -f net10.0       # compiles the Android app's C# on any PC
 dotnet build src/ConstructDpr.Mobile -f net10.0-android   # the .apk (needs: dotnet workload install maui-android + Android SDK)
