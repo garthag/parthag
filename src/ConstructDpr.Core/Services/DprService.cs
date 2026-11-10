@@ -170,20 +170,32 @@ public sealed class DprService(AppDbContext db, string currentUser)
     }
 
     /// <summary>True when the stored approved content still matches its snapshot hash.</summary>
-    public bool VerifyIntegrity(Dpr dpr) => dpr.Status != DprStatus.Approved || dpr.SnapshotHash == Hash(dpr, PhotoHashes(dpr.Id));
+    public bool VerifyIntegrity(Dpr dpr)
+    {
+        if (dpr.Status != DprStatus.Approved) return true;
+        var photos = PhotoHashes(dpr.Id);
+        // Current fingerprint (numbers in one standard form), or one made by version 2.1.17 and earlier.
+        return dpr.SnapshotHash == Hash(dpr, photos) || dpr.SnapshotHash == Hash(dpr, photos, canonical: false);
+    }
 
     private List<string> PhotoHashes(int dprId) =>
         db.Photos.Where(p => p.DprId == dprId).OrderBy(p => p.Id).Select(p => p.Sha256).ToList();
 
-    private static string Hash(Dpr d, List<string> photos)
+    /// <summary>
+    /// SHA-256 of the approved content. Numbers are written in one standard form (85 and 85.000 are the same quantity:
+    /// databases return decimals with different trailing zeros), so the fingerprint only changes when the content does.
+    /// </summary>
+    private static string Hash(Dpr d, List<string> photos, bool canonical = true)
     {
+        decimal N(decimal v) => canonical ? v / 1.000000000000000000000000000000000m : v;
+        decimal? Nn(decimal? v) => v is { } x ? N(x) : null;
         object content = new
         {
             d.Number, d.Revision, d.ReportDate, d.Shift, d.Weather, d.SiteConditions, d.WorkCompleted, d.DelayReasons, d.TomorrowPlan, d.SafetyNotes,
-            Activities = d.Activities.OrderBy(l => l.ActivityId).Select(l => new { l.ActivityId, l.QtyToday, l.QtyAccepted, l.CumQty }),
-            Manpower = d.Manpower.Select(m => new { m.Agency, m.Trade, m.Skilled, m.SemiSkilled, m.Unskilled, m.Supervisors, m.Hours }),
-            Equipment = d.Equipment.Select(e => new { e.Code, e.WorkingHours, e.IdleHours, e.BreakdownHours }),
-            Materials = d.Materials.Select(m => new { m.Code, m.Opening, m.Received, m.Issued }),
+            Activities = d.Activities.OrderBy(l => l.ActivityId).Select(l => new { l.ActivityId, QtyToday = N(l.QtyToday), QtyAccepted = Nn(l.QtyAccepted), CumQty = N(l.CumQty) }),
+            Manpower = d.Manpower.Select(m => new { m.Agency, m.Trade, m.Skilled, m.SemiSkilled, m.Unskilled, m.Supervisors, Hours = N(m.Hours) }),
+            Equipment = d.Equipment.Select(e => new { e.Code, WorkingHours = N(e.WorkingHours), IdleHours = N(e.IdleHours), BreakdownHours = N(e.BreakdownHours) }),
+            Materials = d.Materials.Select(m => new { m.Code, Opening = N(m.Opening), Received = N(m.Received), Issued = N(m.Issued) }),
         };
         if (photos.Count > 0) content = new { Report = content, Photos = photos }; // reports without photos keep their original hash
         return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(content)))).ToLowerInvariant();
