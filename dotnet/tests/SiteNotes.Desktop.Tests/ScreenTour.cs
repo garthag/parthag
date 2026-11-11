@@ -246,7 +246,7 @@ public class ScreenTour
             {
                 pdf.NewPage();
                 pdf.Text(t, 12, bold: true, color: PdfDoc.Accent, spacingAfter: 6);
-                pdf.Image(Path.Combine(dir, f), 470);
+                pdf.Image(Path.Combine(dir, f), 400); // fits under the title on the same landscape page
             }
         });
     }

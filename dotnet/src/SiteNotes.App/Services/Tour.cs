@@ -20,8 +20,11 @@ public static class Tour
 #endif
     }
 
+    private static int _started;
+
     public static async Task RunAsync()
     {
+        if (Interlocked.Exchange(ref _started, 1) == 1) return; // the start page can appear twice
         Log("START 00-start");
         try
         {

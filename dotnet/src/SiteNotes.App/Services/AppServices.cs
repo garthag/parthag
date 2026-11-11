@@ -73,7 +73,9 @@ public static class AppServices
     {
         CurrentProject = p;
         await Db.SetSettingAsync("CurrentProject", p?.Id ?? "");
-        ProjectChanged?.Invoke();
+        // screens rebuild themselves on this event, so it is always raised on the UI thread (callers may be on a worker thread)
+        if (MainThread.IsMainThread) ProjectChanged?.Invoke();
+        else MainThread.BeginInvokeOnMainThread(() => ProjectChanged?.Invoke());
     }
 
     public static string ProjectId => CurrentProject?.Id ?? "";

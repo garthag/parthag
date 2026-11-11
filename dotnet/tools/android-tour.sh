@@ -23,5 +23,9 @@ while [ $SECONDS -lt $end ]; do
   sleep 0.5
 done
 echo "----- app log -----"
-adb logcat -d | grep -E "SITENOTES_TOUR|SiteNotes|FATAL|AndroidRuntime|DOTNET|monodroid|mono-rt" | tail -150 | tee "$OUT/tour-log.txt"
+adb logcat -d | grep -E "SITENOTES_TOUR|SITENOTES_ERROR|SiteNotes|FATAL|AndroidRuntime|DOTNET|monodroid|mono-rt" | tail -150 | tee "$OUT/tour-log.txt"
 ls -la "$OUT"
+# a tour that captured almost nothing means the app crashed or never came to the front: fail loudly
+count=$(ls "$OUT"/*.png 2>/dev/null | wc -l)
+echo "screens captured: $count"
+if [ "$count" -lt 12 ]; then echo "::error::Android screen tour captured only $count screens – see tour-log.txt"; exit 1; fi

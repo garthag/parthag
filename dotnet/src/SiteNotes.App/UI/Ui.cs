@@ -203,15 +203,23 @@ public static class Ui
         try { await action(); }
         catch (Exception ex)
         {
-            var page = Application.Current?.Windows.FirstOrDefault()?.Page;
-            if (page != null) await page.DisplayAlertAsync("Something went wrong", ex.Message, "OK");
+            Console.WriteLine("SITENOTES_ERROR " + ex);
+            // the failing code may have run on a worker thread: a dialog can only be shown from the UI thread
+            await MainThread.InvokeOnMainThreadAsync(async () =>
+            {
+                var page = Application.Current?.Windows.FirstOrDefault()?.Page;
+                if (page != null) await page.DisplayAlertAsync("Something went wrong", ex.Message, "OK");
+            });
         }
     }
 
     public static Task Toast(string message)
     {
-        var page = Application.Current?.Windows.FirstOrDefault()?.Page;
-        return page?.DisplayAlertAsync("", message, "OK") ?? Task.CompletedTask;
+        return MainThread.InvokeOnMainThreadAsync(() =>
+        {
+            var page = Application.Current?.Windows.FirstOrDefault()?.Page;
+            return page?.DisplayAlertAsync("", message, "OK") ?? Task.CompletedTask;
+        });
     }
 
     public static Color StatusColor(string status) => status switch
