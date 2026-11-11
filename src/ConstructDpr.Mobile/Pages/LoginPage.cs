@@ -5,7 +5,7 @@ namespace ConstructDpr.Mobile.Pages;
 /// <summary>Server address (asked once), then sign in or create an account.</summary>
 public sealed class LoginPage : ContentPage
 {
-    private readonly Entry _server = Ui.Field(null, "e.g. http://office-pc:5080", Keyboard.Url);
+    private readonly Entry _server = Ui.Field(null, "http://192.168.1.20:5080", Keyboard.Url);
     private readonly Entry _name = Ui.Field(null, "Your name");
     private readonly Entry _email = Ui.Field(null, "E-mail", Keyboard.Email);
     private readonly Entry _password = new() { Placeholder = "Password (8+ characters)", IsPassword = true, FontSize = 16, BackgroundColor = Colors.White };
@@ -32,7 +32,8 @@ public sealed class LoginPage : ContentPage
             {
                 new Label { Text = "CONSTRUCT", FontSize = 26, FontAttributes = FontAttributes.Bold, TextColor = Ui.Brand },
                 new Label { Text = "DPR · Daily progress & site management", FontSize = 14, TextColor = Ui.Accent, FontAttributes = FontAttributes.Bold },
-                Ui.Labelled("Server address (from your office)", _server),
+                Ui.Labelled("Server address", _server),
+                Ui.Small("Shown in the Windows app: Settings → Phones → Let phones connect to this PC. The phone must be on the same Wi-Fi as that PC."),
                 _nameRow,
                 Ui.Labelled("E-mail", _email),
                 Ui.Labelled("Password", _password),

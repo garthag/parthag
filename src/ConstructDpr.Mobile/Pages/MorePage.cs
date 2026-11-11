@@ -46,7 +46,7 @@ public sealed class MorePage : ContentPage
                     Ui.Small("Role on this project: " + (AppState.Project is null ? "—" : Ui.Role(AppState.Role))),
                 },
             }),
-            Ui.Card(new VerticalStackLayout { Spacing = 6, Children = { Ui.H2("Project"), projects,
+            Ui.Card(new VerticalStackLayout { Spacing = 6, Children = { Ui.H2("Project"), Ui.Boxed(projects),
                 Ui.Plain("Load demo project", async (_, _) => await Ui.TryAsync(this, async () =>
                 {
                     var p = await AppState.Api.CreateDemoProjectAsync();

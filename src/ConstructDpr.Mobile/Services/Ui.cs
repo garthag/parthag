@@ -85,7 +85,23 @@ public static class Ui
         Field(value?.ToString("0.###", CultureInfo.InvariantCulture), placeholder, Keyboard.Numeric);
 
     /// <summary>A label above a control.</summary>
-    public static View Labelled(string label, View control) => new VerticalStackLayout { Spacing = 2, Children = { Small(label), control } };
+    public static View Labelled(string label, View control) => new VerticalStackLayout { Spacing = 2, Children = { Small(label), Boxed(control) } };
+
+    /// <summary>Draws a clear outline around an input (text, number, picker, date), so it is visible before it is tapped.</summary>
+    public static View Boxed(View control)
+    {
+        if (control is not (InputView or Picker or DatePicker)) return control;
+        control.BackgroundColor = Colors.Transparent;
+        return new Border
+        {
+            Content = control,
+            BackgroundColor = Colors.White,
+            Stroke = Color.FromArgb("#9AA9B7"),
+            StrokeThickness = 1,
+            StrokeShape = new RoundRectangle { CornerRadius = 8 },
+            Padding = new Thickness(8, 0),
+        };
+    }
 
     /// <summary>Page scaffold: grey background, scrolling content with padding.</summary>
     public static ScrollView Scroll(params View[] children)

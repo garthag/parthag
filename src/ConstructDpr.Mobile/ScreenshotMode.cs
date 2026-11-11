@@ -27,6 +27,16 @@ public static class ScreenshotMode
         Directory.CreateDirectory(dir);
         try
         {
+            async Task Shot(string name)
+            {
+                await Task.Delay(3500);
+                var shot = await Screenshot.Default.CaptureAsync();
+                await using var src = await shot.OpenReadAsync(ScreenshotFormat.Png);
+                await using var dst = File.Create(Path.Combine(dir, name + ".png"));
+                await src.CopyToAsync(dst);
+            }
+            window.Page = new LoginPage();
+            await Shot("android-00-sign-in");
             await AppState.Session.SetServerAsync(o.Server);
             try { await AppState.Session.RegisterAsync(o.Email, o.Password, "Site Engineer"); }
             catch (Exception ex) when (ex is WorkflowException or ConflictException) { /* already registered */ }
@@ -40,14 +50,6 @@ public static class ScreenshotMode
             }
             var shell = new AppShell();
             window.Page = shell;
-            async Task Shot(string name)
-            {
-                await Task.Delay(3500);
-                var shot = await Screenshot.Default.CaptureAsync();
-                await using var src = await shot.OpenReadAsync(ScreenshotFormat.Png);
-                await using var dst = File.Create(Path.Combine(dir, name + ".png"));
-                await src.CopyToAsync(dst);
-            }
             await Shot("android-01-login-done-home");
             var dprs = await AppState.Api.DprsAsync(AppState.Pid);
             await Shell.Current.GoToAsync("//reports");

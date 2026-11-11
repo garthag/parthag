@@ -209,7 +209,7 @@ public sealed class DprPage : ProjectPage
                 Touched();
                 Build();
             };
-            box.Children.Add(pick);
+            box.Children.Add(Ui.Boxed(pick));
         }
         foreach (var l in d.Activities)
         {
@@ -253,7 +253,7 @@ public sealed class DprPage : ProjectPage
             {
                 var delay = Ui.Field(l.DelayReason, "Delay / remarks (optional)");
                 delay.TextChanged += (_, e) => { l.DelayReason = e.NewTextValue; Touched(); };
-                card.Children.Add(delay);
+                card.Children.Add(Ui.Boxed(delay));
             }
             else if (!string.IsNullOrEmpty(l.DelayReason)) card.Children.Add(Ui.Small("Delay: " + l.DelayReason));
             box.Children.Add(Ui.Card(card));
@@ -322,7 +322,7 @@ public sealed class DprPage : ProjectPage
             {
                 var reason = Ui.Field(e.BreakdownReason, "Breakdown reason (needed with breakdown hours)");
                 reason.TextChanged += (_, a) => { e.BreakdownReason = a.NewTextValue; MarkDirty(); };
-                card.Children.Add(reason);
+                card.Children.Add(Ui.Boxed(reason));
             }
             box.Children.Add(Ui.Card(card));
         }
