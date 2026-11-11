@@ -186,7 +186,7 @@ public class DprEditorView : ViewBase, ISaveable, IPrintable
             (Glyph.Delete, "Delete report", DeleteAsync));
         _statusBadge.Text = locked ? "🔒 APPROVED – read only" : r.Status.ToString().ToUpperInvariant();
         _statusBadge.Foreground = Theme.StatusBrush(r.Status.ToString());
-        tb.Items.Add(_statusBadge);
+        tb.Items.Add(W.Free(_statusBadge));
 
         var header = W.Card(W.Form(6,
             W.Field("Report no.", W.Text(PdfReports.ReportLabel(_b), 16, true, Theme.Primary)),
@@ -217,8 +217,8 @@ public class DprEditorView : ViewBase, ISaveable, IPrintable
         _tabs.SelectedIndex = 0;
 
         var dock = new DockPanel();
-        foreach (var top in new UIElement[] { tb, header, _summary }) { DockPanel.SetDock(top, Dock.Top); dock.Children.Add(top); }
-        dock.Children.Add(_tabs);
+        foreach (var top in new UIElement[] { tb, header, _summary }) { DockPanel.SetDock(top, Dock.Top); dock.Children.Add(W.Free(top)); }
+        dock.Children.Add(W.Free(_tabs));
         Content = dock;
     }
 
@@ -498,7 +498,8 @@ public class DprEditorView : ViewBase, ISaveable, IPrintable
 
     private UIElement PhotosTab()
     {
-        var panel = new MediaPanel(MediaOwner.Report, () => _b.Report.Id);
+        // the report's own photos + the photos taken that day for its activities, in the order taken
+        var panel = new MediaPanel(MediaOwner.Report, () => _b.Report.Id, async () => { Collect(); return await Desk.Db.ReportMediaAsync(_b.Report, _b.Activities); });
         panel.CountChanged += n => { if (_tabs.Items.Count > 7) ((TabItem)_tabs.Items[7]).Header = $"8  Photos & videos ({n})"; };
         return panel;
     }

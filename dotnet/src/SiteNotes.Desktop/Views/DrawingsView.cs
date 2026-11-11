@@ -20,6 +20,12 @@ public class DrawingRow(Drawing d) : LiveRow
     public int Agencies => P?.Agencies ?? 0;
     public string State => P == null ? "" : DrawingReports.StateText(P.State);
     public string Wbs => P?.WbsPath ?? "";
+    public decimal Value => P?.Value ?? 0;
+    public decimal AllocatedValue => P?.AllocatedValue ?? 0;
+    public decimal UnallocatedValue => P?.UnallocatedValue ?? 0;
+    public decimal CompletedValue => P?.CompletedValue ?? 0;
+    public decimal PayableValue => P?.PayableValue ?? 0;
+    public string File => P?.FileName == null ? "" : "📎";
 }
 
 public class ItemRow(DrawingItem i) : LiveRow
@@ -40,6 +46,11 @@ public class ItemRow(DrawingItem i) : LiveRow
         P.Agencies.Any(a => a.Excess > 0) ? "agency beyond its allocation" : "",
     }.Where(x => x != ""));
     public string State => P == null ? "" : DrawingReports.StateText(P.State);
+    public decimal Value => P?.Value ?? 0;
+    public decimal UnallocatedValue => P?.UnallocatedValue ?? 0;
+    public decimal CompletedValue => P?.CompletedValue ?? 0;
+    public decimal AllocatedValue => P?.AllocatedValue ?? 0;
+    public decimal PayableValue => P?.PayableValue ?? 0;
 }
 
 public class AllocRow(DrawingAllocation a) : LiveRow
@@ -51,6 +62,9 @@ public class AllocRow(DrawingAllocation a) : LiveRow
     public double Percent => P?.Percent ?? 0;
     public double Excess => P?.Excess ?? 0;
     public DateTime? LastWorked => P?.LastWorked;
+    public decimal AllocatedValue => CostCalculator.Round((decimal)A.AllocatedQty * A.Rate);
+    public decimal PayableValue => P?.PayableValue ?? 0;
+    public decimal BalanceValue => CostCalculator.Round((decimal)Balance * A.Rate);
 }
 
 /// <summary>
@@ -93,20 +107,34 @@ public class DrawingsView : ViewBase, IPrintable
             .Text("Quantity", nameof(DrawingRow.Quantity), 170, readOnly: true)
             .Progress("Allocated", nameof(DrawingRow.AllocatedPercent), 105).Progress("Completed", nameof(DrawingRow.Percent), 105)
             .Number("Agencies", nameof(DrawingRow.Agencies), 65, "0", readOnly: true).Status("Work status", nameof(DrawingRow.State), 110)
+            .Text("File", nameof(DrawingRow.File), 40, readOnly: true)
+            .Number("BOQ value", nameof(DrawingRow.Value), 110, "#,0.00", readOnly: true)
+            .Number("Allocated value (payable)", nameof(DrawingRow.AllocatedValue), 140, "#,0.00", readOnly: true)
+            .Number("Unallocated value", nameof(DrawingRow.UnallocatedValue), 120, "#,0.00", readOnly: true)
+            .Number("Completed value", nameof(DrawingRow.CompletedValue), 115, "#,0.00", readOnly: true)
+            .Number("Payable for work done", nameof(DrawingRow.PayableValue), 140, "#,0.00", readOnly: true)
             .OnEdited(async o => await Dialogs.Guard(async () => { await Desk.Db.SaveAsync(((DrawingRow)o).D); await RecalcAsync(); })).Grid;
         _iGrid = new GridBuilder(_items, multiSelect: false)
             .Text("Item / BOQ no.", "I.ItemNo", 95).Text("Description", "I.Description", 230).Enum<DrawingItemKind>("Type", "I.Kind", 95)
-            .Suggest("Unit", "I.Unit", Lists.Units, 55).Number("Drawing qty", "I.Qty", 85)
+            .Suggest("Unit", "I.Unit", Lists.Units, 55).Number("Drawing qty", "I.Qty", 85).Number("BOQ rate", "I.Rate", 90, "#,0.00")
+            .Number("BOQ value", nameof(ItemRow.Value), 105, "#,0.00", readOnly: true)
             .Number("Allocated", nameof(ItemRow.Allocated), 80, readOnly: true).Number("Unallocated", nameof(ItemRow.Unallocated), 85, readOnly: true)
             .Number("Completed", nameof(ItemRow.Completed), 85, readOnly: true).Number("Balance", nameof(ItemRow.Balance), 80, readOnly: true)
             .Progress("Progress", nameof(ItemRow.Percent), 105).Status("Status", nameof(ItemRow.State), 105)
+            .Number("Unallocated value", nameof(ItemRow.UnallocatedValue), 115, "#,0.00", readOnly: true)
+            .Number("Completed value", nameof(ItemRow.CompletedValue), 110, "#,0.00", readOnly: true)
+            .Number("Payable (agencies)", nameof(ItemRow.PayableValue), 115, "#,0.00", readOnly: true)
             .Text("Check", nameof(ItemRow.Warning), 200, readOnly: true).Lookup("Counts for activity", "I.ActivityId", acts, 170)
             .OnEdited(async o => await Dialogs.Guard(async () => { await Desk.Db.SaveAsync(((ItemRow)o).I); await RecalcAsync(); })).Grid;
         _aGrid = new GridBuilder(_allocs, multiSelect: false)
             .Lookup("Agency (subcontractor)", "A.SubcontractorId", _subs, 200).Number("Allocated qty", "A.AllocatedQty", 95)
-            .Text("Work order", "A.WorkOrderNo", 110).Date("Allocated on", "A.AllocatedOn")
+            .Number("Unit price payable", "A.Rate", 115, "#,0.00").Number("Allocated value", nameof(AllocRow.AllocatedValue), 110, "#,0.00", readOnly: true)
+            .Text("Work order no.", "A.WorkOrderNo", 110).Date("Allocated on", "A.AllocatedOn")
             .Number("Done", nameof(AllocRow.Done), 80, readOnly: true).Number("Balance", nameof(AllocRow.Balance), 80, readOnly: true)
-            .Progress("Progress", nameof(AllocRow.Percent), 105).Number("Beyond allocation", nameof(AllocRow.Excess), 105, readOnly: true)
+            .Progress("Progress", nameof(AllocRow.Percent), 105)
+            .Number("Payable for work done", nameof(AllocRow.PayableValue), 135, "#,0.00", readOnly: true)
+            .Number("Balance value", nameof(AllocRow.BalanceValue), 105, "#,0.00", readOnly: true)
+            .Number("Beyond allocation", nameof(AllocRow.Excess), 105, readOnly: true)
             .Date("Last worked", nameof(AllocRow.LastWorked), readOnly: true).Text("Remarks", "A.Remarks")
             .OnEdited(async o => await Dialogs.Guard(async () =>
             {
@@ -123,7 +151,14 @@ public class DrawingsView : ViewBase, IPrintable
 
         var tb = W.ToolBar(
             (Glyph.Add, "Add drawing", AddDrawingAsync),
+            (Glyph.Link, "Attach drawing file…", AttachFileAsync),
+            (Glyph.Open, "Open drawing", OpenFileAsync),
+            null,
             (Glyph.Add, "Add item", AddItemAsync),
+            (Glyph.Table, "Import BOQ…", ImportBoqAsync),
+            (Glyph.Excel, "BOQ template", () => Dialogs.CreateAndOpenAsync("BOQ_template.xlsx", BoqService.Template)),
+            (Glyph.Chart, "Create activities", CreateActivitiesAsync),
+            null,
             (Glyph.People, "Allocate to agency", AddAllocAsync),
             (Glyph.Accept, "Allocate the rest…", AllocateRestAsync),
             null,
@@ -131,6 +166,10 @@ public class DrawingsView : ViewBase, IPrintable
             null,
             (Glyph.Print, "PDF", PdfAsync),
             (Glyph.Excel, "Excel", ExcelAsync),
+            null,
+            (Glyph.Edit, "Export to edit…", ExportEditAsync),
+            (Glyph.Table, "Import Excel…", ImportEditAsync),
+            null,
             (Glyph.Refresh, "Recalculate", RefreshAsync));
         var search = W.Wrap(W.Text("🔍 "), _search, W.Muted("   Completed quantities come from the daily reports (“Add drawing work…”). One item can be split between several agencies."));
         search.Margin = new Thickness(10, 6, 10, 4);
@@ -203,6 +242,11 @@ public class DrawingsView : ViewBase, IPrintable
         _kpis.Children.Add(W.Stat("Over-allocated", all.Count(i => i.OverAllocated > 1e-9).ToString(), Theme.Danger));
         _kpis.Children.Add(W.Stat("Done without allocation", all.Count(i => i.CompletedWithoutAllocation > 0).ToString(), Theme.Danger));
         _kpis.Children.Add(W.Stat("Beyond drawing qty", all.Count(i => i.Excess > 0).ToString(), Theme.Danger));
+        _kpis.Children.Add(W.Stat("BOQ value", PdfReports.M(_reg.Drawings.Sum(d => d.Value))));
+        _kpis.Children.Add(W.Stat("Allocated (payable)", PdfReports.M(_reg.Drawings.Sum(d => d.AllocatedValue)), Theme.Accent));
+        _kpis.Children.Add(W.Stat("Unallocated value", PdfReports.M(_reg.Drawings.Sum(d => d.UnallocatedValue)), Theme.Danger));
+        _kpis.Children.Add(W.Stat("Completed value", PdfReports.M(_reg.Drawings.Sum(d => d.CompletedValue)), Theme.Success));
+        _kpis.Children.Add(W.Stat("Payable to agencies", PdfReports.M(_reg.Drawings.Sum(d => d.PayableValue)), Theme.Accent));
         _summary.Items.Clear();
         _summary.Items.Add(new TabItem
         {
@@ -212,7 +256,11 @@ public class DrawingsView : ViewBase, IPrintable
                 .Number("Allocated", nameof(AgencyDrawingSummary.Allocated), 90).Number("Done", nameof(AgencyDrawingSummary.Done), 90)
                 .Number("Balance", nameof(AgencyDrawingSummary.Balance), 90).Progress("Progress", nameof(AgencyDrawingSummary.Percent), 120)
                 .Number("Drawings", nameof(AgencyDrawingSummary.Drawings), 70, "0").Number("Items", nameof(AgencyDrawingSummary.Items), 60, "0")
-                .Number("Done without allocation", nameof(AgencyDrawingSummary.WithoutAllocation), 150).Grid,
+                .Number("Done without allocation", nameof(AgencyDrawingSummary.WithoutAllocation), 150)
+                .Number("Allocated value", nameof(AgencyDrawingSummary.AllocatedValue), 120, "#,0.00")
+                .Number("Payable for work done", nameof(AgencyDrawingSummary.PayableValue), 140, "#,0.00")
+                .Number("Balance value", nameof(AgencyDrawingSummary.BalanceValue), 110, "#,0.00")
+                .Text("Work orders", nameof(AgencyDrawingSummary.WorkOrders), 0).Grid,
         });
     }
 
@@ -311,6 +359,98 @@ public class DrawingsView : ViewBase, IPrintable
             await Desk.Db.DeleteAsync(d.D);
         }
         await RefreshAsync();
+    }
+
+    private async Task AttachFileAsync()
+    {
+        if (_dGrid.SelectedItem is not DrawingRow d) { Dialogs.Info("Select a drawing first."); return; }
+        var dlg = new Microsoft.Win32.OpenFileDialog { Title = $"Drawing file for {d.D.Number}", Filter = "Drawings|*.pdf;*.dwg;*.dxf;*.jpg;*.jpeg;*.png;*.tif;*.tiff|All files|*.*" };
+        if (dlg.ShowDialog() != true) return;
+        var m = await Desk.ImportMediaAsync(dlg.FileName, MediaOwner.Drawing, d.D.Id, MediaKind.Document, $"{d.D.Number} {d.D.Revision}");
+        d.D.FileMediaId = m.Id;
+        await Desk.Db.SaveAsync(d.D);
+        await RecalcAsync();
+        Desk.Say($"Attached {System.IO.Path.GetFileName(dlg.FileName)} to {d.D.Number}");
+    }
+
+    private async Task OpenFileAsync()
+    {
+        if (_dGrid.SelectedItem is not DrawingRow d) return;
+        var m = d.D.FileMediaId == "" ? null : await Desk.Db.GetAsync<MediaItem>(d.D.FileMediaId);
+        if (m == null) { Dialogs.Info("No file attached. Use “Attach drawing file…”."); return; }
+        var path = Desk.Db.MediaPath(m.FileName);
+        if (!System.IO.File.Exists(path)) { Dialogs.Info("The file is still downloading from the sync server."); return; }
+        Dialogs.Open(path);
+    }
+
+    private static readonly string[] ExchangeKinds = ["Drawings (register)", "Items / BOQ of all drawings (qty, BOQ rate)", "Allocations (agency, work order, qty, unit price)"];
+
+    /// <summary>Drawings as shown (search and sort applied), or all items / allocations of those drawings, to edit in Excel.</summary>
+    private async Task ExportEditAsync()
+    {
+        var k = Dialogs.Choose("Export to edit in Excel", "Which sheet?", ExchangeKinds);
+        if (k < 0) return;
+        await ExportEditAsync(k);
+    }
+
+    public async Task ExportEditAsync(int kind)
+    {
+        var shown = System.Windows.Data.CollectionViewSource.GetDefaultView(_drawings).Cast<DrawingRow>().Select(r => r.D).ToList();
+        var ids = shown.Select(d => d.Id).ToHashSet();
+        var order = shown.Select((d, i) => (d.Id, i)).ToDictionary(x => x.Id, x => x.i);
+        var x = ExchangeUi.Sheets;
+        if (kind == 0) await ExchangeUi.ExportAsync(() => x.DrawingsAsync(Desk.ProjectId), shown);
+        else if (kind == 1)
+            await ExchangeUi.ExportAsync(() => x.DrawingItemsAsync(Desk.ProjectId),
+                (await Desk.Db.ListForProjectAsync<DrawingItem>(Desk.ProjectId)).Where(i => ids.Contains(i.DrawingId)).OrderBy(i => order[i.DrawingId]).ThenBy(i => i.SortOrder));
+        else
+            await ExchangeUi.ExportAsync(() => x.AllocationsAsync(Desk.ProjectId),
+                (await Desk.Db.ListForProjectAsync<DrawingAllocation>(Desk.ProjectId)).Where(a => ids.Contains(a.DrawingId)).OrderBy(a => order[a.DrawingId]).ThenBy(a => a.SubcontractorName),
+                "To allocate: add a row with Drawing no., Item no., Agency, Work order no., Allocated qty and Unit price payable.");
+    }
+
+    private async Task ImportEditAsync()
+    {
+        var k = Dialogs.Choose("Import from Excel", "What does the file contain?", ExchangeKinds);
+        if (k < 0) return;
+        await ImportEditAsync(k, null);
+    }
+
+    public async Task ImportEditAsync(int kind, string? file)
+    {
+        var x = ExchangeUi.Sheets;
+        var done = kind switch
+        {
+            0 => await ExchangeUi.ImportAsync(() => x.DrawingsAsync(Desk.ProjectId), file),
+            1 => await ExchangeUi.ImportAsync(() => x.DrawingItemsAsync(Desk.ProjectId), file),
+            _ => await ExchangeUi.ImportAsync(() => x.AllocationsAsync(Desk.ProjectId), file),
+        };
+        if (done) await RefreshAsync();
+    }
+
+    private async Task ImportBoqAsync()
+    {
+        if (_dGrid.SelectedItem is not DrawingRow d) { Dialogs.Info("Select (or add) the drawing first, then import its BOQ."); return; }
+        var dlg = new Microsoft.Win32.OpenFileDialog { Title = $"BOQ for {d.D.Number}", Filter = "BOQ (Excel or CSV)|*.xlsx;*.xlsm;*.csv|All files|*.*" };
+        if (dlg.ShowDialog() != true) return;
+        BoqImportResult result;
+        await using (var fs = System.IO.File.OpenRead(dlg.FileName)) result = BoqService.Import(fs, dlg.FileName);
+        if (result.Items.Count == 0) { Dialogs.Info(string.Join("\n", result.Warnings)); return; }
+        if (!Dialogs.Confirm($"Import {result.Items.Count} item(s) into {d.D.Number}? Items with the same item no. are updated." +
+                             (result.Warnings.Count > 0 ? "\n\n" + string.Join("\n", result.Warnings.Take(8)) : ""))) return;
+        var (added, updated) = await new BoqService(Desk.Db).SaveImportAsync(d.D, result.Items);
+        await RecalcAsync();
+        await ShowItemsAsync();
+        Desk.Say($"BOQ imported: {added} added, {updated} updated");
+    }
+
+    private async Task CreateActivitiesAsync()
+    {
+        if (_dGrid.SelectedItem is not DrawingRow d) { Dialogs.Info("Select a drawing first."); return; }
+        if (!Dialogs.Confirm($"Create a planned activity for every item of {d.D.Number} that has none?\n\nProgress then flows from the daily reports (Add drawing work) to the item, the agency and the activity.")) return;
+        var n = await new BoqService(Desk.Db).CreateActivitiesAsync(d.D, d.D.IssueDate, d.D.IssueDate?.AddDays(60));
+        await ShowItemsAsync();
+        Desk.Say(n == 0 ? "Every item already has an activity" : $"{n} activities created – see Planning › Activities & progress");
     }
 
     public async Task PdfAsync()

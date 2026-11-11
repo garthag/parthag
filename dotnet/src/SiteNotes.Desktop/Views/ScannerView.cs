@@ -90,7 +90,7 @@ public class ScannerView : ViewBase, IPrintable
         dock.Children.Add(tb);
         DockPanel.SetDock(head, Dock.Top);
         dock.Children.Add(head);
-        dock.Children.Add(W.Scroll(_strip, 10));
+        dock.Children.Add(W.Scroll(_strip, 10));   // W.Scroll frees _strip from the previous layout
         Content = dock;
     }
 

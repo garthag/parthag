@@ -47,6 +47,8 @@ public class ReportOptions
     /// <summary>Leave out sections that have nothing in them (keeps reports short).</summary>
     public bool HideEmptySections { get; set; } = true;
     public int PhotosPerRow { get; set; } = 2;
+    /// <summary>Crop photos to fill uniform 4:3 frames (true) or fit the whole photo inside the frame (false).</summary>
+    public bool PhotoCrop { get; set; } = true;
     /// <summary>0 = all photos.</summary>
     public int MaxPhotos { get; set; }
     public bool Landscape { get; set; }

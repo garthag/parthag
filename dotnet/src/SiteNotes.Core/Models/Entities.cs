@@ -285,6 +285,8 @@ public class MediaItem : SyncEntity
     public double? Latitude { get; set; }
     public double? Longitude { get; set; }
     public long FileSize { get; set; }
+    /// <summary>Leave this photo out of the daily report PDF (default: printed).</summary>
+    public bool ExcludeFromReport { get; set; }
 
     /// <summary>Local only: true once the file itself is on the server.</summary>
     [JsonIgnore] public bool IsUploaded { get; set; }

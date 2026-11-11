@@ -125,6 +125,8 @@ public class Drawing : SyncEntity
     public DrawingStatus Status { get; set; } = DrawingStatus.ForConstruction;
     public DateTime? IssueDate { get; set; }
     public string Remarks { get; set; } = "";
+    /// <summary>The drawing document itself (PDF / image / DWG) as a MediaItem id; it syncs like photos.</summary>
+    public string FileMediaId { get; set; } = "";
     public override string ToString() => string.IsNullOrWhiteSpace(Title) ? $"{Number} {Revision}" : $"{Number} {Revision} – {Title}";
 }
 
@@ -137,6 +139,8 @@ public class DrawingItem : SyncEntity
     public DrawingItemKind Kind { get; set; } = DrawingItemKind.BoqItem;
     public string Unit { get; set; } = "MT";
     public double Qty { get; set; }
+    /// <summary>BOQ (contract) rate per unit; gives the item value and the value of unallocated / completed work.</summary>
+    public decimal Rate { get; set; }
     /// <summary>Optional: progress on this item also counts for this planned activity.</summary>
     public string ActivityId { get; set; } = "";
     public string Remarks { get; set; } = "";
@@ -152,6 +156,8 @@ public class DrawingAllocation : SyncEntity
     public string SubcontractorId { get; set; } = "";
     public string SubcontractorName { get; set; } = "";
     public double AllocatedQty { get; set; }
+    /// <summary>Unit price payable to this agency (work order rate).</summary>
+    public decimal Rate { get; set; }
     public DateTime AllocatedOn { get; set; } = DateTime.Today;
     public string WorkOrderNo { get; set; } = "";
     public string Remarks { get; set; } = "";

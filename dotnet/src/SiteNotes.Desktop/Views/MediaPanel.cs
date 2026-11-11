@@ -16,18 +16,24 @@ public class MediaPanel : DockPanel
 {
     private readonly MediaOwner _owner;
     private readonly Func<string> _ownerId;
+    private readonly Func<Task<List<MediaItem>>>? _source;
+    private readonly string _defaultCaption;
     private readonly WrapPanel _tiles = new();
     public event Action<int>? CountChanged;
 
-    public MediaPanel(MediaOwner owner, Func<string> ownerId)
+    /// <param name="source">What to show (default: the media owned by this record). The daily report also shows
+    /// the photos taken that day for its activities.</param>
+    public MediaPanel(MediaOwner owner, Func<string> ownerId, Func<Task<List<MediaItem>>>? source = null, string defaultCaption = "")
     {
         _owner = owner;
         _ownerId = ownerId;
+        _source = source;
+        _defaultCaption = defaultCaption;
         AllowDrop = true;
         Drop += async (_, e) => { if (e.Data.GetData(DataFormats.FileDrop) is string[] files) await Dialogs.Guard(() => AddAsync(files)); };
         var top = W.Wrap(
             W.Button("Add photos / videos…", () => AddAsync(Dialogs.OpenMedia()), Glyph.Photo, true),
-            W.Muted("   or drag & drop files here · double-click to open · right-click to caption or remove"));
+            W.Muted("   or drag & drop · shown in the order taken · untick “In report” to leave a photo out of the PDF · right-click for caption, date or remove"));
         top.Margin = new Thickness(0, 4, 0, 8);
         SetDock(top, Dock.Top);
         Children.Add(top);
@@ -40,7 +46,7 @@ public class MediaPanel : DockPanel
         foreach (var f in files.Where(File.Exists))
         {
             var video = Path.GetExtension(f).ToLowerInvariant() is ".mp4" or ".mov" or ".avi" or ".wmv" or ".mkv";
-            await Desk.ImportMediaAsync(f, _owner, _ownerId(), video ? MediaKind.Video : MediaKind.Photo);
+            await Desk.ImportMediaAsync(f, _owner, _ownerId(), video ? MediaKind.Video : MediaKind.Photo, _defaultCaption);
         }
         await LoadAsync();
     }
@@ -48,7 +54,7 @@ public class MediaPanel : DockPanel
     public async Task LoadAsync()
     {
         var id = _ownerId();
-        var items = (await Desk.Db.ListAsync<MediaItem>(m => m.OwnerId == id)).OrderBy(m => m.CapturedAtUtc).ToList();
+        var items = (_source != null ? await _source() : await Desk.Db.ListAsync<MediaItem>(m => m.OwnerId == id)).OrderBy(m => m.CapturedAtUtc).ToList();
         _tiles.Children.Clear();
         if (items.Count == 0) _tiles.Children.Add(W.Muted("No photos or videos yet."));
         foreach (var m in items)
@@ -61,12 +67,27 @@ public class MediaPanel : DockPanel
             var tile = new StackPanel { Margin = new Thickness(0, 0, 10, 10), Width = 160 };
             tile.Children.Add(new Border { Width = 160, Height = 120, Background = Theme.PrimaryDark, Child = visual, CornerRadius = new CornerRadius(4), ClipToBounds = true });
             tile.Children.Add(caption);
-            tile.Children.Add(W.Muted(m.CapturedAtUtc.ToLocalTime().ToString("dd-MMM HH:mm"), 10));
             var item = m;
+            var when = W.Muted(m.CapturedAtUtc.ToLocalTime().ToString("dd-MMM-yyyy HH:mm") + (m.OwnerType == MediaOwner.Activity && _owner != MediaOwner.Activity ? " · activity photo" : ""), 10);
+            tile.Children.Add(when);
+            if (m.Kind != MediaKind.Video)
+                tile.Children.Add(W.Check("In report", !m.ExcludeFromReport, async on => { item.ExcludeFromReport = !on; await Desk.Db.SaveAsync(item); }));
             tile.MouseLeftButtonDown += (_, e) => { if (e.ClickCount == 2) Dialogs.Open(path); };
             var menu = new ContextMenu();
             var cap = new MenuItem { Header = "Caption…" };
             cap.Click += async (_, _) => { var t = Dialogs.Prompt("Caption", "Caption", item.Caption); if (t != null) { item.Caption = t; await Desk.Db.SaveAsync(item); caption.Text = t; } };
+            var date = new MenuItem { Header = "Date & time taken…" };
+            date.Click += async (_, _) =>
+            {
+                var t = Dialogs.Prompt("Date & time", "When was it taken? (dd-MM-yyyy HH:mm)", item.CapturedAtUtc.ToLocalTime().ToString("dd-MM-yyyy HH:mm"));
+                if (t != null && DateTime.TryParseExact(t, ["dd-MM-yyyy HH:mm", "dd-MM-yyyy"], null, System.Globalization.DateTimeStyles.AssumeLocal, out var dt))
+                {
+                    item.CapturedAtUtc = dt.ToUniversalTime();
+                    await Desk.Db.SaveAsync(item);
+                    await LoadAsync();
+                }
+            };
+            menu.Items.Add(date);
             var del = new MenuItem { Header = "Remove" };
             del.Click += async (_, _) => { if (Dialogs.Confirm("Remove this photo/video?")) { await Desk.Db.DeleteAsync(item); await LoadAsync(); } };
             menu.Items.Add(cap);

@@ -76,7 +76,7 @@ public class ReportManagerView : ViewBase
             (Glyph.Save, "Save as default for this project", async () => { await Desk.SaveReportOptionsAsync(_profile, _opt); Desk.Say("Report settings saved – every PDF uses them now"); }),
             (Glyph.Refresh, "Reset to standard", () => { if (Dialogs.Confirm("Reset to the standard layout and all sections?")) { _opt = new ReportOptions(); Build(); } return Task.CompletedTask; }),
             (Glyph.Folder, "Open reports folder", () => { Dialogs.Open(Desk.ReportsFolder); return Task.CompletedTask; }));
-        tb.Items.Add(_preview);
+        tb.Items.Add(W.Free(_preview));
         var dock = new DockPanel();
         DockPanel.SetDock(tb, Dock.Top);
         dock.Children.Add(tb);
@@ -86,7 +86,7 @@ public class ReportManagerView : ViewBase
 
     private static GroupBox Box(string header, UIElement content) => new()
     {
-        Header = new TextBlock { Text = header, FontWeight = FontWeights.SemiBold, Foreground = Theme.Primary }, Content = content, Margin = new Thickness(0, 0, 10, 10), Background = Theme.Card,
+        Header = new TextBlock { Text = header, FontWeight = FontWeights.SemiBold, Foreground = Theme.Primary }, Content = W.Free(content), Margin = new Thickness(0, 0, 10, 10), Background = Theme.Card,
     };
 
     private UIElement Contents()
@@ -134,7 +134,8 @@ public class ReportManagerView : ViewBase
                 _opt.ActivitySort, v => _opt.ActivitySort = v)),
             W.Field("Sort manpower rows", W.Choice([(ManpowerRowSort.AsEntered, "As entered"), (ManpowerRowSort.Party, "Agency / department"), (ManpowerRowSort.Trade, "Trade"),
                 (ManpowerRowSort.CountHigh, "Most people"), (ManpowerRowSort.Activity, "Activity")], _opt.ManpowerSort, v => _opt.ManpowerSort = v)),
-            W.Field("Photos per row", W.Choice([(1, "1 large"), (2, "2"), (3, "3"), (4, "4 small")], _opt.PhotosPerRow, v => _opt.PhotosPerRow = v)),
+            W.Field("Photos per row (standard 4:3 frames)", W.Choice([(1, "1 large"), (2, "2 standard"), (3, "3"), (4, "4 small")], _opt.PhotosPerRow, v => _opt.PhotosPerRow = v)),
+            W.Field("Photo framing", W.Choice([(true, "Fill frame (crop edges)"), (false, "Whole photo (fit)")], _opt.PhotoCrop, v => _opt.PhotoCrop = v)),
             W.Field("Photos per report", W.Choice([(0, "All"), (4, "4"), (8, "8"), (12, "12"), (20, "20")], _opt.MaxPhotos, v => _opt.MaxPhotos = v)),
             W.Field("Daily report paper", W.Choice([(false, "Portrait"), (true, "Landscape")], _opt.Landscape, v => _opt.Landscape = v)));
     }

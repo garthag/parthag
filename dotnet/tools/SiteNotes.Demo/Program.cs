@@ -287,6 +287,14 @@ static class Demo
                 }
             }
         }
+        // BOQ rate per item; each agency has its own work order and unit price payable (below the BOQ rate)
+        foreach (var it in dItems) it.Rate = it.Unit switch { "MT" => 85000.50m, "m²" => 2450.25m, _ => 350000m };
+        var woNo = 100;
+        foreach (var al in dAllocs)
+        {
+            al.Rate = Math.Round(dItems.First(i => i.Id == al.DrawingItemId).Rate * (decimal)(0.70 + rnd.Next(0, 20) / 100.0), 2);
+            if (al.WorkOrderNo == "") al.WorkOrderNo = $"WO-{++woNo}";
+        }
         await db.SaveAllAsync(drawings);
         await db.SaveAllAsync(dItems);
         await db.SaveAllAsync(dAllocs);
@@ -399,6 +407,11 @@ static class Demo
             }
             ImageTools.SaveJpeg(bmp, db.MediaPath(name));
             await db.SaveAsync(new MediaItem { ProjectId = p.Id, OwnerType = MediaOwner.Report, OwnerId = r.Id, Kind = MediaKind.Photo, FileName = name, Caption = $"Progress photo {i + 1}", CapturedAtUtc = r.Date.AddHours(10 + i) });
+            // site photos taken on the activity itself (Activities › Photos & videos) before the report: one earlier in the day, one left out of the PDF
+            var act = (await db.ListAsync<ReportActivity>(a => a.ReportId == r.Id)).FirstOrDefault(a => a.ActivityId != "");
+            if (act != null)
+                await db.SaveAsync(new MediaItem { ProjectId = p.Id, OwnerType = MediaOwner.Activity, OwnerId = act.ActivityId, Kind = i == 0 ? MediaKind.Photo : MediaKind.Video, FileName = name,
+                    Caption = $"{act.ActivityName} – site {(i == 0 ? "photo" : "video")}", CapturedAtUtc = r.Date.AddHours(7 + i * 5), ExcludeFromReport = false });
         }
     }
 
@@ -567,8 +580,72 @@ static class Verify
                 }
             }
             log.Check("DPR drawing rows: to date = agency's running total, planned = its allocation", dOk);
+            // values: BOQ value, allocated (work order) value, unallocated value, payable for work done
+            decimal R2(decimal v) => Math.Round(v, 2, MidpointRounding.AwayFromZero);
+            log.Check("Drawing values: BOQ value = qty × BOQ rate; unallocated value = unallocated qty × BOQ rate; completed value capped at the item value",
+                items.All(i => i.Value == R2((decimal)i.Qty * i.Item.Rate) && i.UnallocatedValue == R2((decimal)i.Unallocated * i.Item.Rate) && i.CompletedValue <= i.Value && i.CompletedValue == R2((decimal)Math.Min(i.Completed, i.Qty) * i.Item.Rate)),
+                $"BOQ value {reg.Drawings.Sum(d => d.Value):#,0.00}, completed {reg.Drawings.Sum(d => d.CompletedValue):#,0.00}, unallocated {reg.Drawings.Sum(d => d.UnallocatedValue):#,0.00}");
+            log.Check("Work orders: allocated value = Σ allocated qty × unit price; payable = min(done, allocated) × unit price (never above the work order)",
+                items.All(i => i.AllocatedValue == allocRows.Where(a => a.DrawingItemId == i.Item.Id).Sum(a => R2((decimal)a.AllocatedQty * a.Rate))
+                               && i.Agencies.All(a => a.PayableValue <= a.AllocatedValue && (a.Unallocated ? a.PayableValue == 0 : true))),
+                $"allocated {reg.Drawings.Sum(d => d.AllocatedValue):#,0.00}, payable {reg.Drawings.Sum(d => d.PayableValue):#,0.00}");
+            log.Check("Subcontractor-wise values add up to the drawing totals", reg.ByAgency.Sum(a => a.AllocatedValue) == reg.Drawings.Sum(d => d.AllocatedValue) && reg.ByAgency.Sum(a => a.PayableValue) == reg.Drawings.Sum(d => d.PayableValue));
             log.Fact($"{p.Name}: {reg.Drawings.Count} drawings · {items.Count} items · {reg.Drawings.Count(d => d.State == DrawingState.Completed)} drawings completed · " +
                      $"{items.Count(i => i.Unallocated > 0)} items partly unallocated · {items.Count(i => i.CompletedWithoutAllocation > 0)} items worked without allocation");
+        }
+
+        // activity photos & videos flow into the daily report of the day they were taken, in the order taken
+        var actMedia = await db.ListForProjectAsync<MediaItem>(p.Id, m => m.OwnerType == MediaOwner.Activity);
+        if (actMedia.Count > 0)
+        {
+            var expected = bundles.Sum(b => actMedia.Count(m => m.CapturedAtUtc.ToLocalTime().Date == b.Report.Date.Date && b.Activities.Any(a => a.ActivityId == m.OwnerId)));
+            var got = bundles.Sum(b => b.Media.Count(m => m.OwnerType == MediaOwner.Activity));
+            log.Check("Activity photos/videos appear in the daily report of their date", expected == got && got > 0, $"{got} activity photos/videos in {bundles.Count(b => b.Media.Any(m => m.OwnerType == MediaOwner.Activity))} reports");
+            log.Check("Report photos & videos are in the order taken", bundles.All(b => b.Media.Zip(b.Media.Skip(1)).All(x => x.First.CapturedAtUtc <= x.Second.CapturedAtUtc)));
+            log.Check("An activity photo never shows up in a report of another day", bundles.All(b => b.Media.Where(m => m.OwnerType == MediaOwner.Activity).All(m => m.CapturedAtUtc.ToLocalTime().Date == b.Report.Date.Date)));
+        }
+
+        // edit-in-Excel round trip of every module: export → import unchanged = no change; export → edit → import = exactly the edits
+        {
+            var x = new ExchangeSheets(db);
+            async Task<(int Added, int Updated, int Unchanged, int Warnings)> RoundTrip<T>(ExchangeSheet<T> sheet, Action<ClosedXML.Excel.IXLWorksheet>? edit = null) where T : SyncEntity, new()
+            {
+                var rows = await db.ListForProjectAsync<T>(p.Id);
+                var ms = new MemoryStream();
+                DataExchange.Export(ms, sheet, rows);
+                ms.Position = 0;
+                if (edit != null)
+                {
+                    using var wb = new ClosedXML.Excel.XLWorkbook(ms);
+                    edit(wb.Worksheets.First());
+                    ms = new MemoryStream();
+                    wb.SaveAs(ms);
+                    ms.Position = 0;
+                }
+                var res = DataExchange.Import(ms, "x.xlsx", sheet, rows);
+                return (res.Added.Count, res.Updated.Count, res.Unchanged, res.Warnings.Count);
+            }
+            var n = new List<string>();
+            var okSame = true;
+            async Task Same<T>(ExchangeSheet<T> sheet) where T : SyncEntity, new()
+            {
+                var r = await RoundTrip(sheet);
+                okSame &= r is { Added: 0, Updated: 0 } && (r.Warnings == 0 || r is { Unchanged: 0, Warnings: 1 }); // an empty sheet only says “no rows found”
+                n.Add($"{sheet.Name} {r.Unchanged}");
+            }
+            await Same(await x.SubcontractorsAsync()); await Same(await x.DepartmentsAsync()); await Same(await x.ResourcesAsync(p.Id)); await Same(await x.WbsAsync(p.Id));
+            await Same(await x.ActivitiesAsync(p.Id)); await Same(await x.HindrancesAsync()); await Same(await x.RequirementsAsync()); await Same(await x.DrawingsAsync(p.Id));
+            await Same(await x.DrawingItemsAsync(p.Id)); await Same(await x.AllocationsAsync(p.Id));
+            log.Check("Excel export → import without edits changes nothing (all 10 module sheets)", okSame, string.Join(" · ", n));
+            // sort the sheet differently, change 3 quantities, add 1 row → exactly 3 changed + 1 new
+            var edited = await RoundTrip(await x.ActivitiesAsync(p.Id), ws =>
+            {
+                var last = ws.LastRowUsed()!.RowNumber();
+                ws.Range(2, 1, last, ws.LastColumnUsed()!.ColumnNumber()).Sort(2); // user sorted by name in Excel
+                for (var r = 2; r <= 4; r++) ws.Cell(r, 6).Value = ws.Cell(r, 6).GetDouble() + 12.5;
+                ws.Cell(last + 1, 1).Value = "NEW-1"; ws.Cell(last + 1, 2).Value = "Added in Excel"; ws.Cell(last + 1, 6).Value = 10;
+            });
+            log.Check("Excel edit: re-sorted sheet, 3 quantities changed, 1 row added → 3 changed + 1 new, rest untouched", edited is { Added: 1, Updated: 3, Warnings: 0 }, $"{edited.Unchanged} unchanged");
         }
 
         // registers

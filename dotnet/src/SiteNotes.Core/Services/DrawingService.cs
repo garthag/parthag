@@ -12,6 +12,14 @@ public class AllocationProgress
     public string Agency { get; init; } = "";
     public double Allocated { get; set; }
     public double Done { get; set; }
+    /// <summary>Unit price payable (work-order rate; quantity-weighted if the agency has several allocations on the item).</summary>
+    public decimal Rate { get; set; }
+    public decimal AllocatedValue { get; set; }
+    /// <summary>Payable for work done, up to the allocated quantity.</summary>
+    public decimal PayableValue => CostCalculator.Round((decimal)Math.Min(Done, Allocated) * Rate);
+    /// <summary>Value of work done beyond the allocation (to be approved before paying).</summary>
+    public decimal ExcessValue => CostCalculator.Round((decimal)Excess * Rate);
+    public decimal BalanceValue => CostCalculator.Round((decimal)Balance * Rate);
     public double Balance => Math.Max(0, Allocated - Done);
     public double Percent => Allocated <= 0 ? 0 : Math.Min(100, Math.Round(Done / Allocated * 100, 2));
     public DateTime? FirstWorked { get; set; }
@@ -39,6 +47,16 @@ public class DrawingItemProgress
     public double Percent => Qty <= 0 ? 0 : Math.Min(100, Math.Round(Completed / Qty * 100, 2));
     public double AllocatedPercent => Qty <= 0 ? 0 : Math.Min(100, Math.Round(Allocated / Qty * 100, 2));
     public List<AllocationProgress> Agencies { get; } = [];
+    /// <summary>BOQ value = drawing qty × BOQ rate.</summary>
+    public decimal Value => CostCalculator.Round((decimal)Qty * Item.Rate);
+    /// <summary>Value of the unallocated quantity at the BOQ rate.</summary>
+    public decimal UnallocatedValue => CostCalculator.Round((decimal)Unallocated * Item.Rate);
+    /// <summary>Value of completed work at the BOQ rate (capped at the drawing qty).</summary>
+    public decimal CompletedValue => CostCalculator.Round((decimal)Math.Min(Completed, Qty) * Item.Rate);
+    /// <summary>Σ agencies' allocated qty × their unit price payable.</summary>
+    public decimal AllocatedValue => Agencies.Sum(a => a.AllocatedValue);
+    /// <summary>Σ agencies' payable for work done.</summary>
+    public decimal PayableValue => Agencies.Sum(a => a.PayableValue);
     public DrawingState State => Completed >= Qty && Qty > 0 ? DrawingState.Completed
         : Completed > 0 ? DrawingState.InProgress
         : Allocated <= 0 ? DrawingState.NotAllocated
@@ -64,10 +82,17 @@ public class DrawingProgress
     public DrawingState State { get; set; }
     public int Agencies => Items.SelectMany(i => i.Agencies).Select(a => a.SubcontractorId).Distinct().Count();
     public string TotalsText => string.Join(" · ", Totals.Select(t => $"{t.Qty:#,0.##} {t.Unit}"));
+    public decimal Value => Items.Sum(i => i.Value);
+    public decimal AllocatedValue => Items.Sum(i => i.AllocatedValue);
+    public decimal UnallocatedValue => Items.Sum(i => i.UnallocatedValue);
+    public decimal CompletedValue => Items.Sum(i => i.CompletedValue);
+    public decimal PayableValue => Items.Sum(i => i.PayableValue);
+    public string? FileName { get; set; }
 }
 
 /// <summary>Subcontractor-wise drawing work: allocated vs done, per unit.</summary>
-public record AgencyDrawingSummary(string Agency, string Unit, double Allocated, double Done, double Balance, int Drawings, int Items, double WithoutAllocation)
+public record AgencyDrawingSummary(string Agency, string Unit, double Allocated, double Done, double Balance, int Drawings, int Items, double WithoutAllocation,
+    decimal AllocatedValue = 0, decimal PayableValue = 0, decimal BalanceValue = 0, string WorkOrders = "")
 {
     public double Percent => Allocated <= 0 ? 0 : Math.Min(100, Math.Round(Done / Allocated * 100, 2));
 }
@@ -102,6 +127,7 @@ public class DrawingService(LocalDatabase db)
         foreach (var d in drawings.OrderBy(d => d.Number))
         {
             var dp = new DrawingProgress { Drawing = d, WbsPath = ProgressService.WbsPath(d.WbsId, wbs) };
+            if (d.FileMediaId != "" && await db.GetAsync<MediaItem>(d.FileMediaId) is { IsDeleted: false } f) dp.FileName = f.FileName;
             foreach (var it in items[d.Id].OrderBy(i => i.SortOrder).ThenBy(i => i.ItemNo))
             {
                 var ip = new DrawingItemProgress { Item = it };
@@ -112,6 +138,7 @@ public class DrawingService(LocalDatabase db)
                     if (!byAgency.TryGetValue(a.SubcontractorId, out var ap))
                         byAgency[a.SubcontractorId] = ap = new AllocationProgress { SubcontractorId = a.SubcontractorId, Agency = Name(a.SubcontractorId, a.SubcontractorName) };
                     ap.Allocated += a.AllocatedQty;
+                    ap.AllocatedValue += CostCalculator.Round((decimal)a.AllocatedQty * a.Rate);
                     if (a.WorkOrderNo != "") ap.WorkOrders = ap.WorkOrders == "" ? a.WorkOrderNo : ap.WorkOrders + ", " + a.WorkOrderNo;
                 }
                 foreach (var g in work.GroupBy(w => w.SubcontractorId))
@@ -122,6 +149,7 @@ public class DrawingService(LocalDatabase db)
                     var dates = g.Where(w => w.TodayQty > 0).Select(w => reports[w.ReportId]).ToList();
                     if (dates.Count > 0) { ap.FirstWorked = dates.Min(); ap.LastWorked = dates.Max(); }
                 }
+                foreach (var ap in byAgency.Values) ap.Rate = ap.Allocated > 0 ? Math.Round(ap.AllocatedValue / (decimal)ap.Allocated, 4) : 0;
                 ip.Agencies.AddRange(byAgency.Values.OrderByDescending(a => a.Allocated).ThenBy(a => a.Agency));
                 ip.Allocated = Math.Round(ip.Agencies.Sum(a => a.Allocated), 4);
                 ip.Completed = Math.Round(work.Sum(w => w.TodayQty), 4);
@@ -149,7 +177,9 @@ public class DrawingService(LocalDatabase db)
             var done = g.Sum(x => x.a.Done);
             reg.ByAgency.Add(new AgencyDrawingSummary(g.Key.Agency, g.Key.Unit, Math.Round(allocated, 4), Math.Round(done, 4),
                 Math.Round(g.Sum(x => x.a.Balance), 4), g.Select(x => x.d.Drawing.Id).Distinct().Count(), g.Select(x => x.i.Item.Id).Distinct().Count(),
-                Math.Round(g.Where(x => x.a.Unallocated).Sum(x => x.a.Done), 4)));
+                Math.Round(g.Where(x => x.a.Unallocated).Sum(x => x.a.Done), 4),
+                g.Sum(x => x.a.AllocatedValue), g.Sum(x => x.a.PayableValue), g.Sum(x => x.a.BalanceValue),
+                string.Join(", ", g.Select(x => x.a.WorkOrders).Where(w => w != "").Distinct())));
         }
         return reg;
     }

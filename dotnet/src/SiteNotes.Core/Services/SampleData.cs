@@ -68,17 +68,17 @@ public static class SampleData
         var dwg = new Drawing { ProjectId = pid, Number = "WTP-ST-1001", Title = "Clarifier bridge – structural steel", Revision = "R2", Discipline = "Structural", WbsId = clarifier.Id, IssueDate = t.AddDays(-20) };
         var dwg2 = new Drawing { ProjectId = pid, Number = "WTP-ME-2001", Title = "Filter house – pumps & piping", Revision = "R0", Discipline = "Mechanical", WbsId = filter.Id, IssueDate = t.AddDays(-10) };
         await db.SaveAllAsync([dwg, dwg2]);
-        var mainSteel = new DrawingItem { ProjectId = pid, DrawingId = dwg.Id, ItemNo = "1457", Description = "Main steel – bridge girders", Unit = "MT", Qty = 100, SortOrder = 0 };
-        var grating = new DrawingItem { ProjectId = pid, DrawingId = dwg.Id, ItemNo = "1458", Description = "Grating & handrail", Unit = "m²", Qty = 240, SortOrder = 1 };
-        var pumps = new DrawingItem { ProjectId = pid, DrawingId = dwg2.Id, ItemNo = "EQ-01", Description = "Backwash pump set", Kind = DrawingItemKind.Equipment, Unit = "Nos", Qty = 4, SortOrder = 0 };
-        var piping = new DrawingItem { ProjectId = pid, DrawingId = dwg2.Id, ItemNo = "2105", Description = "DI piping 300 mm", Unit = "Rm", Qty = 180, SortOrder = 1 };
+        var mainSteel = new DrawingItem { ProjectId = pid, DrawingId = dwg.Id, ItemNo = "1457", Description = "Main steel – bridge girders", Unit = "MT", Qty = 100, Rate = 85000, SortOrder = 0 };
+        var grating = new DrawingItem { ProjectId = pid, DrawingId = dwg.Id, ItemNo = "1458", Description = "Grating & handrail", Unit = "m²", Qty = 240, Rate = 2450, SortOrder = 1 };
+        var pumps = new DrawingItem { ProjectId = pid, DrawingId = dwg2.Id, ItemNo = "EQ-01", Description = "Backwash pump set", Kind = DrawingItemKind.Equipment, Unit = "Nos", Qty = 4, Rate = 350000, SortOrder = 0 };
+        var piping = new DrawingItem { ProjectId = pid, DrawingId = dwg2.Id, ItemNo = "2105", Description = "DI piping 300 mm", Unit = "Rm", Qty = 180, Rate = 4200, SortOrder = 1 };
         await db.SaveAllAsync([mainSteel, grating, pumps, piping]);
         var allocs = new[]
         {
-            new DrawingAllocation { ProjectId = pid, DrawingId = dwg.Id, DrawingItemId = mainSteel.Id, SubcontractorId = steel.Id, SubcontractorName = steel.Name, AllocatedQty = 60, WorkOrderNo = "WO-114" },
-            new DrawingAllocation { ProjectId = pid, DrawingId = dwg.Id, DrawingItemId = mainSteel.Id, SubcontractorId = formwork.Id, SubcontractorName = formwork.Name, AllocatedQty = 40, WorkOrderNo = "WO-121" },
-            new DrawingAllocation { ProjectId = pid, DrawingId = dwg.Id, DrawingItemId = grating.Id, SubcontractorId = formwork.Id, SubcontractorName = formwork.Name, AllocatedQty = 240 },
-            new DrawingAllocation { ProjectId = pid, DrawingId = dwg2.Id, DrawingItemId = pumps.Id, SubcontractorId = steel.Id, SubcontractorName = steel.Name, AllocatedQty = 2 },
+            new DrawingAllocation { ProjectId = pid, DrawingId = dwg.Id, DrawingItemId = mainSteel.Id, SubcontractorId = steel.Id, SubcontractorName = steel.Name, AllocatedQty = 60, Rate = 12500, WorkOrderNo = "WO-114" },
+            new DrawingAllocation { ProjectId = pid, DrawingId = dwg.Id, DrawingItemId = mainSteel.Id, SubcontractorId = formwork.Id, SubcontractorName = formwork.Name, AllocatedQty = 40, Rate = 11800, WorkOrderNo = "WO-121" },
+            new DrawingAllocation { ProjectId = pid, DrawingId = dwg.Id, DrawingItemId = grating.Id, SubcontractorId = formwork.Id, SubcontractorName = formwork.Name, AllocatedQty = 240, Rate = 650, WorkOrderNo = "WO-121" },
+            new DrawingAllocation { ProjectId = pid, DrawingId = dwg2.Id, DrawingItemId = pumps.Id, SubcontractorId = steel.Id, SubcontractorName = steel.Name, AllocatedQty = 2, Rate = 42000, WorkOrderNo = "WO-130" },
         };
         await db.SaveAllAsync(allocs);
 

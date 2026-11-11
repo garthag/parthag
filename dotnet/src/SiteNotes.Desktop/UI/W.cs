@@ -12,6 +12,23 @@ namespace SiteNotes.Desktop.UI;
 /// <summary>Small builders so views read like markup, in plain C#.</summary>
 public static class W
 {
+    /// <summary>
+    /// Detaches a control from its current parent so it can be placed again (screens rebuild their layout on refresh
+    /// and keep some controls, e.g. a filter panel; WPF refuses an element that still has a parent).
+    /// </summary>
+    public static T Free<T>(T e) where T : UIElement
+    {
+        switch (LogicalTreeHelper.GetParent(e) ?? VisualTreeHelper.GetParent(e))
+        {
+            case Panel p: p.Children.Remove(e); break;
+            case ContentControl c when ReferenceEquals(c.Content, e): c.Content = null; break;
+            case Decorator d when ReferenceEquals(d.Child, e): d.Child = null; break;
+            case ItemsControl i when i.Items.Contains(e): i.Items.Remove(e); break;
+            case ContentPresenter cp when ReferenceEquals(cp.Content, e): cp.Content = null; break;
+        }
+        return e;
+    }
+
     public static TextBlock Text(string text, double size = 13, bool bold = false, Brush? color = null, bool wrap = true) => new()
     {
         Text = text, FontSize = size, FontWeight = bold ? FontWeights.SemiBold : FontWeights.Normal,
@@ -30,7 +47,7 @@ public static class W
     {
         var p = new StackPanel { Margin = new Thickness(0, 0, 12, 8) };
         p.Children.Add(Muted(label, 11.5));
-        p.Children.Add(input);
+        p.Children.Add(Free(input));
         return p;
     }
 
@@ -44,7 +61,7 @@ public static class W
             if (i % columns == 0) g.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             Grid.SetRow(items[i], i / columns);
             Grid.SetColumn(items[i], i % columns);
-            g.Children.Add(items[i]);
+            g.Children.Add(Free(items[i]));
         }
         return g;
     }
@@ -142,7 +159,7 @@ public static class W
     public static Border Card(UIElement content, double padding = 12) => new()
     {
         Background = Theme.Card, BorderBrush = Theme.Line, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(6),
-        Padding = new Thickness(padding), Margin = new Thickness(0, 0, 10, 10), Child = content,
+        Padding = new Thickness(padding), Margin = new Thickness(0, 0, 10, 10), Child = Free(content),
     };
 
     /// <summary>Big number tile.</summary>
@@ -159,13 +176,13 @@ public static class W
     public static WrapPanel Wrap(params UIElement[] items)
     {
         var w = new WrapPanel();
-        foreach (var i in items) w.Children.Add(i);
+        foreach (var i in items) w.Children.Add(Free(i));
         return w;
     }
 
     public static ScrollViewer Scroll(UIElement content, double padding = 14) => new()
     {
-        Content = new Border { Padding = new Thickness(padding), Child = content },
+        Content = new Border { Padding = new Thickness(padding), Child = Free(content) },
         VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
         HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
     };
@@ -173,7 +190,7 @@ public static class W
     public static StackPanel Stack(params UIElement[] items)
     {
         var s = new StackPanel();
-        foreach (var i in items) s.Children.Add(i);
+        foreach (var i in items) s.Children.Add(Free(i));
         return s;
     }
 

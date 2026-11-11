@@ -159,6 +159,7 @@ public sealed class LocalDatabase
         var hi = await Rows<Hindrance>(x => x.ReportId);
         var rq = await Rows<Requirement>(x => x.ReportId);
         var md = await Rows<MediaItem>(x => x.OwnerId);
+        var activityMedia = (await ListForProjectAsync<MediaItem>(projectId, m => m.OwnerType == MediaOwner.Activity)).ToLookup(m => m.OwnerId);
         var master = (await ListForProjectAsync<Activity>(projectId)).ToDictionary(a => a.Id);
 
         // Cumulative quantities: running sum over every report in date order.
@@ -187,7 +188,7 @@ public sealed class LocalDatabase
                 Materials = mt[r.Id].OrderBy(x => x.SortOrder).ToList(),
                 Hindrances = hi[r.Id].ToList(),
                 Requirements = rq[r.Id].ToList(),
-                Media = md[r.Id].OrderBy(x => x.CapturedAtUtc).ToList(),
+                Media = md[r.Id].Concat(ActivityMediaOn(r.Date, acts[r.Id], activityMedia)).DistinctBy(x => x.Id).OrderBy(x => x.CapturedAtUtc).ToList(),
             };
             // all rows of the same activity / drawing item+agency in one report share the report's final cumulative
             foreach (var a in b.Activities.Where(a => a.ProgressKey != ""))
@@ -218,8 +219,8 @@ public sealed class LocalDatabase
             Materials = (await ListAsync<ReportMaterial>(x => x.ReportId == reportId)).OrderBy(x => x.SortOrder).ToList(),
             Hindrances = await ListAsync<Hindrance>(x => x.ReportId == reportId),
             Requirements = await ListAsync<Requirement>(x => x.ReportId == reportId),
-            Media = (await ListAsync<MediaItem>(x => x.OwnerId == reportId)).OrderBy(x => x.CapturedAtUtc).ToList(),
         };
+        b.Media = await ReportMediaAsync(r, b.Activities);
         await RefreshCumulativeAsync(b);
         return b;
     }
@@ -276,6 +277,21 @@ public sealed class LocalDatabase
         await _db.RunInTransactionAsync(c => { foreach (var e in rows) c.InsertOrReplace(e); });
         Changed?.Invoke(nameof(DailyReport));
     }
+
+    /// <summary>
+    /// Photos &amp; videos of a daily report: the report's own plus those taken on the report date for the
+    /// activities in the report (Activities › Photos), all ordered by the time they were taken.
+    /// </summary>
+    public async Task<List<MediaItem>> ReportMediaAsync(DailyReport r, IEnumerable<ReportActivity> rows)
+    {
+        var own = await ListAsync<MediaItem>(x => x.OwnerId == r.Id);
+        var activityMedia = (await ListForProjectAsync<MediaItem>(r.ProjectId, m => m.OwnerType == MediaOwner.Activity)).ToLookup(m => m.OwnerId);
+        return own.Concat(ActivityMediaOn(r.Date, rows, activityMedia)).DistinctBy(x => x.Id).OrderBy(x => x.CapturedAtUtc).ToList();
+    }
+
+    private static IEnumerable<MediaItem> ActivityMediaOn(DateTime date, IEnumerable<ReportActivity> rows, ILookup<string, MediaItem> activityMedia) =>
+        rows.Select(a => a.ActivityId).Where(id => id != "").Distinct()
+            .SelectMany(id => activityMedia[id]).Where(m => m.CapturedAtUtc.ToLocalTime().Date == date.Date);
 
     public async Task<WorkCalendar> CalendarAsync(string projectId) =>
         (await ListForProjectAsync<WorkCalendar>(projectId)).OrderByDescending(c => c.UpdatedAtUtc).FirstOrDefault()
@@ -366,7 +382,9 @@ public sealed class LocalDatabase
 
         // Activities planned for this date (or already started) and not yet 100 % are listed automatically.
         var progress = await new ProgressService(this).ComputeAsync(projectId, asOf: date.Date.AddDays(-1));
-        var running = progress.Activities.Where(p => p.Percent < 100 && p.Activity.PlannedQty > 0 &&
+        // activities created from drawing items get their progress through drawing work, never as a separate plan row
+        var fromDrawings = (await ListForProjectAsync<DrawingItem>(projectId)).Where(i => i.ActivityId != "").Select(i => i.ActivityId).ToHashSet();
+        var running = progress.Activities.Where(p => p.Percent < 100 && p.Activity.PlannedQty > 0 && !fromDrawings.Contains(p.Activity.Id) &&
             (p.DoneQty > 0 || (p.Activity.PlannedStart is { } st && st.Date <= date.Date))).ToList();
 
         var last = await _db.Table<DailyReport>()
@@ -391,7 +409,7 @@ public sealed class LocalDatabase
             ActivityId = a.ActivityId, ActivityName = a.ActivityName, Location = a.Location, Unit = a.Unit,
             PlannedQty = a.PlannedQty, CumulativeQty = a.CumulativeQty, SubcontractorId = a.SubcontractorId,
             SubcontractorName = a.SubcontractorName, DrawingItemId = a.DrawingItemId,
-        }).Where(a => a.PlannedQty <= 0 || a.CumulativeQty < a.PlannedQty).ToList();
+        }).Where(a => (a.PlannedQty <= 0 || a.CumulativeQty < a.PlannedQty) && (a.DrawingItemId != "" || !fromDrawings.Contains(a.ActivityId))).ToList();
         AddRunning();
         var open = b.Activities.Select(a => a.ActivityId).ToHashSet();
         string Keep(string activityId) => activityId == "" || open.Contains(activityId) ? activityId : "";

@@ -193,20 +193,22 @@ public static class PdfReports
                     break;
 
                 case DprSection.Photos:
-                    var photos = b.Media.Where(m => m.Kind is MediaKind.Photo or MediaKind.ScanPage).ToList();
+                    // in the order they were taken; photos switched off in the app are left out
+                    var shown = b.Media.Where(m => !m.ExcludeFromReport).OrderBy(m => m.CapturedAtUtc).ToList();
+                    var photos = shown.Where(m => m.Kind is MediaKind.Photo or MediaKind.ScanPage).ToList();
                     if (opt.MaxPhotos > 0) photos = photos.Take(opt.MaxPhotos).ToList();
-                    var videos = b.Media.Where(m => m.Kind == MediaKind.Video).ToList();
+                    var videos = shown.Where(m => m.Kind == MediaKind.Video).ToList();
                     if (photos.Count > 0)
                     {
-                        pdf.Section(Head("Site photographs"), $"{photos.Count} photos");
-                        var per = Math.Clamp(opt.PhotosPerRow, 1, 4);
-                        pdf.ImageGrid(photos.Select(m => (mediaPath(m.FileName), Caption(m))), per, per switch { 1 => 300, 2 => 170, 3 => 120, _ => 90 });
+                        pdf.Section(Head("Site photographs"), $"{photos.Count} photos · in order taken");
+                        // standard 4:3 frames, photos centre-cropped to fill them so every page looks even
+                        pdf.ImageGrid(photos.Select(m => (mediaPath(m.FileName), Caption(m))), Math.Clamp(opt.PhotosPerRow, 1, 4), 0, opt.PhotoCrop);
                     }
                     if (videos.Count > 0)
                     {
-                        pdf.Section("Videos");
-                        pdf.Table([new("#", 0.55f), new("File", 2.5f), new("Caption", 3), new("Recorded", 1.5f)],
-                            videos.Select((v, i) => new[] { (i + 1).ToString(), v.FileName, v.Caption, v.CapturedAtUtc.ToLocalTime().ToString("dd-MMM HH:mm") }));
+                        pdf.Section("Videos", $"{videos.Count} · in order recorded");
+                        pdf.Table([new("#", 0.55f), new("Recorded", 1.4f), new("Caption", 3.5f), new("File", 2.2f)],
+                            videos.Select((v, i) => new[] { (i + 1).ToString(), v.CapturedAtUtc.ToLocalTime().ToString("dd-MMM-yyyy HH:mm"), v.Caption, v.FileName }));
                     }
                     break;
 

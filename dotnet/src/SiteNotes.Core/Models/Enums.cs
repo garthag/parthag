@@ -11,7 +11,7 @@ public enum MachineOwnership { Own, Hired }
 public enum MediaKind { Photo, Video, ScanPage, Document }
 
 /// <summary>What a media file is attached to.</summary>
-public enum MediaOwner { Note, Report, Hindrance, Requirement, Scan }
+public enum MediaOwner { Note, Report, Hindrance, Requirement, Scan, Activity, Drawing }
 
 public enum HindranceStatus { Open, Resolved }
 

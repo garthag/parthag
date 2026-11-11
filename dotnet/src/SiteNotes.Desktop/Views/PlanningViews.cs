@@ -110,6 +110,9 @@ public class WbsView : ViewBase
             (Glyph.Add, "Add under selected", () => AddAsync((_tree.SelectedItem as TreeViewItem)?.Tag is WbsNode n ? n.Id : "")),
             (Glyph.Delete, "Delete", DeleteAsync),
             null,
+            (Glyph.Edit, "Export to edit", () => ExchangeUi.ExportAsync(() => ExchangeUi.Sheets.WbsAsync(Desk.ProjectId), _all.OrderBy(n => n.Level).ThenBy(n => n.SortOrder).ThenBy(n => n.Code))),
+            (Glyph.Table, "Import Excel…", async () => { if (await ExchangeUi.ImportAsync(() => ExchangeUi.Sheets.WbsAsync(Desk.ProjectId))) await RefreshAsync(); }),
+            null,
             (Glyph.Refresh, "Refresh", RefreshAsync));
         _tree.SelectedItemChanged += (_, _) => ShowEditor();
         var split = new Grid();
@@ -283,6 +286,9 @@ public class ActivitiesView : ViewBase
             (Glyph.Print, "Progress & cost PDF", () => ExportAsync(true)),
             (Glyph.Excel, "Excel", () => ExportAsync(false)),
             null,
+            (Glyph.Edit, "Export to edit", ExportEditAsync),
+            (Glyph.Table, "Import Excel…", () => ImportEditAsync(null)),
+            null,
             (Glyph.Refresh, "Recalculate", RefreshAsync));
         var bar = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(10, 8, 10, 4) };
         bar.Children.Add(W.Text("🔍 "));
@@ -393,6 +399,19 @@ public class ActivitiesView : ViewBase
         _grid.BeginEdit();
     }
 
+    /// <summary>Activities as shown (search, status filter and column sort applied) to edit in Excel.</summary>
+    public Task ExportEditAsync()
+    {
+        _grid.CommitEdit(DataGridEditingUnit.Row, true);
+        return ExchangeUi.ExportAsync(() => ExchangeUi.Sheets.ActivitiesAsync(Desk.ProjectId), _view.Cast<ActivityRow>().Select(r => r.A),
+            "Progress, forecast and cost are calculated from the daily reports and are not part of this sheet.");
+    }
+
+    public async Task ImportEditAsync(string? file)
+    {
+        if (await ExchangeUi.ImportAsync(() => ExchangeUi.Sheets.ActivitiesAsync(Desk.ProjectId), file)) await RefreshAsync();
+    }
+
     private async Task DeleteAsync()
     {
         var sel = _grid.SelectedItems.OfType<ActivityRow>().ToList();
@@ -419,7 +438,10 @@ public class ActivitiesView : ViewBase
         if (_pp == null) return;
         var tabs = new TabControl { Margin = new Thickness(10, 4, 10, 10) };
         if (_grid.SelectedItem is ActivityRow r)
+        {
+            tabs.Items.Add(new TabItem { Header = $"Photos & videos: {r.A.Name}", Content = new MediaPanel(MediaOwner.Activity, () => r.A.Id, defaultCaption: r.A.ToString()) });
             tabs.Items.Add(new TabItem { Header = $"Resources for: {r.A.Name}", Content = ResourcesPanel(r) });
+        }
         tabs.Items.Add(new TabItem { Header = "Subcontractor-wise", Content = PartyGrid(_pp.BySubcontractor, "Subcontractor") });
         tabs.Items.Add(new TabItem { Header = "Department-wise", Content = PartyGrid(_pp.ByDepartment, "Department") });
         tabs.SelectedIndex = 0;

@@ -47,6 +47,8 @@ public class GridView<T> : ViewBase where T : SyncEntity, new()
     public Func<List<T>, string, Task>? Excel { get; init; }
     public Func<T, Task>? AfterSave { get; init; }
     public Func<T, Task>? OpenDetail { get; init; }
+    /// <summary>Edit-in-Excel sheet of this module: adds “Export to edit” and “Import Excel…”.</summary>
+    public Func<Task<ExchangeSheet<T>>>? Exchange { get; init; }
     /// <summary>Extra toolbar buttons acting on the selected row(s).</summary>
     public (string Glyph, string Text, Func<List<T>, Task> Run)[] RowActions { get; init; } = [];
 
@@ -109,6 +111,21 @@ public class GridView<T> : ViewBase where T : SyncEntity, new()
             if (!_actionsAdded)
             {
                 _actionsAdded = true;
+                if (Exchange != null)
+                {
+                    var at2 = _toolbar.Items.Count - 2; // before the separator + Refresh
+                    _toolbar.Items.Insert(at2++, new Separator());
+                    foreach (var (glyph, text, tip, run) in new (string, string, string, Func<Task>)[]
+                    {
+                        (Glyph.Edit, "Export to edit", "Excel file of the rows shown (search, filter and sort applied; or the selected rows) to edit and import back", ExportEditAsync),
+                        (Glyph.Table, "Import Excel…", "Import the edited file: changed rows are updated, new rows are added, nothing is deleted", ImportEditAsync),
+                    })
+                    {
+                        var b = new Button { Content = W.IconText(glyph, text), Padding = new Thickness(8, 4, 8, 4), ToolTip = tip };
+                        b.Click += async (_, _) => await Dialogs.Guard(run);
+                        _toolbar.Items.Insert(at2++, b);
+                    }
+                }
                 if (RowActions.Length > 0) _toolbar.Items.Insert(3, new Separator());
                 var at = 4;
                 foreach (var (glyph, text, run) in RowActions)
@@ -204,6 +221,23 @@ public class GridView<T> : ViewBase where T : SyncEntity, new()
         _grid.Items.Refresh();
     }
 
+    /// <summary>Rows as shown: selected rows if several are selected, else everything visible, in the grid's current sort order.</summary>
+    private List<T> ShownRows()
+    {
+        _grid.CommitEdit(DataGridEditingUnit.Row, true);
+        var sel = Selected();
+        return sel.Count > 1 ? _view.Cast<T>().Where(sel.Contains).ToList() : _view.Cast<T>().ToList();
+    }
+
+    public Task ExportEditAsync() => ExchangeUi.ExportAsync(Exchange!, ShownRows(), $"Exported {DateTime.Now:dd-MMM-yyyy HH:mm} · {Desk.Project?.Name}");
+
+    public async Task ImportEditAsync(string? file)
+    {
+        if (await ExchangeUi.ImportAsync(Exchange!, file, _projectScoped)) await RefreshAsync();
+    }
+
+    private Task ImportEditAsync() => ImportEditAsync(null);
+
     private async Task ExportAsync(bool pdf)
     {
         var sel = Selected();
@@ -281,6 +315,7 @@ public static class MasterViews
         s => $"{s.Name} {s.Trade} {s.ContactPerson} {s.Phone}")
     {
         Order = l => l.OrderBy(s => s.Name),
+        Exchange = () => ExchangeUi.Sheets.SubcontractorsAsync(),
         Filters = [("Active", s => s.IsActive), ("Inactive", s => !s.IsActive)],
         BulkActions = [("Mark active", l => l.ForEach(s => s.IsActive = true)), ("Mark inactive", l => l.ForEach(s => s.IsActive = false))],
     };
@@ -290,6 +325,7 @@ public static class MasterViews
         d => $"{d.Name} {d.Head}")
     {
         Order = l => l.OrderBy(d => d.Name),
+        Exchange = () => ExchangeUi.Sheets.DepartmentsAsync(),
     };
 
     public static GridView<SiteResource> Resources() => new("Resources & rates", () => new SiteResource { Name = "New resource" },
@@ -305,6 +341,7 @@ public static class MasterViews
         r => $"{r.Code} {r.Name} {r.Type} {r.Remarks}", hint: "Manpower & machines: rate per day or per hour. Materials: per unit. Non-material (hire, testing, transport): type Other, per unit or lump sum.")
     {
         Order = l => l.OrderBy(r => r.Type).ThenBy(r => r.Name),
+        Exchange = () => ExchangeUi.Sheets.ResourcesAsync(Desk.ProjectId),
         Filters = Enum.GetValues<ResourceType>().Select(t => (t == ResourceType.Other ? "Non-material" : t.ToString(), (Func<SiteResource, bool>)(r => r.Type == t))).ToArray(),
     };
 }
@@ -326,6 +363,7 @@ public static class RegisterViews
         hint: "Type in the grid. Select a hindrance and click “Photos & videos…” (or double-click it) to attach evidence photos and videos.")
     {
         Order = l => l.OrderByDescending(h => h.FromDate).ThenByDescending(h => h.SerialNo),
+        Exchange = () => ExchangeUi.Sheets.HindrancesAsync(),
         AfterSave = async h => { if (h.SerialNo == 0) { h.SerialNo = await Desk.Db.NextSerialAsync<Hindrance>(h.ProjectId); await Desk.Db.SaveAsync(h); } },
         Filters = [("Open", h => h.Status == HindranceStatus.Open), ("Resolved", h => h.Status == HindranceStatus.Resolved),
                    .. Lists.ResponsibleParties.Select(p => (p, (Func<Hindrance, bool>)(h => h.ResponsibleParty == p)))],
@@ -352,6 +390,7 @@ public static class RegisterViews
         r => $"{r.SerialNo} {r.Category} {r.Item} {r.RaisedBy} {r.Remarks}")
     {
         Order = l => l.OrderBy(r => r.RequiredBy ?? DateTime.MaxValue),
+        Exchange = () => ExchangeUi.Sheets.RequirementsAsync(),
         AfterSave = async r => { if (r.SerialNo == 0) { r.SerialNo = await Desk.Db.NextSerialAsync<Requirement>(r.ProjectId); await Desk.Db.SaveAsync(r); } },
         Filters = [("Open (not received)", r => r.Status is RequirementStatus.Pending or RequirementStatus.Approved or RequirementStatus.Ordered), ("Overdue", r => r.IsOverdue),
                    .. Enum.GetValues<RequirementStatus>().Select(st => (st.ToString(), (Func<Requirement, bool>)(r => r.Status == st)))],

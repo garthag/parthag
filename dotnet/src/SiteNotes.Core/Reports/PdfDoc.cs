@@ -511,11 +511,12 @@ public sealed class PdfDoc : IDisposable
     // ---------- images ----------
 
     /// <summary>Photos two per row with captions underneath.</summary>
-    public void ImageGrid(IEnumerable<(string Path, string Caption)> images, int perRow = 2, float imageHeight = 170)
+    public void ImageGrid(IEnumerable<(string Path, string Caption)> images, int perRow = 2, float imageHeight = 0, bool crop = false)
     {
         var list = images.ToList();
         const float gap = 10;
         var w = (ContentWidth - gap * (perRow - 1)) / perRow;
+        if (imageHeight <= 0) imageHeight = Math.Min(w * 0.75f, PageHeight * 0.55f); // standard 4:3 photo frame
         using var cf = Font(7.5f);
         using var ink = Fill(Muted);
         using var border = Stroke(Grid);
@@ -529,8 +530,17 @@ public sealed class PdfDoc : IDisposable
             {
                 var x = Margin + j * (w + gap);
                 var rect = new SKRect(x, _y, x + w, _y + imageHeight);
-                using var img = DryRun ? null : ImageTools.LoadForPdf(row[j].Path, 1200);
-                if (img != null) C.DrawImage(img, Fit(img.Width, img.Height, rect), new SKSamplingOptions(SKFilterMode.Linear));
+                using var img = DryRun ? null : ImageTools.LoadForPdf(row[j].Path, perRow == 1 ? 1800 : 1200, 82);
+                if (img != null && crop)
+                {
+                    // centre-crop the photo to the frame's shape, then fill the frame
+                    var scale = Math.Max(rect.Width / img.Width, rect.Height / img.Height);
+                    var sw = rect.Width / scale;
+                    var sh = rect.Height / scale;
+                    var src = new SKRect((img.Width - sw) / 2, (img.Height - sh) / 2, (img.Width + sw) / 2, (img.Height + sh) / 2);
+                    C.DrawImage(img, src, rect, new SKSamplingOptions(SKFilterMode.Linear), null);
+                }
+                else if (img != null) C.DrawImage(img, Fit(img.Width, img.Height, rect), new SKSamplingOptions(SKFilterMode.Linear));
                 else
                 {
                     using var tf = Font(9);
