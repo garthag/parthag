@@ -61,8 +61,14 @@ Project
 Many agencies often work on one drawing, and one item can be shared. For example, item 1457 on a drawing is 100 MT, given 60 MT to agency A and 40 MT to agency B, while another drawing goes entirely to one contractor.
 
 - **Drawings:** number, revision, title, discipline, status (Issued / For construction / Revised / Superseded / Cancelled), WBS (plant › unit › area) and issue date.
-- **Items on a drawing:** BOQ items, **equipment** and **parts**, each with its unit and drawing quantity. An item can also count towards a planned activity.
-- **Allocations:** each item is split between one or more agencies (quantity, work order no., date). Use **Allocate the rest…** to give the remaining quantity to an agency.
+- **Drawing file:** **Attach drawing file…** stores the PDF / image / DWG with the drawing; **Open drawing** shows it. The file syncs to every device.
+- **Items on a drawing:** BOQ items, **equipment** and **parts**, each with its unit, drawing quantity and **BOQ rate**.
+- **Import BOQ…:** reads an Excel or CSV sheet with the columns *Item no · Description · Type · Unit · Qty · Rate* (any order; **BOQ template** gives an example). Items with the same item no. are updated, not duplicated.
+- **Create activities:** makes a planned activity for every item (code = drawing no. / item no.). Progress entered as drawing work then counts for the item, the agency and the activity, without double counting.
+- **Allocations:** each item is split between one or more agencies with **quantity, work order no. and unit price payable** to that agency. Use **Allocate the rest…** to give the remaining quantity to an agency.
+- **Values:**
+  - BOQ value = quantity × BOQ rate; **unallocated value** = unallocated quantity × BOQ rate; **completed value** = completed quantity × BOQ rate (never above the item value);
+  - **allocated value** = allocated quantity × unit price; **payable for work done** = the smaller of done and allocated × unit price; balance value = the rest of the work order.
 - **Daily report:** **Add drawing work** lists every item and agency allocation. Type today's quantity; "to date", balance and % are worked out for that agency against its allocation.
 - **Calculated automatically:**
   - per item: allocated, **unallocated**, **completed**, balance, %;
@@ -72,19 +78,23 @@ Many agencies often work on one drawing, and one item can be shared. For example
 - **Report (PDF / Excel):**
   - drawing summary;
   - every drawing with its items and each agency's allocated → done;
-  - **subcontractor-wise drawing work** (allocated, done, balance per unit);
+  - **value by drawing** and **work orders** (agency, work order, unit price, allocated value, payable, balance);
+  - **subcontractor-wise drawing work** (allocated, done, balance per unit, allocated value, payable);
   - a **needs attention** list.
 
 ### 3.4 Where photos, videos, hindrances and notes are
 | What | Windows | Android |
 |---|---|---|
 | Photos & videos of a day | Daily report › tab **8 Photos & videos** (add files or drag & drop) | Daily report › **8. Photos & videos** › 📷 Photo / 🖼 Gallery / 🎥 Video |
+| **Site photos & videos of an activity** | Activities & progress › select the activity › tab **Photos & videos** | Open an activity › **Site photos & videos** |
 | Hindrance register | Ribbon **Home › Hindrances** (or Registers & masters) | Menu **⚠️ Hindrances** |
 | Hindrance photos / videos | Select a hindrance › **Photos & videos…** (or double-click it) | Open a hindrance › Photos & videos (evidence) |
 | Requirement attachments | Select a requirement › **Photos & attachments…** | Open a requirement › Photos & attachments |
 | Hindrances in a daily report | Daily report › tab **5 Hindrances** | Daily report › **5. Hindrances** |
 | Notes | Ribbon **Home › Notes** (insert pictures / video / scan from the note toolbox) | Menu **📝 Notes & scans** (📷 🖼 🎥 📄 in the toolbox) |
 | Scan to PDF | Ribbon **Home › Scan to PDF** | Notes & scans › 📄 Scan |
+
+**Photos by date.** Photos and videos taken on an activity appear automatically in the daily report of the day they were taken, if that activity is in the report. Everything is shown **in the order taken** (the date and time can be corrected). Untick **In report** (Windows) or switch off **Show in the PDF report** (Android) to keep a photo but leave it out of the PDF. In the PDF, photos are printed in equal **4:3 frames** (Report manager › Photo framing: *same size* or *whole photo*), 1–4 per row.
 
 ### 3.5 Registers and masters
 - **Hindrance register:** dates, category, description, affected activity, responsibility, hours lost, status, action. Filters and bulk "mark resolved".
@@ -110,7 +120,29 @@ Many agencies often work on one drawing, and one item can be shared. For example
 
 **Save as default** stores these settings per project. They sync, and every PDF the app makes uses them. Excel workbooks have frozen headers, auto-filters and `SUBTOTAL` totals that follow the filter.
 
-### 3.8 Lists everywhere
+### 3.8 Edit in Excel: export, edit, import
+Every module can be taken to Excel, edited there and brought back.
+
+| Module | Sheet columns |
+|---|---|
+| Subcontractors, departments | name, trade, contact, phone, active |
+| Resources & rates | type, code, name, unit, rate, rate basis, agency, department |
+| WBS | code, name, level, parent, order |
+| Activities | code, name, location, WBS, unit, planned qty, planned start / finish, subcontractor, department, method, weightage |
+| Hindrance and requirement registers | all register columns |
+| Drawings · BOQ items · allocations | drawing register; items with qty and BOQ rate; agency, work order no., qty and unit price |
+
+1. Search, filter and sort the list the way you want it, then **Export to edit** (Android: ⋮ › *Export to edit (Excel)*). The file has exactly the rows shown, in that order. On Windows, selecting several rows exports only those.
+2. Edit cells in Excel. **Add rows at the bottom** for new records. Sort or filter the sheet freely; drop-down lists are provided for units, status and similar columns.
+3. **Import Excel…** shows how many rows are new, changed and unchanged, and lists any warnings, before anything is saved.
+
+Rules of the import:
+- A row is recognised by the **ID** in the last column; without it, by its code / number / name. So a sheet typed from scratch (or a CSV) can be imported too.
+- Only changed rows are saved. Rows that are not in the file are left alone; **an import never deletes**.
+- Names are checked: an unknown subcontractor, department, WBS or drawing is reported and the old value is kept. A wrong number or date is reported the same way.
+- Grey columns (serial numbers, descriptions shown for reference) are ignored.
+
+### 3.9 Lists everywhere
 - **Search box**, filter list, **click a column header to sort**, **Ctrl / Shift + click to select many**.
 - Bulk actions on the selection: PDF, Excel, submit / approve / draft, resolve, change status, activate / deactivate, delete.
 - PC grids work like a spreadsheet (type, Tab, Enter). Every edited row saves itself.

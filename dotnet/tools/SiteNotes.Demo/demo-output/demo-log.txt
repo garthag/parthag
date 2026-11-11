@@ -1,14 +1,14 @@
-SiteNotes DPR – heavy demo & verification · 11-Nov-2026 01:30 · 180 days of reports for the big project
+SiteNotes DPR – heavy demo & verification · 11-Nov-2026 01:35 · 180 days of reports for the big project
 Built Metro Depot – Civil & Track Works: 30 WBS nodes, 152 activities, 6 drawings with 24 items / 42 allocations, 16 resources, 157 daily reports
 Built Hospital Block G+8: 14 WBS nodes, 60 activities, 4 drawings with 16 items / 28 allocations, 16 resources, 105 daily reports
 Sample project created on site-phone-B: Sample – Water Treatment Plant
-  ⏱ Build 3 projects on 3 devices: 11.19 s
+  ⏱ Build 3 projects on 3 devices: 10.72 s
 Edited 6 earlier reports and deleted report no. 179 in Metro Depot – Civil & Track Works
 Edited 6 earlier reports and deleted report no. 53 in Hospital Block G+8
-  ⏱ Edit / delete earlier reports: 0.45 s
+  ⏱ Edit / delete earlier reports: 0.43 s
 
 ▶ Concurrency stress: 40 saves and 40 full reads at the same time
-  [PASS] Reads during writes never fail or see a row twice – 7.8 s
+  [PASS] Reads during writes never fail or see a row twice – 7.9 s
 
 ▶ Verify Metro Depot – Civil & Track Works
   [PASS] Report numbers are unique – 156 reports, 101–257
@@ -52,7 +52,7 @@ Edited 6 earlier reports and deleted report no. 53 in Hospital Block G+8
   [PASS] Excel edit: re-sorted sheet, 3 quantities changed, 1 row added → 3 changed + 1 new, rest untouched – 149 unchanged
   [PASS] Hindrance serial numbers unique – 13 hindrances
   [PASS] Requirement serial numbers unique – 5 requirements
-  ⏱ Verify Metro Depot – Civil & Track Works: 2.27 s
+  ⏱ Verify Metro Depot – Civil & Track Works: 2.18 s
   · Metro Depot – Civil & Track Works: 156 reports · 152 activities · overall 51.8 % (plan 53 %) · 64 completed, 22 delayed · 39,592 man-days · cost ₹ 137,446,855.56 · 13 hindrances · 5 requirements
 
 ▶ Verify Hospital Block G+8
@@ -97,7 +97,7 @@ Edited 6 earlier reports and deleted report no. 53 in Hospital Block G+8
   [PASS] Excel edit: re-sorted sheet, 3 quantities changed, 1 row added → 3 changed + 1 new, rest untouched – 57 unchanged
   [PASS] Hindrance serial numbers unique – 4 hindrances
   [PASS] Requirement serial numbers unique – 7 requirements
-  ⏱ Verify Hospital Block G+8: 0.54 s
+  ⏱ Verify Hospital Block G+8: 0.53 s
   · Hospital Block G+8: 104 reports · 60 activities · overall 57.6 % (plan 59.3 %) · 27 completed, 11 delayed · 12,024 man-days · cost ₹ 42,536,914.41 · 4 hindrances · 7 requirements
 
 ▶ Verify Sample – Water Treatment Plant
@@ -131,23 +131,23 @@ Edited 6 earlier reports and deleted report no. 53 in Hospital Block G+8
   [PASS] Work beyond drawing qty / allocation is flagged – 0 items beyond drawing qty, 0 agency shares beyond allocation
   [PASS] Subcontractor-wise drawing work adds up to the item totals (per unit) – 1 Nos, 0 Rm, 34 MT, 0 m²
   [PASS] DPR drawing rows: to date = agency's running total, planned = its allocation
-  [PASS] Drawing values: BOQ value = qty × BOQ rate; unallocated value = unallocated qty × BOQ rate; completed value capped at the item value – BOQ value 0.00, completed 0.00, unallocated 0.00
-  [PASS] Work orders: allocated value = Σ allocated qty × unit price; payable = min(done, allocated) × unit price (never above the work order) – allocated 0.00, payable 0.00
+  [PASS] Drawing values: BOQ value = qty × BOQ rate; unallocated value = unallocated qty × BOQ rate; completed value capped at the item value – BOQ value 11,244,000.00, completed 3,240,000.00, unallocated 1,456,000.00
+  [PASS] Work orders: allocated value = Σ allocated qty × unit price; payable = min(done, allocated) × unit price (never above the work order) – allocated 1,462,000.00, payable 461,400.00
   [PASS] Subcontractor-wise values add up to the drawing totals
   · Sample – Water Treatment Plant: 2 drawings · 4 items · 0 drawings completed · 2 items partly unallocated · 0 items worked without allocation
   [PASS] Excel export → import without edits changes nothing (all 10 module sheets) – Subcontractors 2 · Departments 6 · Resources & rates 9 · WBS 3 · Activities 4 · Hindrance register 0 · Requirement register 1 · Drawings 2 · Drawing items (BOQ) 4 · Drawing allocations 4
   [PASS] Excel edit: re-sorted sheet, 3 quantities changed, 1 row added → 3 changed + 1 new, rest untouched – 1 unchanged
   [PASS] Hindrance serial numbers unique – 0 hindrances
   [PASS] Requirement serial numbers unique – 1 requirements
-  ⏱ Verify Sample – Water Treatment Plant: 0.17 s
+  ⏱ Verify Sample – Water Treatment Plant: 0.19 s
   · Sample – Water Treatment Plant: 4 reports · 4 activities · overall 34.1 % (plan 45.4 %) · 0 completed, 2 delayed · 91 man-days · cost ₹ 1,102,200.00 · 0 hindrances · 1 requirements
-  [PASS] Sync office – Synced 01:30:56 · ↑0 ↓0 · files ↑0 ↓0
-  [PASS] Sync phone A – Synced 01:30:56 · ↑0 ↓2460 · files ↑0 ↓0
-  [PASS] Sync phone B – Synced 01:30:56 · ↑0 ↓2460 · files ↑0 ↓0
-  [PASS] Sync office – Synced 01:30:56 · ↑0 ↓0 · files ↑0 ↓0
-  [PASS] Sync phone A – Synced 01:30:56 · ↑0 ↓0 · files ↑0 ↓0
-  [PASS] Sync phone B – Synced 01:30:56 · ↑0 ↓0 · files ↑0 ↓0
-  ⏱ Sync 3 devices (2 rounds): 0.52 s
+  [PASS] Sync office – Synced 01:35:56 · ↑0 ↓0 · files ↑0 ↓0
+  [PASS] Sync phone A – Synced 01:35:56 · ↑0 ↓2459 · files ↑0 ↓0
+  [PASS] Sync phone B – Synced 01:35:56 · ↑0 ↓2459 · files ↑0 ↓0
+  [PASS] Sync office – Synced 01:35:56 · ↑0 ↓0 · files ↑0 ↓0
+  [PASS] Sync phone A – Synced 01:35:56 · ↑0 ↓0 · files ↑0 ↓0
+  [PASS] Sync phone B – Synced 01:35:56 · ↑0 ↓0 · files ↑0 ↓0
+  ⏱ Sync 3 devices (2 rounds): 0.51 s
 
 ▶ Verify all devices hold identical data after sync
   [PASS] Same rows on office PC, phone A and phone B – DailyReport: 266; ReportManpower: 5926; MediaItem: 28
@@ -196,7 +196,7 @@ Edited 6 earlier reports and deleted report no. 53 in Hospital Block G+8
   [PASS] Excel edit: re-sorted sheet, 3 quantities changed, 1 row added → 3 changed + 1 new, rest untouched – 149 unchanged
   [PASS] Hindrance serial numbers unique – 13 hindrances
   [PASS] Requirement serial numbers unique – 5 requirements
-  ⏱ Verify Metro Depot – Civil & Track Works: 1.11 s
+  ⏱ Verify Metro Depot – Civil & Track Works: 1.15 s
   · Metro Depot – Civil & Track Works: 156 reports · 152 activities · overall 51.8 % (plan 53 %) · 64 completed, 22 delayed · 39,592 man-days · cost ₹ 137,446,855.56 · 13 hindrances · 5 requirements
 
 ▶ Verify Hospital Block G+8 (after sync, on office PC)
@@ -241,7 +241,7 @@ Edited 6 earlier reports and deleted report no. 53 in Hospital Block G+8
   [PASS] Excel edit: re-sorted sheet, 3 quantities changed, 1 row added → 3 changed + 1 new, rest untouched – 57 unchanged
   [PASS] Hindrance serial numbers unique – 4 hindrances
   [PASS] Requirement serial numbers unique – 7 requirements
-  ⏱ Verify Hospital Block G+8: 0.52 s
+  ⏱ Verify Hospital Block G+8: 0.60 s
   · Hospital Block G+8: 104 reports · 60 activities · overall 57.6 % (plan 59.3 %) · 27 completed, 11 delayed · 12,024 man-days · cost ₹ 42,536,914.41 · 4 hindrances · 7 requirements
 
 ▶ Verify Sample – Water Treatment Plant (after sync, on office PC)
@@ -275,15 +275,15 @@ Edited 6 earlier reports and deleted report no. 53 in Hospital Block G+8
   [PASS] Work beyond drawing qty / allocation is flagged – 0 items beyond drawing qty, 0 agency shares beyond allocation
   [PASS] Subcontractor-wise drawing work adds up to the item totals (per unit) – 1 Nos, 0 Rm, 34 MT, 0 m²
   [PASS] DPR drawing rows: to date = agency's running total, planned = its allocation
-  [PASS] Drawing values: BOQ value = qty × BOQ rate; unallocated value = unallocated qty × BOQ rate; completed value capped at the item value – BOQ value 0.00, completed 0.00, unallocated 0.00
-  [PASS] Work orders: allocated value = Σ allocated qty × unit price; payable = min(done, allocated) × unit price (never above the work order) – allocated 0.00, payable 0.00
+  [PASS] Drawing values: BOQ value = qty × BOQ rate; unallocated value = unallocated qty × BOQ rate; completed value capped at the item value – BOQ value 11,244,000.00, completed 3,240,000.00, unallocated 1,456,000.00
+  [PASS] Work orders: allocated value = Σ allocated qty × unit price; payable = min(done, allocated) × unit price (never above the work order) – allocated 1,462,000.00, payable 461,400.00
   [PASS] Subcontractor-wise values add up to the drawing totals
   · Sample – Water Treatment Plant: 2 drawings · 4 items · 0 drawings completed · 2 items partly unallocated · 0 items worked without allocation
   [PASS] Excel export → import without edits changes nothing (all 10 module sheets) – Subcontractors 2 · Departments 6 · Resources & rates 9 · WBS 3 · Activities 4 · Hindrance register 0 · Requirement register 1 · Drawings 2 · Drawing items (BOQ) 4 · Drawing allocations 4
   [PASS] Excel edit: re-sorted sheet, 3 quantities changed, 1 row added → 3 changed + 1 new, rest untouched – 1 unchanged
   [PASS] Hindrance serial numbers unique – 0 hindrances
   [PASS] Requirement serial numbers unique – 1 requirements
-  ⏱ Verify Sample – Water Treatment Plant: 0.27 s
+  ⏱ Verify Sample – Water Treatment Plant: 0.28 s
   · Sample – Water Treatment Plant: 4 reports · 4 activities · overall 34.1 % (plan 45.4 %) · 0 completed, 2 delayed · 91 man-days · cost ₹ 1,102,200.00 · 0 hindrances · 1 requirements
 
 ▶ Verify projects never mix
@@ -295,9 +295,9 @@ Edited 6 earlier reports and deleted report no. 53 in Hospital Block G+8
   ⏱ Metro Depot – Civil & Track Works: load 156 reports with all rows: 0.05 s
   [PASS] Metro Depot – Civil & Track Works: 01-DPR-latest.pdf – 6 pages · 116 KB · 0.2 s
   [PASS] Metro Depot – Civil & Track Works: 02-DPR-latest-short-custom-order.pdf – 5 pages · 105 KB · 0.1 s
-  [PASS] Metro Depot – Civil & Track Works: 03-DPR-all-reports-last-30-days.pdf – 216 pages · 1,462 KB · 1.2 s
+  [PASS] Metro Depot – Civil & Track Works: 03-DPR-all-reports-last-30-days.pdf – 216 pages · 1,461 KB · 1.2 s
   [PASS] Metro Depot – Civil & Track Works: 04-DPR-register-whole-project.pdf – 11 pages · 126 KB · 0.1 s
-  [PASS] Metro Depot – Civil & Track Works: 05-DPR-workbook-whole-project.xlsx – 8 sheets · 524 KB · 1.8 s
+  [PASS] Metro Depot – Civil & Track Works: 05-DPR-workbook-whole-project.xlsx – 8 sheets · 524 KB · 1.9 s
   [PASS] Metro Depot – Civil & Track Works: 06-Progress-and-cost.pdf – 24 pages · 268 KB · 0.2 s
   [PASS] Metro Depot – Civil & Track Works: 07-Progress-and-cost.xlsx – 4 sheets · 43 KB · 0.1 s
   [PASS] Metro Depot – Civil & Track Works: 08-Manpower-summary.pdf – 5 pages · 84 KB · 0.1 s
@@ -339,15 +339,15 @@ Edited 6 earlier reports and deleted report no. 53 in Hospital Block G+8
   [PASS] Sample – Water Treatment Plant: 08-Manpower-summary.pdf – 1 pages · 62 KB · 0.1 s
   [PASS] Sample – Water Treatment Plant: 09-Hindrance-register.pdf – 1 pages · 69 KB · 0.1 s
   [PASS] Sample – Water Treatment Plant: 10-Hindrance-register.xlsx – 1 sheets · 6 KB · 0.0 s
-  [PASS] Sample – Water Treatment Plant: 11-Requirement-register.pdf – 1 pages · 61 KB · 0.1 s
+  [PASS] Sample – Water Treatment Plant: 11-Requirement-register.pdf – 1 pages · 61 KB · 0.0 s
   [PASS] Sample – Water Treatment Plant: 12-Requirement-register.xlsx – 1 sheets · 7 KB · 0.0 s
-  [PASS] Sample – Water Treatment Plant: 15-Drawing-register-work-completion.pdf – 2 pages · 87 KB · 0.1 s
+  [PASS] Sample – Water Treatment Plant: 15-Drawing-register-work-completion.pdf – 3 pages · 94 KB · 0.1 s
   [PASS] Sample – Water Treatment Plant: 16-Drawing-register-work-completion.xlsx – 4 sheets · 11 KB · 0.0 s
   [PASS] Sample – Water Treatment Plant: Excel manpower total = database – 88
   [PASS] Sample – Water Treatment Plant: Excel cost total = database – ₹ 1,102,200.00
   [PASS] Sample – Water Treatment Plant: progress workbook cost = project cost – ₹ 1,102,200.00
   [PASS] Scan: 3 pages → one PDF in Scans › today
   [PASS] Note PDF with checklist, lists, arrow, quote and scan
-  ⏱ Generate all reports: 8.28 s
+  ⏱ Generate all reports: 8.31 s
 
 RESULT: 300 checks passed, 0 failed.

@@ -110,7 +110,7 @@ public static class DrawingReports
             pdf.Section("Subcontractor-wise drawing work");
             pdf.Table([
                     new("Agency", 2.2f), new("Unit", 0.6f), new("Allocated", 1, true), new("Done", 1, true), new("Balance", 1, true),
-                    new("Progress", 1.3f, false, true), new("Drawings", 0.7f, true), new("Items", 0.6f, true), new("Done without allocation", 1.1f, true),
+                    new("Progress", 1.3f, false, true), new("Drawings", 0.95f, true), new("Items", 0.7f, true), new("Done without allocation", 1.1f, true),
                     new("Allocated value", 1.2f, true), new("Payable", 1.2f, true), new("Work orders", 1.4f)
                 ],
                 reg.ByAgency.Select(a => new[] { a.Agency, a.Unit, N(a.Allocated), N(a.Done), N(a.Balance), P(a.Percent), a.Drawings.ToString(), a.Items.ToString(), N(a.WithoutAllocation),

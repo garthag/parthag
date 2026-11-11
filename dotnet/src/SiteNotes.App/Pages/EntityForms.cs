@@ -167,6 +167,8 @@ public static class EntityForms
             Ui.SectionHeader("Progress (calculated automatically)"),
             ProgressPanel(a),
             Ui.SectionHeader("Assigned resources (planned)"), resources,
+            Ui.SectionHeader("Site photos & videos (shown in the daily report of the day they were taken)"),
+            new MediaStrip(MediaOwner.Activity, () => a.Id),
             F("Remarks", Ui.Memo(a.Remarks, "", v => a.Remarks = v, 50)));
     }
 

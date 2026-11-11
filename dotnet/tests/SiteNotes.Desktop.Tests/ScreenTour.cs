@@ -80,7 +80,20 @@ public class ScreenTour
             {
                 var g = Find<DataGrid>(main.CurrentView as DependencyObject);
                 if (g?.Items.Count > 0) g.SelectedIndex = 1;
-                await Task.CompletedTask;
+                // edit in Excel: export the rows shown, change one quantity in the file, import it back
+                var view = (ActivitiesView)main.CurrentView!;
+                await view.ExportEditAsync();
+                var file = Directory.GetFiles(Desk.ReportsFolder, "Activities_edit_*.xlsx").OrderByDescending(File.GetLastWriteTimeUtc).First();
+                using (var wb = new ClosedXML.Excel.XLWorkbook(file))
+                {
+                    var ws = wb.Worksheets.First();
+                    Assert.Equal("Planned qty", ws.Cell(1, 6).GetString());
+                    ws.Cell(2, 6).Value = ws.Cell(2, 6).GetDouble() + 1;
+                    wb.Save();
+                }
+                await view.ImportEditAsync(file);
+                Assert.Contains(Dialogs.Messages, m => m.Contains("Activities: 0 new row(s) and 1 changed row(s)"));
+                await Settle();
             });
         await Show(new DrawingsView(), "04b-drawing-register", "Drawing register – drawings → items (BOQ / equipment / parts) → allocations to agencies; allocated, unallocated, completed, balance");
         await Show(new WbsView(), "05-wbs", "WBS – Project › Plant › Unit › Area › System › Work package",

@@ -106,6 +106,24 @@ public class SettingsPage : ContentPage
 /// <summary>Full-screen photo with caption / remarks, share, open and delete. Videos open in the system player.</summary>
 public class MediaViewerPage : ContentPage
 {
+    private static View InReport(Core.Models.MediaItem m)
+    {
+        var sw = new Switch { IsToggled = !m.ExcludeFromReport, OnColor = Ui.Primary, VerticalOptions = LayoutOptions.Center };
+        sw.Toggled += (_, e) => m.ExcludeFromReport = !e.Value;
+        return new HorizontalStackLayout { Spacing = 8, Children = { sw, Ui.Label("Show in the PDF report", 14) } };
+    }
+
+    private static View TakenOn(Core.Models.MediaItem m)
+    {
+        var local = m.CapturedAtUtc.ToLocalTime();
+        var date = new DatePicker { Date = local.Date, Format = "dd-MMM-yyyy" };
+        var time = new TimePicker { Time = local.TimeOfDay, Format = "HH:mm" };
+        void Set() => m.CapturedAtUtc = DateTime.SpecifyKind(((DateTime?)date.Date ?? local.Date).Date + ((TimeSpan?)time.Time ?? local.TimeOfDay), DateTimeKind.Local).ToUniversalTime();
+        date.DateSelected += (_, _) => Set();
+        time.PropertyChanged += (_, e) => { if (e.PropertyName == nameof(TimePicker.Time)) Set(); };
+        return new HorizontalStackLayout { Spacing = 8, Children = { date, time } };
+    }
+
     public MediaViewerPage(Core.Models.MediaItem m, Func<Task> onChanged)
     {
         Title = m.Kind == Core.Models.MediaKind.Video ? "Video" : "Photo";
@@ -132,6 +150,8 @@ public class MediaViewerPage : ContentPage
                 Ui.Caption($"{m.CapturedAtUtc.ToLocalTime():dd-MMM-yyyy HH:mm}" + (m.Latitude is { } la ? $" · GPS {la:0.00000}, {m.Longitude:0.00000}" : "") +
                            (File.Exists(path) ? "" : " · file not on this device yet (syncing)")),
                 Ui.Field("Caption", Ui.Entry(m.Caption, "What does it show?", changed: v => m.Caption = v)),
+                InReport(m),
+                Ui.Field("Date & time taken (photos and videos are shown in this order)", TakenOn(m)),
                 Ui.Field("Remarks", Ui.Memo(m.Remarks, "", v => m.Remarks = v, 60)),
                 Ui.Button("💾 Save", async () => { await AppServices.Db.SaveAsync(m); await onChanged(); await Navigation.PopAsync(); }),
             }

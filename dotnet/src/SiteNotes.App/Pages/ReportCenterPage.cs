@@ -171,6 +171,8 @@ public class ReportCenterPage : ContentPage
         mpSort.Changed += () => _opt.ManpowerSort = mpSort.Value;
         var perRow = new ChipGroup<int>([(1, "1 large"), (2, "2"), (3, "3"), (4, "4 small")], [_opt.PhotosPerRow]);
         perRow.Changed += () => _opt.PhotosPerRow = perRow.Value;
+        var crop = new ChipGroup<bool>([(true, "Same size (4:3, cropped)"), (false, "Whole photo")], [_opt.PhotoCrop]);
+        crop.Changed += () => _opt.PhotoCrop = crop.Value;
         var maxPhotos = new ChipGroup<int>([(0, "All"), (4, "4"), (8, "8"), (12, "12"), (20, "20")], [_opt.MaxPhotos]);
         maxPhotos.Changed += () => _opt.MaxPhotos = maxPhotos.Value;
 
@@ -182,6 +184,7 @@ public class ReportCenterPage : ContentPage
             Ui.Field("Sort activity rows by", actSort),
             Ui.Field("Sort manpower rows by", mpSort),
             Ui.Field("Photos per row", perRow),
+            Ui.Field("Photo framing", crop),
             Ui.Field("Photos per report", maxPhotos));
     }
 

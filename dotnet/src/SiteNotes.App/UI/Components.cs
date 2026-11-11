@@ -147,10 +147,15 @@ public class MediaStrip : VerticalStackLayout
     private List<MediaItem> _items = [];
     public event Action<int>? CountChanged;
 
-    public MediaStrip(MediaOwner owner, Func<string> ownerId)
+    private readonly Func<Task<List<MediaItem>>>? _source;
+
+    /// <param name="source">What to show (default: the media of this record). The daily report also shows the photos
+    /// taken that day on its activities.</param>
+    public MediaStrip(MediaOwner owner, Func<string> ownerId, Func<Task<List<MediaItem>>>? source = null)
     {
         _owner = owner;
         _ownerId = ownerId;
+        _source = source;
         Spacing = 8;
         Children.Add(_thumbs);
         Children.Add(new FlexLayout
@@ -171,7 +176,7 @@ public class MediaStrip : VerticalStackLayout
     public async Task LoadAsync()
     {
         var id = _ownerId();
-        _items = (await AppServices.Db.ListAsync<MediaItem>(m => m.OwnerId == id)).OrderBy(m => m.CapturedAtUtc).ToList();
+        _items = (_source != null ? await _source() : await AppServices.Db.ListAsync<MediaItem>(m => m.OwnerId == id)).OrderBy(m => m.CapturedAtUtc).ToList();
         Render();
     }
 
@@ -179,6 +184,7 @@ public class MediaStrip : VerticalStackLayout
     {
         // No caption prompt: capture stays one tap. Tap a thumbnail to add a caption later.
         _items.Add(m);
+        _items = [.. _items.OrderBy(x => x.CapturedAtUtc)];
         Render();
         return Task.CompletedTask;
     }
@@ -204,8 +210,17 @@ public class MediaStrip : VerticalStackLayout
             var tile = new Border
             {
                 WidthRequest = 104, HeightRequest = 104, Margin = new Thickness(0, 0, 6, 6), StrokeThickness = 0,
-                StrokeShape = new RoundRectangle { CornerRadius = 8 }, BackgroundColor = Ui.PrimaryDark, Content = content,
+                StrokeShape = new RoundRectangle { CornerRadius = 8 }, BackgroundColor = Ui.PrimaryDark,
             };
+            // order taken: time under every tile; photos left out of the PDF and activity photos are marked
+            var tag = new Label
+            {
+                Text = m.CapturedAtUtc.ToLocalTime().ToString("dd-MMM HH:mm") + (m.ExcludeFromReport ? " · not in PDF" : "") + (m.OwnerType == MediaOwner.Activity && _owner != MediaOwner.Activity ? " · activity" : ""),
+                FontSize = 9, TextColor = Colors.White, BackgroundColor = Color.FromRgba(0, 0, 0, 0.55), Padding = new Thickness(4, 1),
+                VerticalOptions = LayoutOptions.End, HorizontalOptions = LayoutOptions.Fill, LineBreakMode = LineBreakMode.TailTruncation,
+            };
+            content.Opacity = m.ExcludeFromReport ? 0.45 : 1;
+            tile.Content = new Grid { Children = { content, tag } };
             ToolTipProperties.SetText(tile, m.Caption);
             var tap = new TapGestureRecognizer();
             var item = m;

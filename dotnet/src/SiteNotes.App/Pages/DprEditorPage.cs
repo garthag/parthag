@@ -220,8 +220,9 @@ public class DprEditorPage : ContentPage
                 Ui.Field("Attendees", Ui.Number(r.ToolboxTalkAttendees, v => { r.ToolboxTalkAttendees = (int)v; Changed(); }))),
             Ui.Field("Safety observations", Ui.Memo(r.SafetyRemarks, "Unsafe acts, near misses, PPE compliance…", v => { r.SafetyRemarks = v; Changed(); }, 60))));
 
-        var media = new MediaStrip(MediaOwner.Report, () => _b.Report.Id);
-        var mediaSec = new Section("8. Photos & videos", false).With(media);
+        var media = new MediaStrip(MediaOwner.Report, () => _b.Report.Id, () => AppServices.Db.ReportMediaAsync(_b.Report, _b.Activities));
+        var mediaSec = new Section("8. Photos & videos", false).With(
+            Ui.Caption("In the order taken. Includes the photos taken today on the activities of this report. Tap a photo for caption, date or to leave it out of the PDF."), media);
         media.CountChanged += n => mediaSec.Badge = $"{n}";
         _form.Children.Add(mediaSec);
 

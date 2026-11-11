@@ -33,6 +33,8 @@ public abstract class ListPage<T> : ContentPage where T : SyncEntity, new()
     protected virtual Task ExportPdfAsync(List<T> items, string filterText) => Task.CompletedTask;
     protected virtual Task ExportExcelAsync(List<T> items, string filterText) => Task.CompletedTask;
     protected virtual bool CanExport => false;
+    /// <summary>Edit-in-Excel sheet of this module: adds “Export to edit (Excel)” and “Import Excel…” to the ⋮ menu.</summary>
+    protected virtual Task<ExchangeSheet<T>>? ExchangeSheet() => null;
     /// <summary>Extra bulk actions for selected items (name → action).</summary>
     protected virtual IEnumerable<(string Name, Func<List<T>, Task> Run)> BulkActions => [];
     private bool _selecting;
@@ -150,7 +152,7 @@ public abstract class ListPage<T> : ContentPage where T : SyncEntity, new()
         await ReloadAsync();
     }
 
-    private bool _exportAdded;
+    private bool _exportAdded, _exchangeAdded;
 
     protected override async void OnAppearing()
     {
@@ -160,6 +162,12 @@ public abstract class ListPage<T> : ContentPage where T : SyncEntity, new()
             ToolbarItems.Add(new ToolbarItem("PDF", null, () => _ = Ui.Guard(() => ExportPdfAsync(Visible().ToList(), DescribeFilter()))));
             ToolbarItems.Add(new ToolbarItem("Excel", null, () => _ = Ui.Guard(() => ExportExcelAsync(Visible().ToList(), DescribeFilter()))));
             _exportAdded = true;
+        }
+        if (!_exchangeAdded && ExchangeSheet() != null)
+        {
+            _exchangeAdded = true;
+            ToolbarItems.Add(new ToolbarItem("Export to edit (Excel)", null, () => _ = Ui.Guard(async () => await ExchangeFlow.ExportAsync(this, await ExchangeSheet()!, Visible()))) { Order = ToolbarItemOrder.Secondary });
+            ToolbarItems.Add(new ToolbarItem("Import Excel…", null, () => _ = Ui.Guard(async () => { if (await ExchangeFlow.ImportAsync(this, await ExchangeSheet()!, ProjectScoped)) await ReloadAsync(); })) { Order = ToolbarItemOrder.Secondary });
         }
         await ReloadAsync();
         AppServices.DataChanged += OnData;
@@ -182,6 +190,9 @@ public abstract class ListPage<T> : ContentPage where T : SyncEntity, new()
     private string DescribeFilter() =>
         string.Join(" · ", new[] { FilterChoice == "All" ? "All" : FilterChoice, string.IsNullOrWhiteSpace(_search.Text) ? "" : $"“{_search.Text}”" }
             .Where(s => s != ""));
+
+    /// <summary>The rows as shown: search, filter and sort applied.</summary>
+    protected List<T> VisibleItems() => Visible().ToList();
 
     private IEnumerable<T> Visible()
     {
@@ -220,6 +231,7 @@ public class ProjectListPage : ListPage<Project>
 
 public class SubcontractorListPage : ListPage<Subcontractor>
 {
+    protected override Task<ExchangeSheet<Subcontractor>>? ExchangeSheet() => ExchangeFlow.Sheets.SubcontractorsAsync();
     public SubcontractorListPage() : base("Subcontractors") { }
     protected override string[] FilterOptions => ["Active", "Inactive"];
     protected override bool Filter(Subcontractor s, string f) => f == "Active" ? s.IsActive : !s.IsActive;
@@ -236,6 +248,7 @@ public class SubcontractorListPage : ListPage<Subcontractor>
 
 public class DepartmentListPage : ListPage<Department>
 {
+    protected override Task<ExchangeSheet<Department>>? ExchangeSheet() => ExchangeFlow.Sheets.DepartmentsAsync();
     public DepartmentListPage() : base("Departments")
     {
         ToolbarItems.Add(new ToolbarItem("Add standard", null, async () =>
@@ -258,6 +271,7 @@ public class ActivityListPage : ListPage<Activity>
     protected override string[] SortOptions => ["Code", "Name", "Planned start"];
     protected override Activity Create() => new() { ProjectId = AppServices.ProjectId };
     protected override Page EditPage(Activity a) => EntityForms.ActivityForm(a);
+    protected override Task<ExchangeSheet<Activity>>? ExchangeSheet() => ExchangeFlow.Sheets.ActivitiesAsync(AppServices.ProjectId);
     protected override IEnumerable<Activity> Sort(IEnumerable<Activity> items, string sort) => sort switch
     {
         "Name" => items.OrderBy(a => a.Name),
@@ -270,6 +284,7 @@ public class ActivityListPage : ListPage<Activity>
 
 public class HindranceListPage : ListPage<Hindrance>
 {
+    protected override Task<ExchangeSheet<Hindrance>>? ExchangeSheet() => ExchangeFlow.Sheets.HindrancesAsync();
     public HindranceListPage() : base("Hindrance register") { }
     protected override string[] SortOptions => ["Newest", "Oldest", "Hours lost", "Serial no"];
     protected override string[] FilterOptions => ["Open", "Resolved", .. Lists.ResponsibleParties];
@@ -314,6 +329,7 @@ public class HindranceListPage : ListPage<Hindrance>
 
 public class RequirementListPage : ListPage<Requirement>
 {
+    protected override Task<ExchangeSheet<Requirement>>? ExchangeSheet() => ExchangeFlow.Sheets.RequirementsAsync();
     public RequirementListPage() : base("Requirement register") { }
     protected override string[] SortOptions => ["Required by", "Newest", "Priority", "Serial no"];
     protected override string[] FilterOptions => ["Open (not received)", "Overdue", .. Enum.GetNames<RequirementStatus>(), .. Lists.RequirementCategories];
@@ -357,6 +373,7 @@ public class RequirementListPage : ListPage<Requirement>
 
 public class ResourceListPage : ListPage<SiteResource>
 {
+    protected override Task<ExchangeSheet<SiteResource>>? ExchangeSheet() => ExchangeFlow.Sheets.ResourcesAsync(AppServices.ProjectId);
     public ResourceListPage() : base("Resources & rates") { }
     protected override string[] SortOptions => ["Type", "Name", "Rate"];
     protected override string[] FilterOptions => Enum.GetNames<ResourceType>();
@@ -391,6 +408,7 @@ public class ResourceListPage : ListPage<SiteResource>
 
 public class WbsListPage : ListPage<WbsNode>
 {
+    protected override Task<ExchangeSheet<WbsNode>>? ExchangeSheet() => ExchangeFlow.Sheets.WbsAsync(AppServices.ProjectId);
     private Dictionary<string, WbsNode> _map = [];
     public WbsListPage() : base("WBS – plant / unit / area") { }
     protected override string[] SortOptions => ["Tree", "Code"];
