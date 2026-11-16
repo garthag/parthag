@@ -18,7 +18,11 @@
 ;                   Setup.exe /S /NOSQL     (app only)
 ; =====================================================================
 Unicode true
-Target amd64-unicode          ; 64-bit installer – the app itself is x64 only
+; 64-bit installer when this NSIS has the amd64 stubs (Linux NSIS does), otherwise the standard
+; 32-bit installer – it installs the x64 app into the 64-bit Program Files and 64-bit registry.
+!if /FileExists "${NSISDIR}\Stubs\zlib-amd64-unicode"
+  Target amd64-unicode
+!endif
 !include "MUI2.nsh"
 !include "LogicLib.nsh"
 !include "Sections.nsh"
@@ -140,8 +144,10 @@ Section "LocalDB – database on this PC" SecLocalDB
     StrCpy $0 "$PLUGINSDIR\sql\SqlLocalDB.msi"
     SetOutPath "$INSTDIR"
   !endif
+  ${DisableX64FSRedirection}          ; run the 64-bit PowerShell (correct SQL Server registry view)
   nsExec::ExecToLog 'powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$INSTDIR\sql-setup.ps1" -Mode LocalDB -Media "$0" -Log "$INSTDIR\sql-setup.log"'
   Pop $1
+  ${EnableX64FSRedirection}
   ${If} $1 != "0"
     StrCpy $SqlFailed 1
     MessageBox MB_ICONEXCLAMATION|MB_OK "SQL Server LocalDB could not be installed (code $1).$\r$\nDetails: $INSTDIR\sql-setup.log$\r$\n$\r$\nThe program is installed; you can run sql-setup.ps1 later or use another SQL Server." /SD IDOK
@@ -159,8 +165,10 @@ Section /o "SQL Server Express – shared by several PCs" SecExpress
     StrCpy $0 "$PLUGINSDIR\sql\SQLEXPR_x64_ENU.exe"
     SetOutPath "$INSTDIR"
   !endif
+  ${DisableX64FSRedirection}
   nsExec::ExecToLog 'powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$INSTDIR\sql-setup.ps1" -Mode Express -Media "$0" -Database ${DBNAME} -Log "$INSTDIR\sql-setup.log"'
   Pop $1
+  ${EnableX64FSRedirection}
   ${If} $1 == "0"
     StrCpy $HasExpress 1
   ${Else}
