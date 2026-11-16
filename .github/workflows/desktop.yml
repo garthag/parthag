@@ -88,8 +88,10 @@ jobs:
       - name: Silent install – app + SQL Server Express (shared instance)
         shell: pwsh
         run: |
-          $setup = Get-ChildItem dist -Filter 'BSLProjectControl-Setup-*-with-SQL-*.exe' | Select-Object -First 1
-          if (-not $setup) { $setup = Get-ChildItem dist -Filter 'BSLProjectControl-Setup-*.exe' | Select-Object -First 1 }
+          Get-ChildItem dist -Recurse | Format-Table FullName, Length
+          $setup = Get-ChildItem dist -Recurse -Filter 'BSLProjectControl-Setup-*-with-SQL-*.exe' | Select-Object -First 1
+          if (-not $setup) { $setup = Get-ChildItem dist -Recurse -Filter 'BSLProjectControl-Setup-*.exe' | Select-Object -First 1 }
+          if (-not $setup) { throw 'installer not found in the artifact' }
           Write-Host "Installing $($setup.Name)"
           $p = Start-Process $setup.FullName -ArgumentList '/S', '/EXPRESS' -Wait -PassThru
           Write-Host "Installer exit code $($p.ExitCode)"
