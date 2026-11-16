@@ -57,6 +57,8 @@ It works fully **offline** on site. You can optionally turn on **Google sign-in 
 - **Export:** a printable **Drawing Register PDF** (A4 landscape, with a unit × type summary) and a **CSV** for Excel.
 - The sample project includes a 13-sheet drawing set so you can try all of this.
 
+**Windows desktop version (C# + SQL Server):** the same drawing register is also available as a Windows app with a SQL Server database and a shared library folder for office teams. See [`windows-drawing-register/`](windows-drawing-register/README.md).
+
 **Output**
 - **PDF** on A4 in CPWD/PWD style: header block, every section as a table, a photo grid with captions, tags, time and GPS, a video register, and signature blocks. You can preview, print or share it.
 - **WhatsApp summary:** a plain-text DPR formatted with WhatsApp bold markers that you can share in one tap.

@@ -1,0 +1,56 @@
+name: Drawing Register (Windows, C# + SQL Server)
+
+on:
+  push:
+    paths:
+      - 'windows-drawing-register/**'
+      - '.github/workflows/drawing-register-windows.yml'
+  pull_request:
+    paths:
+      - 'windows-drawing-register/**'
+      - '.github/workflows/drawing-register-windows.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: windows-drawing-register
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Start SQL Server LocalDB for the database test
+        shell: pwsh
+        run: |
+          if (Get-Command sqllocaldb -ErrorAction SilentlyContinue) {
+            sqllocaldb create MSSQLLocalDB -s
+            sqllocaldb info MSSQLLocalDB
+            'DR_TEST_SQL=Server=(localdb)\MSSQLLocalDB;Database=DrawingRegisterCi;Integrated Security=true;TrustServerCertificate=true;Connect Timeout=120' >> $env:GITHUB_ENV
+          } else {
+            Write-Host '::warning::SQL Server LocalDB is not installed on this runner; the SQL Server round-trip test will be skipped.'
+          }
+
+      - name: Test
+        run: dotnet test tests/DrawingRegister.Tests -c Release --logger "console;verbosity=normal"
+
+      - name: Publish DrawingRegister.exe (self-contained, win-x64)
+        run: >
+          dotnet publish src/DrawingRegister.App -c Release -r win-x64 --self-contained true
+          -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o publish/DrawingRegister
+
+      - name: Zip
+        shell: pwsh
+        run: |
+          Copy-Item database/DrawingRegister.sql publish/DrawingRegister/
+          Copy-Item README.md publish/DrawingRegister/
+          Compress-Archive -Path publish/DrawingRegister -DestinationPath DrawingRegister-windows-x64.zip
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DrawingRegister-windows-x64
+          path: windows-drawing-register/DrawingRegister-windows-x64.zip
