@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import 'data/local_store.dart';
 import 'screens/home_screen.dart';
 import 'services/cloud_sync.dart';
+import 'services/drawing_service.dart';
 import 'services/media_service.dart';
 import 'state/app_state.dart';
 
@@ -15,15 +16,18 @@ Future<void> main() async {
   final state = AppState(store);
   final cloud = CloudSync();
   await Future.wait([state.load(), cloud.init()]);
-  runApp(SiteDprApp(state: state, cloud: cloud, media: MediaService(store)));
+  runApp(SiteDprApp(
+      state: state, cloud: cloud, media: MediaService(store), drawings: DrawingService(store)));
 }
 
 class SiteDprApp extends StatelessWidget {
-  const SiteDprApp({super.key, required this.state, required this.cloud, required this.media});
+  const SiteDprApp(
+      {super.key, required this.state, required this.cloud, required this.media, required this.drawings});
 
   final AppState state;
   final CloudSync cloud;
   final MediaService media;
+  final DrawingService drawings;
 
   @override
   Widget build(BuildContext context) {
@@ -32,6 +36,7 @@ class SiteDprApp extends StatelessWidget {
         ChangeNotifierProvider.value(value: state),
         ChangeNotifierProvider.value(value: cloud),
         Provider.value(value: media),
+        Provider.value(value: drawings),
       ],
       child: MaterialApp(
         title: 'Site DPR',

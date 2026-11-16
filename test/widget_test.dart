@@ -5,6 +5,7 @@ import 'package:site_dpr/data/local_store.dart';
 import 'package:site_dpr/main.dart';
 import 'package:site_dpr/models/models.dart';
 import 'package:site_dpr/services/cloud_sync.dart';
+import 'package:site_dpr/services/drawing_service.dart';
 import 'package:site_dpr/services/media_service.dart';
 import 'package:site_dpr/state/app_state.dart';
 
@@ -15,7 +16,8 @@ void main() {
     final store = MemoryStore();
     final state = AppState(store);
     await state.load();
-    await tester.pumpWidget(SiteDprApp(state: state, cloud: CloudSync(), media: MediaService(store)));
+    await tester.pumpWidget(SiteDprApp(
+        state: state, cloud: CloudSync(), media: MediaService(store), drawings: DrawingService(store)));
     expect(find.text('No projects yet'), findsOneWidget);
 
     final p = Project(name: 'Metro Depot', location: 'Pune');

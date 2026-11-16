@@ -34,6 +34,29 @@ It works fully **offline** on site. You can optionally turn on **Google sign-in 
 
 **Media library:** every photo and video in the project, with filters by type, category and tag. It has a full-screen viewer with pinch-zoom and video playback, and you can share or edit tags from it.
 
+**Drawing register & viewer** (the *Drawings* tab of every project)
+
+| Register | Viewer | Revisions | Superseded warning |
+|---|---|---|---|
+| ![](docs/screenshots/drawing_register.png) | ![](docs/screenshots/drawing_viewer.png) | ![](docs/screenshots/drawing_revisions.png) | ![](docs/screenshots/drawing_superseded.png) |
+
+- **Import ZIP:** pick the drawing package from the consultant (ZIPs inside ZIPs, PDFs, images and DWG/DXF files also work). The app unzips it into app storage and skips system junk like `__MACOSX` and `Thumbs.db`.
+- **Plant → Unit → Type → Drawing no.** The register is filed the way plant projects keep drawings:
+
+  | Level | Read from | Examples |
+  |---|---|---|
+  | Plant | `Plant-…` folder, `PLANT2` code, a plain parent folder, else the name you enter on import | `Plant-2/`, `Refinery/CDU/` |
+  | Unit / Area | `Unit-…`, `Area-…` or `Block-…` folder, `U200` code, area code in the number, or a plain folder name | `Unit 300/`, `RF-100-ST-…`, `U200-EL-…`, `External Works/` |
+  | Type | discipline folder, discipline code in the number, or keywords | `02_Structural/`, `-ST-`, `-EL-`, `P&ID`, `SLD`, `ISO` |
+  | Revision / status | `R2`, `Rev B`, `REV-0`, `(IFC)`, `IFA`, `As-Built` | `RF-100-ST-GA-0001_R2.pdf` |
+
+  Types follow a fixed register order: **GN** General/Plot plan, **PR** Process, **CV** Civil, **ST** Structural, **AR** Architectural, **ME** Mechanical/Equipment, **PP** Piping, **EL** Electrical, **IN** Instrumentation & Control, **HV** HVAC, **FP** Fire protection, **PL** Plumbing/Utilities, **OT** Other. Drawings sort by number in natural order (`-2` before `-10`).
+- **Revisions:** every revision is kept. The highest one is current (lettered revisions A, B… rank below numbered 0, 1, 2…), and older ones are listed as superseded.
+- **Viewer:** full-screen PDF and image viewer with pinch zoom, double-tap zoom, rotation, sheet navigation and previous/next drawing in register order. A red **SUPERSEDED** banner appears on old revisions, with a one-tap jump to the current one. DWG/DXF files open in another app (AutoCAD, DWG FastView…) through Share.
+- **Edit & search:** search by number, title, unit or revision, filter by type, and correct any plant, unit, type, revision or status. One edit can apply to every revision of the drawing.
+- **Export:** a printable **Drawing Register PDF** (A4 landscape, with a unit × type summary) and a **CSV** for Excel.
+- The sample project includes a 13-sheet drawing set so you can try all of this.
+
 **Output**
 - **PDF** on A4 in CPWD/PWD style: header block, every section as a table, a photo grid with captions, tags, time and GPS, a video register, and signature blocks. You can preview, print or share it.
 - **WhatsApp summary:** a plain-text DPR formatted with WhatsApp bold markers that you can share in one tap.
@@ -42,6 +65,7 @@ It works fully **offline** on site. You can optionally turn on **Google sign-in 
 **Storage and sync**
 - Offline first: data is kept as JSON in the app's private storage, and photos and videos are copied into app storage, so clearing the gallery doesn't lose them.
 - Optional Google cloud: sign in with Google through Firebase Auth. Reports sync to Cloud Firestore and media goes to Firebase Storage, so the whole site team can share it across devices.
+- Drawings stay on the device and are not synced, because drawing sets are large. Import the ZIP on each device that needs it.
 
 ## Download & install
 
@@ -117,12 +141,17 @@ lib/
   data/standards.dart        IS-code catalogues: trades, materials, activities, tests, PPE, permits…
   data/local_store.dart      Offline JSON store
   data/sample_data.dart      Demo project
+  data/sample_drawings.dart  Demo drawing ZIP for the demo project
+  models/drawing.dart        Drawing, drawing types, revision order, Plant → Unit → Type grouping
   state/app_state.dart       Projects/reports state, carry-forward, dashboard summary
   services/media_service.dart  Camera/gallery, geo-tagging, file storage
   services/pdf_service.dart    PDF report
   services/report_text.dart    WhatsApp text summary
   services/cloud_sync.dart     Google sign-in + Firestore/Storage sync
-  screens/                   Home, project, DPR editor, media gallery/viewer, settings
+  services/drawing_parser.dart Reads plant / unit / type / number / revision from ZIP paths
+  services/drawing_service.dart  Unzip & store drawings, read them back
+  services/drawing_register_export.dart  Drawing register PDF and CSV
+  screens/                   Home, project, DPR editor, media gallery/viewer, drawing register/viewer, settings
   widgets/                   Section editors, generic entry form, shared widgets
 test/                        Model, state, PDF and widget tests
 ```

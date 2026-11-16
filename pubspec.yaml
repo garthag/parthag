@@ -50,6 +50,8 @@ dependencies:
   firebase_storage: ^14.0.1
   firebase_auth: ^7.0.1
   path: ^1.9.1
+  archive: ^4.7.1
+  file_picker: ^13.3.3
 
 dev_dependencies:
   flutter_test:
