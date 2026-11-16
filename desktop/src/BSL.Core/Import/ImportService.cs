@@ -94,7 +94,8 @@ public sealed class ImportService(Database db)
                 lines += BulkInsertBom(cn, tx, p.Rows, pkgId, batchId, drawingIds);
             }
             tx.Commit();
-            var text = $"Imported {pkgs.Count} packages, {lines:N0} BOM lines, {drawingsNew} new drawings, {regNew} new register entries.";
+            var text = $"Imported {pkgs.Count} packages, {lines:N0} BOM lines, {drawingsNew} new drawings, {regNew} new register entries."
+                       + Environment.NewLine + new ActivityService(db).LinkActivities();
             db.Audit("BomItem", null, "IMPORT", text);
             return new(text, batchId);
         }
@@ -254,7 +255,7 @@ public sealed class ImportService(Database db)
                 log.Add($"{wb.DrawingScope.Count} drawing scope rows");
             }
             tx.Commit();
-            var text = "Imported " + string.Join(", ", log) + ".";
+            var text = "Imported " + string.Join(", ", log) + "." + Environment.NewLine + new ActivityService(db).LinkActivities();
             db.Audit("Contractor", null, "IMPORT", text);
             return new(text, batchId);
         }

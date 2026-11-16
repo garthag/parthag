@@ -71,9 +71,9 @@ CREATE TABLE dbo.RateMaster (
     Unit            NVARCHAR(20)  NULL,
     InternalRate    DECIMAL(18,2) NULL,
     ExternalRate    DECIMAL(18,2) NULL,
-    Margin          AS (ISNULL(ExternalRate,0) - ISNULL(InternalRate,0)),
-    MarginPct       AS (CASE WHEN ISNULL(ExternalRate,0) = 0 THEN NULL
-                             ELSE CAST((ExternalRate - ISNULL(InternalRate,0)) * 100.0 / ExternalRate AS DECIMAL(9,2)) END),
+    Margin          AS (ExternalRate - InternalRate),                                   -- NULL when a rate is missing
+    MarginPct       AS (CASE WHEN ExternalRate > 0 AND InternalRate IS NOT NULL
+                             THEN CAST((ExternalRate - InternalRate) * 100.0 / ExternalRate AS DECIMAL(9,2)) END),
     EffectiveFrom   DATE          NULL,
     Remarks         NVARCHAR(400) NULL
 );
@@ -110,7 +110,7 @@ CREATE TABLE dbo.ContractItem (
     InternalRate    DECIMAL(18,2) NULL,        -- "Agency Rate"      (MCK -> agency)
     ExternalAmount  AS (CAST(ISNULL(R1WeightTon,0) * ISNULL(ExternalRate,0) AS DECIMAL(18,2))),
     InternalAmount  AS (CAST(ISNULL(R1WeightTon,0) * ISNULL(InternalRate,0) AS DECIMAL(18,2))),
-    Margin          AS (CAST(ISNULL(R1WeightTon,0) * (ISNULL(ExternalRate,0) - ISNULL(InternalRate,0)) AS DECIMAL(18,2))),
+    Margin          AS (CAST(ISNULL(R1WeightTon,0) * (ExternalRate - InternalRate) AS DECIMAL(18,2))),   -- NULL when a rate is missing
     WorkOrderId     INT           NULL CONSTRAINT FK_ContractItem_WorkOrder REFERENCES dbo.WorkOrder(Id),
     AgencyRef       NVARCHAR(50)  NULL,        -- raw value from sheet when it is not a work order (BSL, SN, NA ...)
     ActivityType    NVARCHAR(50)  NULL,
@@ -285,4 +285,78 @@ CREATE TABLE dbo.AuditLog (
     ChangedOn   DATETIME2(0)  NOT NULL CONSTRAINT DF_Audit_On DEFAULT (SYSDATETIME()),
     ChangedBy   NVARCHAR(128) NOT NULL CONSTRAINT DF_Audit_By DEFAULT (SUSER_SNAME())
 );
+GO
+
+/* =====================================================================
+   ACTIVITIES – what work is done (dismantling, erection, fabrication …),
+   linked to contractors, work orders, rates, BOQ items, packages, drawings
+   ===================================================================== */
+IF OBJECT_ID(N'dbo.Activity', N'U') IS NULL
+CREATE TABLE dbo.Activity (
+    Id                  INT IDENTITY(1,1) CONSTRAINT PK_Activity PRIMARY KEY,
+    ActivityCode        NVARCHAR(20)  NOT NULL CONSTRAINT UQ_Activity_Code UNIQUE,   -- DIS-EQP, ERE-EQP ...
+    Name                NVARCHAR(200) NOT NULL,
+    ServiceType         NVARCHAR(50)  NULL,      -- DISMANTLING / ERECTION / MODIFICATION/FABRICATION / SUPPLY & SERVICE
+    WorkCategory        NVARCHAR(100) NULL,      -- matching work-order category (BSL_MECH_ERE_EQUIPMENT ...)
+    Unit                NVARCHAR(20)  NOT NULL CONSTRAINT DF_Activity_Unit DEFAULT (N'MT'),
+    DefaultInternalRate DECIMAL(18,2) NULL,      -- paid to agency
+    DefaultExternalRate DECIMAL(18,2) NULL,      -- billed to client
+    DefaultMargin       AS (DefaultExternalRate - DefaultInternalRate),
+    Description         NVARCHAR(400) NULL,
+    IsActive            BIT           NOT NULL CONSTRAINT DF_Activity_Active DEFAULT (1),
+    SortOrder           INT           NOT NULL CONSTRAINT DF_Activity_Sort DEFAULT (0)
+);
+GO
+
+/* Contractor ↔ activity: which agency is approved / capable for which activity */
+IF OBJECT_ID(N'dbo.ContractorActivity', N'U') IS NULL
+CREATE TABLE dbo.ContractorActivity (
+    Id            INT IDENTITY(1,1) CONSTRAINT PK_ContractorActivity PRIMARY KEY,
+    ContractorId  INT           NOT NULL CONSTRAINT FK_ConAct_Contractor REFERENCES dbo.Contractor(Id) ON DELETE CASCADE,
+    ActivityId    INT           NOT NULL CONSTRAINT FK_ConAct_Activity REFERENCES dbo.Activity(Id) ON DELETE CASCADE,
+    IsApproved    BIT           NOT NULL CONSTRAINT DF_ConAct_Approved DEFAULT (1),
+    InternalRate  DECIMAL(18,2) NULL,        -- contractor's quoted rate for this activity (optional)
+    Capacity      NVARCHAR(100) NULL,        -- e.g. "300 MT / month", "2 cranes"
+    Remarks       NVARCHAR(400) NULL,
+    CONSTRAINT UQ_ContractorActivity UNIQUE (ContractorId, ActivityId)
+);
+GO
+
+/* activity link on existing tables (safe on an existing database) */
+IF COL_LENGTH(N'dbo.WorkOrder', N'ActivityId') IS NULL
+    ALTER TABLE dbo.WorkOrder ADD ActivityId INT NULL CONSTRAINT FK_WorkOrder_Activity REFERENCES dbo.Activity(Id);
+GO
+IF COL_LENGTH(N'dbo.RateMaster', N'ActivityId') IS NULL
+    ALTER TABLE dbo.RateMaster ADD ActivityId INT NULL CONSTRAINT FK_RateMaster_Activity REFERENCES dbo.Activity(Id);
+GO
+IF COL_LENGTH(N'dbo.ContractItem', N'ActivityId') IS NULL
+    ALTER TABLE dbo.ContractItem ADD ActivityId INT NULL CONSTRAINT FK_ContractItem_Activity REFERENCES dbo.Activity(Id);
+GO
+IF COL_LENGTH(N'dbo.Package', N'ActivityId') IS NULL
+    ALTER TABLE dbo.Package ADD ActivityId INT NULL CONSTRAINT FK_Package_Activity REFERENCES dbo.Activity(Id);
+GO
+IF COL_LENGTH(N'dbo.DrawingMaster', N'ActivityId') IS NULL
+    ALTER TABLE dbo.DrawingMaster ADD ActivityId INT NULL CONSTRAINT FK_Drawing_Activity REFERENCES dbo.Activity(Id);
+GO
+
+/* ---------- migration: margins are NULL (not misleading) when one of the two rates is missing ---------- */
+IF EXISTS (SELECT 1 FROM sys.computed_columns WHERE object_id = OBJECT_ID(N'dbo.RateMaster') AND name = N'Margin' AND definition LIKE N'%isnull%')
+BEGIN
+    ALTER TABLE dbo.RateMaster DROP COLUMN MarginPct, Margin;
+    ALTER TABLE dbo.RateMaster ADD Margin AS (ExternalRate - InternalRate),
+        MarginPct AS (CASE WHEN ExternalRate > 0 AND InternalRate IS NOT NULL
+                           THEN CAST((ExternalRate - InternalRate) * 100.0 / ExternalRate AS DECIMAL(9,2)) END);
+END
+GO
+IF EXISTS (SELECT 1 FROM sys.computed_columns WHERE object_id = OBJECT_ID(N'dbo.ContractItem') AND name = N'Margin' AND definition LIKE N'%isnull(\[InternalRate\]%' ESCAPE N'\')
+BEGIN
+    ALTER TABLE dbo.ContractItem DROP COLUMN Margin;
+    ALTER TABLE dbo.ContractItem ADD Margin AS (CAST(ISNULL(R1WeightTon,0) * (ExternalRate - InternalRate) AS DECIMAL(18,2)));
+END
+GO
+IF EXISTS (SELECT 1 FROM sys.computed_columns WHERE object_id = OBJECT_ID(N'dbo.Activity') AND name = N'DefaultMargin' AND definition LIKE N'%isnull%')
+BEGIN
+    ALTER TABLE dbo.Activity DROP COLUMN DefaultMargin;
+    ALTER TABLE dbo.Activity ADD DefaultMargin AS (DefaultExternalRate - DefaultInternalRate);
+END
 GO

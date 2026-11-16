@@ -90,6 +90,8 @@ public static class EntityCatalog
     public static readonly LookupDef WorkOrderLookup = new("WorkOrder",
         "SELECT w.Id, w.UniqueNo + N' | ' + c.ContractorCode + N' | ' + ISNULL(w.ServiceType,N'') + N' | ' + ISNULL(w.WorkOrderNo,N'') AS Display " +
         "FROM dbo.WorkOrder w JOIN dbo.Contractor c ON c.Id = w.ContractorId ORDER BY w.UniqueNo");
+    public static readonly LookupDef ActivityLookup = new("Activity",
+        "SELECT Id, ActivityCode + N' - ' + Name AS Display FROM dbo.Activity WHERE IsActive = 1 ORDER BY SortOrder, ActivityCode");
     public static readonly LookupDef PackageLookup = new("Package",
         "SELECT Id, PackageCode AS Display FROM dbo.Package ORDER BY PackageCode");
     public static readonly LookupDef DrawingLookup = new("DrawingMaster",
@@ -105,7 +107,7 @@ public static class EntityCatalog
     {
         Name = "Contractor", Caption = "Contractor Master", Table = "Contractor", OrderBy = "ContractorCode",
         HasModifiedOn = true, TitleField = "Name", ReportGroupBy = "ContractorType",
-        Children = [("WorkOrder", "ContractorId"), ("DrawingMaster", "OriginatorId"), ("DrawingRegister", "IssuedToId")],
+        Children = [("WorkOrder", "ContractorId"), ("ContractorActivity", "ContractorId"), ("DrawingMaster", "OriginatorId"), ("DrawingRegister", "IssuedToId")],
         Fields =
         [
             T("ContractorCode", "Contractor Code", 20, true, w: 90), T("Name", "Contractor Name", 200, true, w: 220),
@@ -128,6 +130,7 @@ public static class EntityCatalog
         Fields =
         [
             T("UniqueNo", "Unique No", 20, true, w: 70), L("ContractorId", "Contractor", ContractorLookup, req: true),
+            L("ActivityId", "Main Activity", ActivityLookup),
             C("ServiceType", "Type of Service", "ServiceType"), C("WorkCategory", "Work Category", "WorkCategory"),
             T("WorkOrderNo", "Work Order No", grp: "Work order", w: 200), D("WODate", "WO Date", "Work order"),
             N("WOValue", "WO Value", FieldKind.Money, "Work order"), N("ActualWorkDone", "Actual Work Done", FieldKind.Money, "Work order"),
@@ -138,6 +141,7 @@ public static class EntityCatalog
             R("ContractorType", "Contractor Type", grp: "Contractor detail"), R("ContactPerson", "Contact Person", grp: "Contractor detail"),
             R("ContactNo", "Contact No", grp: "Contractor detail"), R("Email", "E-mail", grp: "Contractor detail"),
             R("PAN", "PAN", grp: "Contractor detail"), R("GSTIN", "GSTIN", grp: "Contractor detail"),
+            R("ActivityCode", "Activity Code", grp: "Contractor detail"),
             R("ScopeTon", "Scope (MT)", FieldKind.Decimal, "Progress"), R("ScopeInternalAmount", "Scope Amt (Internal)", FieldKind.Money, "Progress"),
             R("ScopeExternalAmount", "Scope Amt (External)", FieldKind.Money, "Progress"),
             R("ExecutedTon", "Executed (MT)", FieldKind.Decimal, "Progress"), R("ExecutedInternalAmount", "Executed Amt (Internal)", FieldKind.Money, "Progress"),
@@ -146,19 +150,61 @@ public static class EntityCatalog
         ]
     };
 
+    public static readonly EntityDef Activity = new()
+    {
+        Name = "Activity", Caption = "Activity Master", Table = "Activity", OrderBy = "SortOrder, ActivityCode",
+        TitleField = "Name", ReportGroupBy = "ServiceType",
+        Children = [("ContractorActivity", "ActivityId"), ("WorkOrder", "ActivityId"), ("RateMaster", "ActivityId"),
+                    ("ContractItem", "ActivityId"), ("Package", "ActivityId"), ("DrawingMaster", "ActivityId")],
+        Fields =
+        [
+            T("ActivityCode", "Activity Code", 20, true, w: 80), T("Name", "Activity", 200, true, w: 260),
+            C("ServiceType", "Service Type", "ServiceType"), C("WorkCategory", "Work Category", "WorkCategory"),
+            C("Unit", "Unit", "Unit", req: true), B("IsActive", "Active"), N("SortOrder", "Sort", FieldKind.Int, "General"),
+            N("DefaultInternalRate", "Default Internal Rate", FieldKind.Money, "Default rates"),
+            N("DefaultExternalRate", "Default External Rate", FieldKind.Money, "Default rates"),
+            new() { Name = "DefaultMargin", Caption = "Default Margin / unit", Kind = FieldKind.Money, ReadOnly = true, Group = "Default rates" },
+            M("Description", "Description"),
+            R("ApprovedContractors", "Approved contractors", FieldKind.Int, "Usage"), R("WorkOrders", "Work orders", FieldKind.Int, "Usage"),
+            R("BoqItems", "BOQ items", FieldKind.Int, "Usage"), R("Packages", "Packages", FieldKind.Int, "Usage"),
+            R("ScopeTon", "Scope R1 (MT)", FieldKind.Decimal, "Usage"), R("ExecutedTon", "Executed (MT)", FieldKind.Decimal, "Usage"),
+            R("AvgExternalRate", "Avg External Rate (BOQ)", FieldKind.Money, "Usage"), R("AvgInternalRate", "Avg Internal Rate (BOQ)", FieldKind.Money, "Usage"),
+            R("ExternalAmount", "External Amount", FieldKind.Money, "Usage"), R("InternalAmount", "Internal Amount", FieldKind.Money, "Usage"),
+            R("Margin", "Margin", FieldKind.Money, "Usage")
+        ]
+    };
+
+    public static readonly EntityDef ContractorActivity = new()
+    {
+        Name = "ContractorActivity", Caption = "Contractor Activities", Table = "ContractorActivity", OrderBy = "ContractorId, ActivityId",
+        TitleField = "ActivityName", ReportGroupBy = "ContractorCode",
+        Fields =
+        [
+            L("ContractorId", "Contractor", ContractorLookup, req: true), L("ActivityId", "Activity", ActivityLookup, req: true),
+            B("IsApproved", "Approved"), N("InternalRate", "Quoted Internal Rate", FieldKind.Money, "General"),
+            T("Capacity", "Capacity"), M("Remarks", "Remarks"),
+            R("ContractorCode", "Contr. Code"), R("ActivityCode", "Activity Code"), R("ServiceType", "Service Type"),
+            R("DefaultInternalRate", "Activity default Int.", FieldKind.Money), R("DefaultExternalRate", "Activity default Ext.", FieldKind.Money),
+            R("WorkOrders", "Work orders", FieldKind.Int), R("ScopeTon", "Scope (MT)", FieldKind.Decimal)
+        ]
+    };
+
     public static readonly EntityDef RateMaster = new()
     {
-        Name = "RateMaster", Caption = "Rate Master (Internal / External)", Table = "RateMaster", OrderBy = "WorkOrderId, ItemCode",
+        Name = "RateMaster", Caption = "WO Activity Rates (Int / Ext)", Table = "RateMaster", OrderBy = "WorkOrderId, ActivityId, ItemCode",
         Module = "Contract", TitleField = "Description", ReportGroupBy = "ContractorCode",
         Fields =
         [
-            L("WorkOrderId", "Work Order", WorkOrderLookup), C("ActivityType", "Activity", "ServiceType"),
+            L("WorkOrderId", "Work Order", WorkOrderLookup), L("ActivityId", "Activity", ActivityLookup),
+            C("ActivityType", "Service Type", "ServiceType"),
             T("ItemCode", "Item Code", 50, w: 80), T("Description", "Description", 300, true, w: 250), C("Unit", "Unit", "Unit"),
             N("InternalRate", "Internal Rate", FieldKind.Money, "Rates"), N("ExternalRate", "External Rate", FieldKind.Money, "Rates"),
             new() { Name = "Margin", Caption = "Margin / unit", Kind = FieldKind.Money, ReadOnly = true, Group = "Rates" },
             new() { Name = "MarginPct", Caption = "Margin %", Kind = FieldKind.Decimal, ReadOnly = true, Group = "Rates" },
             D("EffectiveFrom", "Effective From", "Rates"), M("Remarks", "Remarks"),
-            R("UniqueNo", "WO Unique No"), R("WorkOrderNo", "Work Order No"), R("ContractorCode", "Contr. Code"), R("ContractorName", "Contractor")
+            R("UniqueNo", "WO Unique No"), R("WorkOrderNo", "Work Order No"), R("ContractorCode", "Contr. Code"), R("ContractorName", "Contractor"),
+            R("ActivityCode", "Activity Code"), R("DefaultInternalRate", "Activity default Int.", FieldKind.Money),
+            R("DefaultExternalRate", "Activity default Ext.", FieldKind.Money), R("ContractorApproved", "Contractor approved", FieldKind.Bool)
         ]
     };
 
@@ -171,6 +217,7 @@ public static class EntityCatalog
         [
             T("PackageCode", "Package Code", 60, true, w: 170), T("PackageName", "Package Name", 200, w: 220), T("Area", "Area"),
             N("NoOfSets", "No. of Sets", FieldKind.Int, "General", true), L("WorkOrderId", "Executing WO", WorkOrderLookup),
+            L("ActivityId", "Activity", ActivityLookup),
             T("SourceSheet", "Source Sheet"), M("Remarks", "Remarks"),
             R("AgencyCode", "Agency"), R("DrawingCount", "Drawings", FieldKind.Int), R("BomLines", "BOM Lines", FieldKind.Int),
             R("BomWeightKg", "BOM Wt / set (kg)", FieldKind.Decimal), R("WeightPerSetTon", "Wt / set (MT)", FieldKind.Decimal),
@@ -194,10 +241,14 @@ public static class EntityCatalog
             new() { Name = "ExternalAmount", Caption = "External Amount", Kind = FieldKind.Money, ReadOnly = true, Group = "Rates" },
             new() { Name = "InternalAmount", Caption = "Internal Amount", Kind = FieldKind.Money, ReadOnly = true, Group = "Rates" },
             new() { Name = "Margin", Caption = "Margin", Kind = FieldKind.Money, ReadOnly = true, Group = "Rates" },
-            L("WorkOrderId", "Agency WO", WorkOrderLookup, "Agency"), T("AgencyRef", "Agency Ref (raw)", 50, grp: "Agency"),
-            C("ActivityType", "Activity", "ServiceType", "Agency"), T("DrawingQty", "Drawing Qty", 50, grp: "Agency"),
+            L("WorkOrderId", "Agency WO", WorkOrderLookup, "Agency"), L("ActivityId", "Activity", ActivityLookup, "Agency"),
+            T("AgencyRef", "Agency Ref (raw)", 50, grp: "Agency"),
+            C("ActivityType", "Service Type", "ServiceType", "Agency"), T("DrawingQty", "Drawing Qty", 50, grp: "Agency"),
             M("Remarks", "Remarks"), N("SortOrder", "Sort", FieldKind.Int, "Other"),
             R("UniqueNo", "WO Unique No"), R("WorkOrderNo", "Work Order No"), R("AgencyCode", "Agency Code"), R("AgencyName", "Agency Name"),
+            R("ActivityCode", "Activity Code"), R("ActivityApproved", "Agency approved for activity", FieldKind.Bool),
+            R("SuggestedInternalRate", "Suggested Int. Rate", FieldKind.Money, "Rates"),
+            R("SuggestedExternalRate", "Suggested Ext. Rate", FieldKind.Money, "Rates"),
             R("ExecutedTon", "Executed (MT)", FieldKind.Decimal, "Progress"), R("BalanceTon", "Balance (MT)", FieldKind.Decimal, "Progress"),
             R("ProgressPct", "Progress %", FieldKind.Decimal, "Progress"),
             R("ExecutedInternalAmount", "Executed Amt (Int.)", FieldKind.Money, "Progress"),
@@ -248,6 +299,7 @@ public static class EntityCatalog
             N("TotalSheets", "Total Sheets", FieldKind.Int, "Classification"), T("CurrentRevision", "Current Rev", 10, grp: "Classification", w: 60),
             C("Status", "Status", "DrawingStatus", "Classification"),
             L("ContractItemId", "BOQ Item", ContractItemLookup, "Contract link"), L("AgencyWorkOrderId", "Executing WO", WorkOrderLookup, "Contract link"),
+            L("ActivityId", "Activity", ActivityLookup, "Contract link"),
             T("EstQty", "Est. Qty", 30, grp: "Contract link"), N("EstWeightKg", "Est. Wt (kg)", grp: "Contract link"),
             M("Remarks", "Remarks"),
             R("PackageCode", "Package Code"), R("OriginatorCode", "Originator"), R("AgencyCode", "Agency"),
@@ -316,7 +368,7 @@ public static class EntityCatalog
     };
 
     public static IReadOnlyList<EntityDef> All { get; } =
-        [Contractor, WorkOrder, RateMaster, ContractItem, RaBill, RaBillLine, Package, DrawingMaster, DrawingRegister, BomItem, LookupValue, ImportBatch];
+        [Contractor, WorkOrder, Activity, ContractorActivity, RateMaster, ContractItem, RaBill, RaBillLine, Package, DrawingMaster, DrawingRegister, BomItem, LookupValue, ImportBatch];
 
     public static EntityDef Get(string name) => All.First(e => e.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
 }

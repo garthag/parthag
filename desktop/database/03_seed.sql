@@ -65,3 +65,22 @@ ON t.EntityName = s.EntityName AND t.FieldKey = s.FieldKey
 WHEN NOT MATCHED THEN INSERT (EntityName, FieldKey, Caption, DataType, ListValues, Formula, DecimalPlaces, SortOrder)
      VALUES (s.EntityName, s.FieldKey, s.Caption, s.DataType, s.ListValues, s.Formula, s.DecimalPlaces, s.SortOrder);
 GO
+
+/* Standard activities. The first six match the work-order categories found in the contractor workbook;
+   default rates are left blank and filled from the BOQ by usp_LinkActivities (weighted average). */
+MERGE dbo.Activity AS t
+USING (VALUES
+    (N'DIS-EQP',  N'Dismantling of mechanical equipment & structures', N'DISMANTLING',              N'BSL_MECH_DIS_EQUIPMENT',   N'MT', 10),
+    (N'ERE-EQP',  N'Erection of mechanical equipment',                 N'ERECTION',                 N'BSL_MECH_ERE_EQUIPMENT',   N'MT', 20),
+    (N'ERE-HYD',  N'Erection of hydraulics',                           N'ERECTION',                 N'BSL_MECH_ERE_HYDRAULICS',  N'MT', 30),
+    (N'ERE-UTL',  N'Erection of utility piping',                       N'ERECTION',                 N'BSL_MECH_ERE_UTILITY',     N'MT', 40),
+    (N'MOD-FAB',  N'Modification / fabrication',                       N'MODIFICATION/FABRICATION', N'BSL_MECH_MOD_FABRICATION', N'MT', 50),
+    (N'SUP-SRV',  N'Supply & service',                                 N'SUPPLY & SERVICE',         N'BSL_MECH_SUP&SERVICE',     N'LS', 60),
+    (N'FAB-STR',  N'Fabrication of structural steel',                  N'MODIFICATION/FABRICATION', NULL,                        N'MT', 70),
+    (N'ERE-STR',  N'Erection of structural steel',                     N'ERECTION',                 NULL,                        N'MT', 80),
+    (N'ERE-DUCT', N'Fabrication & erection of ducts / gas mains',      N'ERECTION',                 NULL,                        N'MT', 90)
+) AS s (ActivityCode, Name, ServiceType, WorkCategory, Unit, SortOrder)
+ON t.ActivityCode = s.ActivityCode
+WHEN NOT MATCHED THEN INSERT (ActivityCode, Name, ServiceType, WorkCategory, Unit, SortOrder)
+     VALUES (s.ActivityCode, s.Name, s.ServiceType, s.WorkCategory, s.Unit, s.SortOrder);
+GO

@@ -17,6 +17,14 @@ namespace BSL.Desktop.Controls;
 public sealed class EntityBrowser : UserControl
 {
     public EntityDef Entity { get; }
+    bool _startNew;
+    readonly EntityRules _rules = new(Program.Db);
+
+    /// <summary>Open the screen directly on a new record in form view (used by the "New …" quick actions).</summary>
+    public void StartWithNewRecord()
+    {
+        if (IsHandleCreated && _table.Columns.Count > 0) Ui.Busy(this, AddNew); else _startNew = true;
+    }
     public string Title { get; }
     public event Action<EntityDef, string, int, string>? OpenRelated;   // child entity, fk column, id, title
 
@@ -78,6 +86,7 @@ public sealed class EntityBrowser : UserControl
         {
             try { _formSplit.SplitterDistance = Math.Max(200, (int)(Height * 0.62)); } catch (InvalidOperationException) { }
             Ui.Busy(this, () => Reload());
+            if (_startNew) Ui.Busy(this, AddNew);
         };
     }
 
@@ -160,6 +169,23 @@ public sealed class EntityBrowser : UserControl
         _lookups.Clear();
         _table = Program.Repo.Load(Entity, _where, _whereParams);
         _table.RowChanged += (_, _) => UpdateChanges();
+        _table.ColumnChanged += (_, e) =>
+        {
+            // run after the data binding has finished writing, otherwise a bound drop-down can write its
+            // old (blank) text back over the value we fill in; then refresh every control from the record
+            var row = e.Row; var col = e.Column!.ColumnName;
+            if (!IsHandleCreated) return;
+            BeginInvoke(() =>
+            {
+                try
+                {
+                    if (row.RowState is DataRowState.Deleted or DataRowState.Detached) return;
+                    _rules.OnChanged(Entity.Name, row, col);
+                    if (_formHost.Visible && Current == row) _bs.ResetCurrentItem();
+                }
+                catch (Exception ex) { Ui.LogError(ex); _statusText.Text = "Auto-fill skipped: " + ex.Message; }
+            });
+        };
         _table.RowDeleted += (_, _) => UpdateChanges();
         _bs.DataSource = _table;
         BuildGridColumns();
@@ -233,7 +259,10 @@ public sealed class EntityBrowser : UserControl
             if (f.Name == "NoOfSets") v[f.Name] = 1;
             if (f.Name == "Status" && f.ChoiceCategory != null && Program.Repo.Choices(f.ChoiceCategory).FirstOrDefault() is { } st) v[f.Name] = st;
             if (f.Name == "ContractorType") v[f.Name] = "Executing Agency";
+            if (f.Name == "IsApproved") v[f.Name] = true;
+            if (f.Name == "Unit" && Entity.Name == "Activity") v[f.Name] = "MT";
         }
+        _rules.OnNew(Entity.Name, v.Row);
         if (_fixedFk is { } fk && _table.Columns.Contains(fk.Column)) v[fk.Column] = fk.Value;
         _bs.EndEdit();
         _bs.Position = _bs.Find(Entity.Key, v[Entity.Key]);

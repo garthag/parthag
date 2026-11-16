@@ -153,6 +153,26 @@ switch (args.FirstOrDefault())
         Console.WriteLine("saved " + args[2]);
         return 0;
     }
+    case "rulestest" when args.Length >= 2:
+    {
+        var db = new Database(args[1]);
+        var repo = new EntityRepository(db);
+        var rules = new EntityRules(db);
+        var t = repo.Load(BSL.Core.Metadata.EntityCatalog.WorkOrder);
+        t.ColumnChanged += (_, e) => rules.OnChanged("WorkOrder", e.Row, e.Column!.ColumnName);
+        var r = t.NewRow();
+        rules.OnNew("WorkOrder", r);
+        t.Rows.Add(r);
+        var act = Convert.ToInt32(db.Scalar("SELECT Id FROM dbo.Activity WHERE ActivityCode = 'ERE-EQP'"));
+        r["ActivityId"] = act;
+        Console.WriteLine($"WO new: {r["UniqueNo"]} service={r["ServiceType"]} category={r["WorkCategory"]}");
+        var ci = repo.Load(BSL.Core.Metadata.EntityCatalog.ContractItem, "1 = 0");
+        ci.ColumnChanged += (_, e) => rules.OnChanged("ContractItem", e.Row, e.Column!.ColumnName);
+        var x = ci.NewRow(); x["Description"] = "test"; ci.Rows.Add(x);
+        x["WorkOrderId"] = Convert.ToInt32(db.Scalar("SELECT Id FROM dbo.WorkOrder WHERE UniqueNo = 'BM07'"));
+        Console.WriteLine($"BOQ item: activity={x["ActivityId"]} int={x["InternalRate"]} ext={x["ExternalRate"]} type={x["ActivityType"]}");
+        return 0;
+    }
     case "pdftest" when args.Length >= 3:
     {
         var wb = BomWorkbookReader.Read(args[1]);

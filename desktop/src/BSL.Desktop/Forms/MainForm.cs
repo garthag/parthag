@@ -60,6 +60,12 @@ public sealed class MainForm : Form
         var m = new MenuStrip();
         var file = new ToolStripMenuItem("&File");
         file.DropDownItems.Add("&Home / dashboard", null, (_, _) => ShowHome());
+        file.DropDownItems.Add("New &contractor…", null, (_, _) => OpenNew(EntityCatalog.Contractor));
+        file.DropDownItems.Add("New &work order…", null, (_, _) => OpenNew(EntityCatalog.WorkOrder));
+        file.DropDownItems.Add("New &activity…", null, (_, _) => OpenNew(EntityCatalog.Activity));
+        file.DropDownItems.Add("Link contractor to activity…", null, (_, _) => OpenNew(EntityCatalog.ContractorActivity));
+        file.DropDownItems.Add("New work-order activity rate…", null, (_, _) => OpenNew(EntityCatalog.RateMaster));
+        file.DropDownItems.Add(new ToolStripSeparator());
         file.DropDownItems.Add("&Settings (database, report header)…", null, (_, _) => OpenSettings());
         file.DropDownItems.Add(new ToolStripSeparator());
         file.DropDownItems.Add("E&xit", null, (_, _) => Close());
@@ -93,6 +99,10 @@ public sealed class MainForm : Form
             f.ShowDialog(this);
             foreach (var b in Browsers().Where(b => b.Entity == def)) b.Reload();
         });
+        tools.DropDownItems.Add("Auto-link activities (work orders, BOQ, contractors, rates, packages, drawings)", null, (_, _) => LinkActivities());
+        tools.DropDownItems.Add("Apply activity rates to BOQ – blank rates only", null, (_, _) => ApplyRates(false));
+        tools.DropDownItems.Add("Apply activity rates to BOQ – overwrite all item rates", null, (_, _) => ApplyRates(true));
+        tools.DropDownItems.Add(new ToolStripSeparator());
         tools.DropDownItems.Add("Drop-down lists…", null, (_, _) => Open(EntityCatalog.LookupValue));
         tools.DropDownItems.Add("Import history…", null, (_, _) => Open(EntityCatalog.ImportBatch));
         m.Items.Add(tools);
@@ -141,6 +151,36 @@ public sealed class MainForm : Form
     IEnumerable<EntityBrowser> Browsers() => _tabs.TabPages.Cast<TabPage>().SelectMany(p => p.Controls.OfType<EntityBrowser>());
 
     public void Open(EntityDef e) => OpenBrowser(new EntityBrowser(e), e.Name);
+
+    /// <summary>Opens the screen (or switches to it) and starts a new record in form view.</summary>
+    public void OpenNew(EntityDef e)
+    {
+        Open(e);
+        if (_tabs.SelectedTab?.Controls.OfType<EntityBrowser>().FirstOrDefault() is { } b) b.StartWithNewRecord();
+    }
+
+    void LinkActivities()
+    {
+        Ui.Busy(this, () =>
+        {
+            var text = new BSL.Core.Data.ActivityService(Program.Db).LinkActivities();
+            foreach (var b in Browsers()) if (!b.HasChanges) b.Reload();
+            RefreshHome();
+            Ui.Info(text);
+        });
+    }
+
+    void ApplyRates(bool overwrite)
+    {
+        if (overwrite && !Ui.Confirm("Replace the internal and external rate of EVERY BOQ item that has an activity with the work-order activity rate (or the activity default)?")) return;
+        Ui.Busy(this, () =>
+        {
+            var n = new BSL.Core.Data.ActivityService(Program.Db).ApplyRates(overwrite);
+            foreach (var b in Browsers()) if (!b.HasChanges) b.Reload();
+            RefreshHome();
+            Ui.Info($"{n} BOQ items updated from activity rates.");
+        });
+    }
 
     void OpenRelated(EntityDef child, string fk, int id, string title) =>
         OpenBrowser(new EntityBrowser(child, title, $"{fk} = @fk", [("@fk", id)], (fk, id)), $"{child.Name}:{fk}:{id}");
@@ -237,11 +277,30 @@ public sealed class MainForm : Form
                        (SELECT SUM(QtyTon) FROM dbo.RaBillLine) AS ExecTon,
                        (SELECT SUM(ExternalAmount) FROM dbo.ContractItem WHERE IsGroupHeader = 0) AS ExtAmt,
                        (SELECT SUM(InternalAmount) FROM dbo.ContractItem WHERE IsGroupHeader = 0) AS IntAmt,
-                       (SELECT COUNT(*) FROM dbo.BomItem WHERE QualityFlags IS NOT NULL AND QualityFlags NOT LIKE N'detail of%') AS Flags
+                       (SELECT SUM(Margin) FROM dbo.ContractItem WHERE IsGroupHeader = 0) AS MarginAmt,
+                       (SELECT COUNT(*) FROM dbo.ContractItem WHERE IsGroupHeader = 0 AND (InternalRate IS NULL OR ExternalRate IS NULL)) AS NoRate,
+                       (SELECT COUNT(*) FROM dbo.BomItem WHERE QualityFlags IS NOT NULL AND QualityFlags NOT LIKE N'detail of%') AS Flags,
+                       (SELECT COUNT(*) FROM dbo.Activity WHERE IsActive = 1) AS Activities,
+                       (SELECT COUNT(*) FROM dbo.ContractorActivity WHERE IsApproved = 1) AS ConAct,
+                       (SELECT COUNT(*) FROM dbo.ContractItem WHERE IsGroupHeader = 0 AND ActivityId IS NULL) AS NoActItems
                 """).Rows[0];
             decimal D(string c) => k[c] is DBNull ? 0 : Convert.ToDecimal(k[c]);
             var head = new Label { Text = "Project dashboard", Font = new Font("Segoe UI", 16f, FontStyle.Bold), ForeColor = Ui.Accent, Dock = DockStyle.Top, Height = 48, Padding = new Padding(20, 12, 0, 0) };
             page.Controls.Add(head);
+            var quick = new FlowLayoutPanel { Dock = DockStyle.Top, Height = 44, Padding = new Padding(16, 4, 0, 0) };
+            quick.Controls.AddRange(
+            [
+                Ui.Button("+ New contractor", (_, _) => OpenNew(EntityCatalog.Contractor), 140),
+                Ui.Button("+ New work order", (_, _) => OpenNew(EntityCatalog.WorkOrder), 140),
+                Ui.Button("+ New activity", (_, _) => OpenNew(EntityCatalog.Activity), 130),
+                Ui.Button("Link contractor to activity", (_, _) => OpenNew(EntityCatalog.ContractorActivity), 190),
+                Ui.Button("+ WO activity rate", (_, _) => OpenNew(EntityCatalog.RateMaster), 150),
+                Ui.Button("Auto-link activities", (_, _) => LinkActivities(), 150),
+                Ui.Button("Apply activity rates to BOQ", (_, _) => ApplyRates(false), 190)
+            ]);
+            page.Controls.Add(quick);
+            quick.BringToFront();
+            flow.BringToFront();
             void Tile(string title, string value, string sub, Action? click = null)
             {
                 var p = new Panel { Width = 250, Height = 110, Margin = new Padding(8), BackColor = Color.White, BorderStyle = BorderStyle.FixedSingle, Cursor = click != null ? Cursors.Hand : Cursors.Default };
@@ -256,7 +315,8 @@ public sealed class MainForm : Form
             Tile("Drawings", $"{k["Drawings"]:N0}", $"{k["Sheets"]:N0} sheets / revisions", () => Open(EntityCatalog.DrawingMaster));
             Tile("BOM weight (all sets)", $"{D("BomTon"):N1} MT", $"{k["Packages"]} packages • {k["BomLines"]:N0} lines", () => Open(EntityCatalog.Package));
             Tile("Contract scope (R1)", $"{D("ScopeTon"):N1} MT", $"executed {D("ExecTon"):N1} MT", () => Open(EntityCatalog.ContractItem));
-            Tile("External vs internal", $"₹ {(D("ExtAmt") - D("IntAmt")) / 100000m:N1} L", $"margin • ext ₹{D("ExtAmt") / 100000m:N1} L", OpenReports);
+            Tile("Margin (both rates known)", $"₹ {D("MarginAmt") / 100000m:N1} L", $"{k["NoRate"]} items missing a rate", OpenReports);
+            Tile("Activities", $"{k["Activities"]}", $"{k["ConAct"]} contractor links • {k["NoActItems"]} items w/o activity", () => Open(EntityCatalog.Activity));
             Tile("BOM lines with flags", $"{k["Flags"]:N0}", "corrected / to check", OpenReports);
 
             var help = new Label

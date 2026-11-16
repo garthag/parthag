@@ -85,8 +85,8 @@ Every entity is described once in `EntityCatalog.cs` (field, caption, type, look
 
 | Module | Screens |
 |---|---|
-| Masters | Contractor Master, Work Orders |
-| Contract | Rate Master (internal / external), Contract BOQ Items, RA Bills, RA Bill Lines |
+| Masters | Contractor Master, Work Orders, Activity Master, Contractor Activities |
+| Contract | WO Activity Rates (internal / external), Contract BOQ Items, RA Bills, RA Bill Lines |
 | Drawings & BOM | Packages / BOM Sheets, Drawing Master, Drawing Register, BOM Items |
 | Settings | Drop-down Lists, Import History |
 
@@ -100,6 +100,44 @@ Every entity is described once in `EntityCatalog.cs` (field, caption, type, look
 | RA bill | RA bill lines |
 
 `Open / edit in new tab` opens the related records filtered to the current record. New rows added there are linked to it automatically.
+
+### Activities: linking contractors, work orders and rates
+
+* **Activity Master** lists the work done: `DIS-EQP` dismantling, `ERE-EQP` erection of equipment, `ERE-HYD` hydraulics, `ERE-UTL` utility piping, `MOD-FAB` modification / fabrication, `SUP-SRV` supply & service, `FAB-STR`, `ERE-STR`, `ERE-DUCT`. Each has a unit and default internal / external rates. You can add your own.
+* **Contractor Activities** records which contractor is approved for which activity, with an optional quoted rate and capacity.
+* **WO Activity Rates** holds the internal (paid to agency) and external (billed to client) rate for each work order and activity.
+* Work orders, BOQ items, packages and drawings each have an **Activity** field.
+* **Auto-link activities** (dashboard button, Tools menu; also runs after every import) fills blanks only:
+
+  | What | How it is filled |
+  |---|---|
+  | Work order → activity | From its work category |
+  | BOQ item → activity | From its work order |
+  | Contractor ↔ activity | From the work orders the contractor holds |
+  | Work-order activity rate | Weighted average (by R1 weight) of its BOQ item rates |
+  | Activity default rates | Weighted average over the whole BOQ |
+  | Package → activity | From its name (ducts / mains, structures, stove shell) |
+  | Drawing → activity | From its BOQ item or package |
+
+  On the imported data this gave 14 work orders, 428 BOQ items, 11 contractor links, 11 work-order rates, 21 packages and 548 drawings. Running it again changes nothing.
+* **Apply activity rates to BOQ** fills blank item rates from the work-order activity rate, or else the activity default. On the imported data it would fill 297 internal and 69 external rates; it only changes data when you press it.
+* **While you type:**
+
+  | Screen | What is filled in |
+  |---|---|
+  | New work order | Next number (BM15 …) |
+  | Work order | Choosing an activity fills service type and work category |
+  | BOQ item | Choosing a work order fills its activity and rates |
+  | WO activity rate | Choosing an activity fills description, unit and default rates |
+
+  Only blank fields are filled.
+* **Margins are blank when a rate is missing.** They used to count a missing rate as zero, which showed ₹16.24 Cr; the real margin on items with both rates is ₹6.09 Cr.
+* **Quick create:** the dashboard and File menu have *New contractor*, *New work order*, *New activity*, *Link contractor to activity* and *New WO activity rate*. Each opens the form on a new record.
+* **Reports (Activities):**
+  * Activity summary
+  * Contractor – activity matrix
+  * Work order activity rates
+  * BOQ items to check: no activity, a missing rate, external rate below internal, or an agency not approved for the activity
 
 ### User-defined fields and formulas
 
@@ -145,7 +183,7 @@ The **Reports** screen has 14 standard reports. You can filter each one by packa
 
 ## 3. Install and run
 
-1. **SQL Server.** Any of these will do: **LocalDB** (installed with Visual Studio), **SQL Server Express** (free) or a full server.
+1. **SQL Server.** SQL Server **2017 or later**. Any of these will do: **LocalDB** (installed with Visual Studio), **SQL Server Express** (free) or a full server.
 2. **Build.** Open `desktop/BSL.ProjectControl.sln` in Visual Studio 2022 (.NET 8 SDK) and run **BSL.Desktop**. Or download the ready-made zip from the GitHub Actions run *Desktop (C# / SQL Server)* (artifact `bsl-project-control-windows`). It is self-contained, so .NET does not need to be installed.
 3. **First start.** The default connection is `(localdb)\MSSQLLocalDB`, database `BSL_ProjectControl`. If that fails, the Settings window opens; enter the server (for example `.\SQLEXPRESS`) and press **Test / create DB**. The app creates the database, tables, views and seed data by itself. The scripts in `desktop/database/*.sql` are the same and can also be run by hand.
 4. **Load your data.**

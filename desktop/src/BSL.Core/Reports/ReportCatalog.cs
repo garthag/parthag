@@ -53,6 +53,42 @@ public static class ReportCatalog
             ORDER BY PackageCode, SourceRow
             """, "Package", true, "Lines the importer corrected or could not resolve."),
 
+        // ----------------------------------------------------------- Activities
+        new("Activities", "Activity summary (scope, executed, internal vs external)", """
+            SELECT ServiceType AS [Service], ActivityCode AS [Code], Name AS [Activity], Unit, ApprovedContractors AS [Contractors],
+                   WorkOrders AS [WOs], BoqItems AS [BOQ Items], ScopeTon AS [Scope (MT)], ExecutedTon AS [Executed (MT)],
+                   DefaultInternalRate AS [Default Internal Rate], DefaultExternalRate AS [Default External Rate],
+                   AvgInternalRate AS [Avg Internal Rate], AvgExternalRate AS [Avg External Rate],
+                   InternalAmount AS [Internal Amount], ExternalAmount AS [External Amount], Margin
+            FROM dbo.vw_Activity WHERE IsActive = 1 ORDER BY SortOrder
+            """, "Service", true, "Every activity with its contractors, work orders, scope, rates and margin."),
+        new("Activities", "Contractor – activity matrix", """
+            SELECT ContractorCode AS [Agency], ContractorName AS [Contractor], ActivityCode AS [Activity Code], ActivityName AS [Activity],
+                   CASE WHEN IsApproved = 1 THEN N'Approved' ELSE N'Not approved' END AS [Status], Capacity,
+                   InternalRate AS [Quoted Internal Rate], DefaultInternalRate AS [Default Internal Rate], DefaultExternalRate AS [Default External Rate],
+                   WorkOrders AS [WOs], ScopeTon AS [Scope (MT)]
+            FROM dbo.vw_ContractorActivity ORDER BY ContractorCode, ActivityCode
+            """, "Agency", true, "Which agency is approved for which activity, with rates."),
+        new("Activities", "Work order activity rates (internal / external)", """
+            SELECT ContractorCode AS [Agency], UniqueNo AS [WO], ActivityCode AS [Activity Code], ActivityName AS [Activity], Unit,
+                   InternalRate AS [Internal Rate], ExternalRate AS [External Rate], Margin AS [Margin per unit], MarginPct AS [Margin Pct],
+                   DefaultInternalRate AS [Default Internal Rate], DefaultExternalRate AS [Default External Rate],
+                   CASE WHEN ContractorApproved = 1 THEN N'Yes' ELSE N'No' END AS [Approved], Remarks
+            FROM dbo.vw_RateMaster ORDER BY ContractorCode, UniqueNo, ActivityCode
+            """, "Agency", true, "Rate per work order and activity, compared with the activity default."),
+        new("Activities", "BOQ items to check (activity / rate / approval)", """
+            SELECT ISNULL(AgencyCode, ISNULL(AgencyRef, N'(none)')) AS [Agency], UniqueNo AS [WO], ActivityCode AS [Activity],
+                   Description, R1WeightTon AS [R1 (MT)], InternalRate AS [Internal Rate], ExternalRate AS [External Rate],
+                   SuggestedInternalRate AS [Suggested Internal Rate], SuggestedExternalRate AS [Suggested External Rate],
+                   CASE WHEN ActivityId IS NULL THEN N'No activity'
+                        WHEN ActivityApproved = 0 THEN N'Agency not approved for activity'
+                        WHEN InternalRate IS NULL OR ExternalRate IS NULL THEN N'Rate missing'
+                        WHEN ExternalRate < InternalRate THEN N'External rate below internal rate' END AS [Issue]
+            FROM dbo.vw_ContractItem
+            WHERE IsGroupHeader = 0 AND (ActivityId IS NULL OR ActivityApproved = 0 OR InternalRate IS NULL OR ExternalRate IS NULL OR ExternalRate < InternalRate)
+            ORDER BY 1, SortOrder
+            """, "Issue", true, "Items without activity, with a missing rate, a negative margin or an agency not approved for the activity."),
+
         // ----------------------------------------------------------- Contractors & contract
         new("Contract", "Contractor master list", """
             SELECT ContractorType AS [Type], ContractorCode AS [Code], Name, ContactPerson AS [Contact], ContactNo AS [Phone], Email AS [E-mail],
