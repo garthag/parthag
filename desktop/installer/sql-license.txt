@@ -1,0 +1,28 @@
+MICROSOFT SQL SERVER 2022 EXPRESS - LICENCE
+
+You chose to install Microsoft SQL Server 2022 Express (LocalDB and/or the shared
+SQL Server Express service). SQL Server Express is free Microsoft software. It is
+installed with the official Microsoft setup in silent mode, which requires you to
+accept the Microsoft SQL Server 2022 Express licence terms on behalf of this PC.
+
+The full licence terms are published by Microsoft at
+  https://www.microsoft.com/sql-server/sql-server-downloads
+and are also stored with SQL Server after installation
+  (C:\Program Files\Microsoft SQL Server\160\License Terms).
+
+What will be installed
+
+  * SQL Server Express LocalDB  (about 55 MB)
+      Database on this PC only. Each Windows user gets the instance
+      (localdb)\MSSQLLocalDB automatically. No Windows service.
+
+  * SQL Server Express - shared (about 260 MB download / 1 GB on disk)
+      Windows service .\SQLEXPRESS that other PCs on the network can use.
+      The installer opens Windows Firewall for it, creates the database
+      BSL_ProjectControl and gives signed-in Windows users access.
+      Other PCs connect to  <THIS-PC-NAME>\SQLEXPRESS  (7. Settings in the app).
+
+If this installer was built with the SQL Server files included, nothing is
+downloaded; otherwise the files are downloaded from Microsoft during setup.
+
+Click "I accept" to continue, or go Back and untick the SQL Server components.

@@ -29,20 +29,37 @@ jobs:
           -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true
           -p:DebugType=none -o desktop/publish/release
 
-      - name: Build installer (NSIS is preinstalled on windows-latest)
+      - name: Download Microsoft SQL Server 2022 Express (LocalDB + Express) for bundling
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          $w = Join-Path $env:RUNNER_TEMP 'sql'
+          New-Item -ItemType Directory -Force $w | Out-Null
+          Invoke-WebRequest 'https://go.microsoft.com/fwlink/p/?linkid=2216019' -OutFile "$w\ssei.exe" -UseBasicParsing
+          Start-Process "$w\ssei.exe" -ArgumentList '/ACTION=Download','/MEDIATYPE=LocalDB',"/MEDIAPATH=$w\localdb",'/QUIET','/HIDEPROGRESSBAR' -Wait
+          Start-Process "$w\ssei.exe" -ArgumentList '/ACTION=Download','/MEDIATYPE=Core',"/MEDIAPATH=$w\core",'/QUIET','/HIDEPROGRESSBAR' -Wait
+          $r = 'desktop\installer\redist'
+          New-Item -ItemType Directory -Force $r | Out-Null
+          Copy-Item (Get-ChildItem "$w\localdb" -Recurse -Filter 'SqlLocalDB.msi' | Select-Object -First 1).FullName "$r\SqlLocalDB.msi"
+          Copy-Item (Get-ChildItem "$w\core" -Recurse -Filter 'SQLEXPR*.exe' | Select-Object -First 1).FullName "$r\SQLEXPR_x64_ENU.exe"
+          Get-ChildItem $r | Format-Table Name, Length
+
+      - name: Build installers (with SQL Server bundled, and app-only)
         shell: pwsh
         working-directory: desktop/installer
         run: |
           $nsis = "${env:ProgramFiles(x86)}\NSIS\makensis.exe"
           if (-not (Test-Path $nsis)) { choco install nsis -y --no-progress; $nsis = "${env:ProgramFiles(x86)}\NSIS\makensis.exe" }
           & $nsis -DVERSION=1.1.0 -DSRC=..\publish\release BSLProjectControl.nsi
+          if (Test-Path redist) { Rename-Item redist redist.off; & $nsis -DVERSION=1.1.0 -DSRC=..\publish\release BSLProjectControl.nsi; Rename-Item redist.off redist }
+          Get-ChildItem *.exe | Format-Table Name, Length
 
       - name: Portable zip
         shell: pwsh
         run: |
           $p = "BSLProjectControl-portable"
           New-Item -ItemType Directory -Force "$p/database", "$p/fonts" | Out-Null
-          Copy-Item desktop/publish/release/BSLProjectControl.exe, desktop/README.md, desktop/installer/app.ico $p
+          Copy-Item desktop/publish/release/BSLProjectControl.exe, desktop/README.md, desktop/installer/app.ico, desktop/installer/sql-setup.ps1 $p
           Copy-Item desktop/database/*.sql "$p/database"
           Compress-Archive -Path $p -DestinationPath BSLProjectControl-portable.zip
 
@@ -52,3 +69,49 @@ jobs:
           path: |
             desktop/installer/BSLProjectControl-Setup-*.exe
             BSLProjectControl-portable.zip
+
+  # Installs the bundled installer on a clean Windows machine and checks SQL Server + the app's database.
+  test-installer:
+    needs: build-windows
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - uses: actions/download-artifact@v4
+        with:
+          name: bsl-project-control-windows
+          path: dist
+
+      - name: Silent install – app + SQL Server Express (shared instance)
+        shell: pwsh
+        run: |
+          $setup = Get-ChildItem dist -Filter 'BSLProjectControl-Setup-*-with-SQL-*.exe' | Select-Object -First 1
+          if (-not $setup) { $setup = Get-ChildItem dist -Filter 'BSLProjectControl-Setup-*.exe' | Select-Object -First 1 }
+          Write-Host "Installing $($setup.Name)"
+          $p = Start-Process $setup.FullName -ArgumentList '/S', '/EXPRESS' -Wait -PassThru
+          Write-Host "Installer exit code $($p.ExitCode)"
+          $dir = "$env:ProgramFiles\BSL Project Control"
+          Get-ChildItem $dir | Format-Table Name, Length
+          Write-Host '--- sql-setup.log'; Get-Content "$dir\sql-setup.log" -ErrorAction SilentlyContinue
+          Write-Host '--- defaults.json'; Get-Content "$dir\defaults.json"
+          if (-not (Test-Path "$dir\BSLProjectControl.exe")) { throw 'program not installed' }
+          if (-not (Select-String "$dir\defaults.json" -Pattern 'SQLEXPRESS' -Quiet)) { throw 'defaults.json does not point to SQLEXPRESS' }
+          $svc = Get-Service 'MSSQL$SQLEXPRESS'
+          Write-Host "Service MSSQL`$SQLEXPRESS: $($svc.Status)"
+          if ($svc.Status -ne 'Running') { throw 'SQL Server Express service is not running' }
+
+      - name: App schema on the installed SQL Server Express (all screens + reports)
+        run: >
+          dotnet run --project desktop/src/BSL.Cli -c Release --
+          dbtest "Server=.\SQLEXPRESS;Database=BSL_ProjectControl;Trusted_Connection=True;TrustServerCertificate=True" ${{ runner.temp }}
+
+      - name: Uninstall (program removed, SQL Server and database kept)
+        shell: pwsh
+        run: |
+          $dir = "$env:ProgramFiles\BSL Project Control"
+          Start-Process "$dir\Uninstall.exe" -ArgumentList '/S', "_?=$dir" -Wait
+          if (Test-Path "$dir\BSLProjectControl.exe") { throw 'program still present after uninstall' }
+          if ((Get-Service 'MSSQL$SQLEXPRESS').Status -ne 'Running') { throw 'SQL Server should be kept' }
+          Write-Host 'Uninstall OK – SQL Server Express and database kept.'

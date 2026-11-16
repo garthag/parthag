@@ -21,10 +21,20 @@ public sealed class AppSettings
     static string Dir => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "BSLProjectControl");
     static string FilePath => Path.Combine(Dir, "settings.json");
 
+    /// <summary>
+    /// Per-user settings; on first start falls back to "defaults.json" next to the program, which the installer
+    /// writes with the SQL Server it installed (LocalDB or .\SQLEXPRESS).
+    /// </summary>
     public static AppSettings Load()
     {
         try { if (File.Exists(FilePath)) return JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(FilePath)) ?? new(); }
         catch { /* corrupt file → defaults */ }
+        try
+        {
+            var machine = Path.Combine(AppContext.BaseDirectory, "defaults.json");
+            if (File.Exists(machine)) return JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(machine)) ?? new();
+        }
+        catch { /* ignore */ }
         return new();
     }
 

@@ -211,11 +211,24 @@ The **Reports** screen has 14 standard reports. You can filter each one by packa
 
 1. **SQL Server.** SQL Server **2017 or later**. Any of these will do: **LocalDB** (installed with Visual Studio), **SQL Server Express** (free) or a full server.
 2. **Install the app.** Either:
-   * **`BSLProjectControl-Setup-1.1.0.exe`** (recommended): installs to *Program Files* with Start-menu and desktop shortcuts and an entry in *Add/Remove Programs*. The uninstaller keeps your database and settings.
-   * **`BSLProjectControl-1.1.0-portable.zip`**: unzip anywhere and run `BSLProjectControl.exe`. No installation needed.
+   * **`BSLProjectControl-Setup-1.1.0-with-SQL-Express.exe`** (recommended): includes **Microsoft SQL Server 2022 Express**, so nothing else is needed. The components page offers:
 
-   Both are self-contained: .NET does **not** need to be installed. The GitHub Actions job *Desktop (C# / SQL Server)* builds both on every push (artifact `bsl-project-control-windows`).
-   To build them yourself, open `desktop/BSL.ProjectControl.sln` in Visual Studio 2022 (.NET 8), publish `BSL.Desktop` (win-x64, self-contained, single file) to `desktop/publish/release`, then run `makensis BSLProjectControl.nsi` in `desktop/installer` (NSIS 3).
+     | Component | When to choose it |
+     |---|---|
+     | BSL Project Control | Always installed. |
+     | SQL Server Express LocalDB | Default. Database on this PC only. |
+     | SQL Server Express – shared | For several PCs. Installs the Windows service `.\SQLEXPRESS` on this PC, opens the Windows Firewall, creates the database `BSL_ProjectControl` and gives signed-in Windows users access. The other PCs install the app without SQL and connect to `THIS-PC\SQLEXPRESS` (*7. Settings*). |
+
+     * Components that are already installed are skipped.
+     * The Microsoft licence is shown for acceptance.
+     * The installer records the chosen server in `defaults.json`, so the app connects on first start.
+     * Silent install: `/S` installs the app + LocalDB, `/S /EXPRESS` the app + the shared service, `/S /NOSQL` the app only.
+     * Log: `C:\Program Files\BSL Project Control\sql-setup.log`.
+   * **`BSLProjectControl-Setup-1.1.0.exe`**: the same installer without SQL Server bundled. If a SQL component is ticked, it downloads the files from Microsoft during setup.
+   * **`BSLProjectControl-portable.zip`**: unzip and run. `sql-setup.ps1 -Mode LocalDB|Express` installs SQL Server by hand.
+
+   Everything is self-contained, so .NET does **not** need to be installed. The GitHub Actions job *Desktop (C# / SQL Server)* builds all three: it downloads the SQL Server files from Microsoft and bundles them. It then **tests the installer on a clean Windows machine**: it installs SQL Server Express, checks the service, creates the app's schema, runs every screen and report, and uninstalls. Download them from the artifact `bsl-project-control-windows`.
+   To build by hand, publish `BSL.Desktop` (win-x64, self-contained, single file) to `desktop/publish/release`. Optionally put `SqlLocalDB.msi` and `SQLEXPR_x64_ENU.exe` in `desktop/installer/redist`. Then run `makensis BSLProjectControl.nsi` in `desktop/installer`.
 3. **First start.** The default connection is `(localdb)\MSSQLLocalDB`, database `BSL_ProjectControl`. If that fails, the Settings window opens; enter the server (for example `.\SQLEXPRESS`) and press **Test / create DB**. The app creates the database, tables, views and seed data by itself. The scripts in `desktop/database/*.sql` are the same and can also be run by hand.
 4. **Load your data.**
    1. Import the contractor workbook.
