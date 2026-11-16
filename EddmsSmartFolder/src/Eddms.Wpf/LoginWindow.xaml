@@ -1,0 +1,52 @@
+<Window x:Class="Eddms.Wpf.LoginWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="EDMS Drawing Register - Sign in" Width="560" SizeToContent="Height"
+        WindowStartupLocation="CenterScreen" ResizeMode="NoResize">
+    <StackPanel>
+        <Border Background="{StaticResource Accent}" Padding="20,14">
+            <StackPanel>
+                <TextBlock Text="EDMS Drawing Register" FontSize="20" FontWeight="SemiBold" Foreground="White"/>
+                <TextBlock Text="Collects Smart Folders, documents and drawings from eddms.cetapps.in into SQL Server"
+                           Foreground="#D7EEEE" TextWrapping="Wrap" Margin="0,4,0,0"/>
+            </StackPanel>
+        </Border>
+
+        <Grid Margin="20,16,20,8">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="150"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+
+            <TextBlock Text="EDMS login name" VerticalAlignment="Center"/>
+            <TextBox x:Name="LoginBox" Grid.Column="1" Grid.ColumnSpan="2" Margin="0,4" Padding="4"/>
+
+            <TextBlock Grid.Row="1" Text="EDMS password" VerticalAlignment="Center"/>
+            <PasswordBox x:Name="PasswordBox" Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2" Margin="0,4" Padding="4"/>
+
+            <TextBlock Grid.Row="2" Text="SQL Server connection" VerticalAlignment="Center"/>
+            <TextBox x:Name="SqlBox" Grid.Row="2" Grid.Column="1" Grid.ColumnSpan="2" Margin="0,4" Padding="4"
+                     ToolTip="Default uses SQL Server LocalDB. For a full SQL Server use e.g. Server=.\SQLEXPRESS;Database=EddmsSmartFolder;Trusted_Connection=True;TrustServerCertificate=True"/>
+
+            <TextBlock Grid.Row="3" Text="Save drawings to" VerticalAlignment="Center"/>
+            <TextBox x:Name="FolderBox" Grid.Row="3" Grid.Column="1" Margin="0,4" Padding="4"/>
+            <Button Grid.Row="3" Grid.Column="2" Content="Browse..." Click="Browse_Click" Margin="6,4,0,4"/>
+
+            <CheckBox x:Name="DownloadCheck" Grid.Row="4" Grid.Column="1" Grid.ColumnSpan="2" Margin="0,8,0,0"
+                      Content="Download drawing files (PDF etc.) during sync"/>
+
+            <TextBlock x:Name="ErrorText" Grid.Row="5" Grid.ColumnSpan="3" Foreground="Firebrick" TextWrapping="Wrap" Margin="0,8,0,0"/>
+        </Grid>
+
+        <DockPanel Margin="20,4,20,18" LastChildFill="False">
+            <Button DockPanel.Dock="Left" Content="Open saved data (offline)" Click="Offline_Click" Margin="0"/>
+            <Button DockPanel.Dock="Right" Content="Sign in and Sync" Style="{StaticResource AccentButton}"
+                    Click="SignIn_Click" IsDefault="True" Margin="0"/>
+        </DockPanel>
+    </StackPanel>
+</Window>

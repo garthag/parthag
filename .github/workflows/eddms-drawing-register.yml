@@ -1,0 +1,70 @@
+name: EDMS Drawing Register (Windows)
+
+on:
+  push:
+    paths:
+      - 'EddmsSmartFolder/**'
+      - '.github/workflows/eddms-drawing-register.yml'
+  pull_request:
+    paths:
+      - 'EddmsSmartFolder/**'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: pwsh
+        working-directory: EddmsSmartFolder
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Build
+        run: dotnet build EddmsSmartFolder.sln -c Release
+
+      - name: Test the SQL schema and registers on SQL Server LocalDB
+        run: |
+          sqllocaldb start MSSQLLocalDB
+          dotnet run --project src/Eddms.SyncConsole -c Release --no-build -- --selftest --sql "Server=(localdb)\MSSQLLocalDB;Database=EddmsSelfTest;Trusted_Connection=True;TrustServerCertificate=True"
+
+      - name: Publish single-file Windows apps
+        run: |
+          dotnet publish src/Eddms.Wpf -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o out/EDMS-Drawing-Register
+          dotnet publish src/Eddms.SyncConsole -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o out/EDMS-Drawing-Register
+          Copy-Item Database/EddmsSchema.sql out/EDMS-Drawing-Register/
+          Copy-Item README.md out/EDMS-Drawing-Register/
+          Get-ChildItem out/EDMS-Drawing-Register -Filter *.pdb | Remove-Item
+          Compress-Archive -Path out/EDMS-Drawing-Register -DestinationPath EDMS-Drawing-Register-windows.zip
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: edms-drawing-register-windows
+          path: EddmsSmartFolder/EDMS-Drawing-Register-windows.zip
+
+  release:
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: edms-drawing-register-windows
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: edms-register-${{ github.run_number }}
+          target_commitish: ${{ github.sha }}
+          name: EDMS Drawing Register ${{ github.run_number }}
+          make_latest: false
+          body: |
+            **Windows:** download `EDMS-Drawing-Register-windows.zip`, extract it, and run `EddmsDrawingRegister.exe`.
+            Needs SQL Server Express or LocalDB on the PC (see README inside the zip).
+          files: EDMS-Drawing-Register-windows.zip
