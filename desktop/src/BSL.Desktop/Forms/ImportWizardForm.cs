@@ -10,7 +10,7 @@ public enum WorkbookKind { Bom, Contractor }
 /// reconciliation with the sheet's own total, plus every data issue; the standardised workbook can be saved
 /// to Excel without touching the database.
 /// </summary>
-public sealed class ImportWizardForm : Form
+public sealed class ImportWizardForm : StyledForm
 {
     readonly WorkbookKind _kind;
     readonly TextBox _file = new() { Width = 560, ReadOnly = true };

@@ -16,6 +16,13 @@ public static class PdfReport
 {
     public static string CompanyName { get; set; } = "BSL BF#3 Revamp – Project Control";
     public static string PreparedBy { get; set; } = Environment.UserName;
+    /// <summary>Second header line (address / project / contract no.).</summary>
+    public static string CompanyAddress { get; set; } = "";
+    /// <summary>PNG / JPG logo printed at the top-left of every report page (blank = no logo, space kept).</summary>
+    public static string? LogoPath { get; set; }
+
+    /// <summary>All report text is printed in capitals; e-mail addresses are left as typed.</summary>
+    public static string U(string? s) => string.IsNullOrEmpty(s) ? "" : s.Contains('@') ? s : s.ToUpperInvariant();
     static readonly CultureInfo India = new("en-IN");
 
     static bool _fontsReady;
@@ -37,10 +44,11 @@ public static class PdfReport
             var kind = c.DataType == typeof(DateTime) ? ColKind.Date
                 : c.DataType == typeof(int) || c.DataType == typeof(long) || c.DataType == typeof(short) ? ColKind.Int
                 : c.DataType == typeof(decimal) || c.DataType == typeof(double) || c.DataType == typeof(float)
-                    ? (n.Contains("Amount") || n.Contains("Rate") || n.Contains("Value") || n.Contains("Margin") || n.Contains("Paid") || n.Contains("Done") ? ColKind.Money : ColKind.Number)
+                    ? (n.Contains("Amount") || n.Contains("Rate") || n.Contains("Value") || n.Contains("Margin") || n.Contains("Paid") || n.Contains("Done") || n.Contains("Difference") ? ColKind.Money : ColKind.Number)
                 : ColKind.Text;
             var total = (kind is ColKind.Number or ColKind.Money) && !n.Contains("Rate") && !n.Contains("Pct") && !n.EndsWith('%') && !n.Contains("Sets");
-            return new ReportColumn(n, string.IsNullOrEmpty(c.Caption) ? n : c.Caption, kind, kind == ColKind.Text ? 2 : 1, total);
+            var weight = kind switch { ColKind.Text => 2.0, ColKind.Money => 1.45, ColKind.Date => 1.15, ColKind.Number => 1.1, _ => 0.8 };
+            return new ReportColumn(n, string.IsNullOrEmpty(c.Caption) ? n : c.Caption, kind, weight, total);
         }).ToList();
     }
 
@@ -56,7 +64,7 @@ public static class PdfReport
         var usable = (sec.PageSetup.PageWidth - sec.PageSetup.LeftMargin - sec.PageSetup.RightMargin).Point;
         var shown = cols.Where(c => c.Name != groupBy && data.Columns.Contains(c.Name)).ToList();
         var totalWeight = shown.Sum(c => c.Weight);
-        var fontSize = shown.Count > 14 ? 6 : shown.Count > 10 ? 7 : 8;
+        var fontSize = shown.Count > 14 ? 7 : shown.Count > 10 ? 8 : 9;
 
         var table = sec.AddTable();
         table.Borders.Width = 0.25;
@@ -71,7 +79,7 @@ public static class PdfReport
         hdr.Format.Font.Bold = true;
         for (int i = 0; i < shown.Count; i++)
         {
-            hdr.Cells[i].AddParagraph(shown[i].Caption);
+            hdr.Cells[i].AddParagraph(U(shown[i].Caption));
             hdr.Cells[i].Format.Alignment = shown[i].Kind == ColKind.Text ? ParagraphAlignment.Left : ParagraphAlignment.Right;
         }
 
@@ -88,7 +96,7 @@ public static class PdfReport
                 gr.Shading.Color = new Color(221, 235, 247);
                 gr.Cells[0].MergeRight = shown.Count - 1;
                 var cap = cols.FirstOrDefault(c => c.Name == groupBy)?.Caption ?? groupBy;
-                gr.Cells[0].AddParagraph($"{cap}: {(g.Key.Length == 0 ? "(blank)" : g.Key)}   ({g.Count()} rows)").Format.Font.Bold = true;
+                gr.Cells[0].AddParagraph(U($"{cap}: {(g.Key.Length == 0 ? "(blank)" : g.Key)}   ({g.Count()} rows)")).Format.Font.Bold = true;
             }
             bool alt = false;
             foreach (var r in g)
@@ -98,7 +106,7 @@ public static class PdfReport
                 alt = !alt;
                 for (int i = 0; i < shown.Count; i++)
                 {
-                    row.Cells[i].AddParagraph(Format(r[shown[i].Name], shown[i].Kind));
+                    row.Cells[i].AddParagraph(U(Format(r[shown[i].Name], shown[i].Kind)));
                     row.Cells[i].Format.Alignment = shown[i].Kind == ColKind.Text ? ParagraphAlignment.Left : ParagraphAlignment.Right;
                 }
             }
@@ -106,7 +114,7 @@ public static class PdfReport
         }
         if (shown.Any(c => c.Total) && list.Count > 0) AddTotalRow(table, shown, list, "GRAND TOTAL", new Color(255, 242, 204));
 
-        sec.AddParagraph($"{list.Count} rows").Format.SpaceBefore = Unit.FromPoint(6);
+        sec.AddParagraph($"{list.Count} ROWS").Format.SpaceBefore = Unit.FromPoint(6);
         Render(doc, path);
     }
 
@@ -115,7 +123,7 @@ public static class PdfReport
         var tr = table.AddRow();
         tr.Shading.Color = shade;
         tr.Format.Font.Bold = true;
-        tr.Cells[0].AddParagraph(label);
+        tr.Cells[0].AddParagraph(U(label));
         for (int i = 0; i < shown.Count; i++)
         {
             if (!shown[i].Total) continue;
@@ -136,7 +144,7 @@ public static class PdfReport
         foreach (var (name, fields) in sections)
         {
             if (fields.Count == 0) continue;
-            var h = sec.AddParagraph(name);
+            var h = sec.AddParagraph(U(name));
             h.Format.Font.Bold = true; h.Format.Font.Size = 11; h.Format.Font.Color = new Color(31, 78, 120);
             h.Format.SpaceBefore = Unit.FromPoint(10); h.Format.SpaceAfter = Unit.FromPoint(3);
             var t = sec.AddTable();
@@ -150,8 +158,8 @@ public static class PdfReport
                 for (int k = 0; k < 2 && i + k < fields.Count; k++)
                 {
                     r.Cells[k * 2].Shading.Color = new Color(242, 242, 242);
-                    r.Cells[k * 2].AddParagraph(fields[i + k].Label).Format.Font.Bold = true;
-                    r.Cells[k * 2 + 1].AddParagraph(fields[i + k].Value);
+                    r.Cells[k * 2].AddParagraph(U(fields[i + k].Label)).Format.Font.Bold = true;
+                    r.Cells[k * 2 + 1].AddParagraph(U(fields[i + k].Value));
                 }
             }
         }
@@ -160,7 +168,7 @@ public static class PdfReport
         foreach (var _ in Enumerable.Range(0, 3)) sign.AddColumn(Unit.FromPoint(usable / 3));
         var sr = sign.AddRow();
         string[] who = ["Prepared by", "Checked by", "Approved by"];
-        for (int i = 0; i < 3; i++) { sr.Cells[i].AddParagraph("____________________"); sr.Cells[i].AddParagraph(who[i]); }
+        for (int i = 0; i < 3; i++) { sr.Cells[i].AddParagraph("____________________"); sr.Cells[i].AddParagraph(U(who[i])); }
         Render(doc, path);
     }
 
@@ -171,7 +179,7 @@ public static class PdfReport
         doc.Info.Author = PreparedBy;
         var st = doc.Styles[StyleNames.Normal]!;
         st.Font.Name = "Arial";
-        st.Font.Size = 8;
+        st.Font.Size = 9;
         var sec = doc.AddSection();
         sec.PageSetup = doc.DefaultPageSetup.Clone();
         sec.PageSetup.PageFormat = PageFormat.A4;
@@ -179,32 +187,66 @@ public static class PdfReport
         sec.PageSetup.PageWidth = landscape ? Unit.FromMillimeter(297) : Unit.FromMillimeter(210);
         sec.PageSetup.PageHeight = landscape ? Unit.FromMillimeter(210) : Unit.FromMillimeter(297);
         sec.PageSetup.LeftMargin = sec.PageSetup.RightMargin = Unit.FromCentimeter(1.2);
-        sec.PageSetup.TopMargin = Unit.FromCentimeter(1.8);
+        sec.PageSetup.TopMargin = Unit.FromCentimeter(3.0);      // room for the logo header
+        sec.PageSetup.HeaderDistance = Unit.FromCentimeter(0.8);
         sec.PageSetup.BottomMargin = Unit.FromCentimeter(1.5);
 
-        var hp = sec.Headers.Primary.AddParagraph();
-        hp.AddFormattedText(CompanyName, TextFormat.Bold);
-        hp.AddTab(); hp.AddText(title);
-        hp.Format.Font.Size = 8;
-        hp.Format.Borders.Bottom.Width = 0.5;
+        // header: [ logo box ] [ company name / address ] [ report title ]
         var width = (sec.PageSetup.PageWidth - sec.PageSetup.LeftMargin - sec.PageSetup.RightMargin);
-        hp.Format.TabStops.AddTabStop(width, TabAlignment.Right);
+        var ht = sec.Headers.Primary.AddTable();
+        ht.Borders.Bottom.Width = 0.75;
+        ht.AddColumn(Unit.FromCentimeter(3.2));
+        ht.AddColumn(Unit.FromPoint(width.Point - Unit.FromCentimeter(3.2).Point - width.Point * 0.32));
+        ht.AddColumn(Unit.FromPoint(width.Point * 0.32));
+        var hr = ht.AddRow();
+        hr.Height = Unit.FromCentimeter(1.6);
+        hr.VerticalAlignment = VerticalAlignment.Center;
+        var logoSize = LogoFit(3.0, 1.45);              // fit inside 3.0 x 1.45 cm, keep proportions
+        if (logoSize is { } sz)
+        {
+            var img = hr.Cells[0].AddImage(LogoPath!);
+            img.Width = Unit.FromCentimeter(sz.W);
+            img.Height = Unit.FromCentimeter(sz.H);
+        }
+        else hr.Cells[0].AddParagraph(" ");          // space reserved for the logo
+        var cp = hr.Cells[1].AddParagraph();
+        cp.AddFormattedText(U(CompanyName), TextFormat.Bold).Font.Size = 11;
+        if (!string.IsNullOrWhiteSpace(CompanyAddress)) { cp.AddLineBreak(); cp.AddFormattedText(U(CompanyAddress)).Font.Size = 8; }
+        var tp = hr.Cells[2].AddParagraph(U(title));
+        tp.Format.Alignment = ParagraphAlignment.Right;
+        tp.Format.Font.Size = 9; tp.Format.Font.Bold = true;
 
         var fp = sec.Footers.Primary.AddParagraph();
         fp.Format.Font.Size = 7;
-        fp.AddText($"Printed {DateTime.Now:dd-MM-yyyy HH:mm} by {PreparedBy}");
-        fp.AddTab(); fp.AddText("Page "); fp.AddPageField(); fp.AddText(" of "); fp.AddNumPagesField();
+        fp.AddText(U($"Printed {DateTime.Now:dd-MM-yyyy HH:mm} by {PreparedBy}"));
+        fp.AddTab(); fp.AddText("PAGE "); fp.AddPageField(); fp.AddText(" OF "); fp.AddNumPagesField();
         fp.Format.TabStops.AddTabStop(width, TabAlignment.Right);
         return doc;
     }
 
+    /// <summary>Logo size in cm fitted into a box, or null when there is no readable logo.</summary>
+    static (double W, double H)? LogoFit(double boxW, double boxH)
+    {
+        if (string.IsNullOrWhiteSpace(LogoPath) || !File.Exists(LogoPath)) return null;
+        try
+        {
+            using var x = PdfSharp.Drawing.XImage.FromFile(LogoPath);
+            if (x.PixelWidth <= 0 || x.PixelHeight <= 0) return null;
+            var ratio = (double)x.PixelWidth / x.PixelHeight;
+            var w = boxW; var h = w / ratio;
+            if (h > boxH) { h = boxH; w = h * ratio; }
+            return (w, h);
+        }
+        catch { return null; }   // unsupported image: keep the space empty
+    }
+
     static void AddTitle(Section sec, string title, string? subtitle)
     {
-        var p = sec.AddParagraph(title);
-        p.Format.Font.Size = 14; p.Format.Font.Bold = true; p.Format.SpaceAfter = Unit.FromPoint(2);
+        var p = sec.AddParagraph(U(title));
+        p.Format.Font.Size = 13; p.Format.Font.Bold = true; p.Format.SpaceAfter = Unit.FromPoint(2);
         if (!string.IsNullOrWhiteSpace(subtitle))
         {
-            var s = sec.AddParagraph(subtitle);
+            var s = sec.AddParagraph(U(subtitle));
             s.Format.Font.Size = 9; s.Format.Font.Italic = true;
         }
         sec.AddParagraph().Format.SpaceAfter = Unit.FromPoint(4);

@@ -52,8 +52,10 @@ public sealed class EntityDef
     public string View => "vw_" + Table;
     public string Key { get; init; } = "Id";
     public string OrderBy { get; init; } = "Id";
-    public string Module { get; init; } = "Masters";
+    public string Module { get; init; } = "1. MASTERS";
     public bool HasModifiedOn { get; init; }
+    /// <summary>False for lists filled by the system (attachments, notes, import history).</summary>
+    public bool AllowNew { get; init; } = true;
     /// <summary>Column used as the record title in form view / record card PDF.</summary>
     public string TitleField { get; init; } = "Id";
     /// <summary>Default grouping column for the PDF of the list.</summary>
@@ -124,7 +126,7 @@ public static class EntityCatalog
 
     public static readonly EntityDef WorkOrder = new()
     {
-        Name = "WorkOrder", Caption = "Work Orders (Contractor WO)", Table = "WorkOrder", OrderBy = "UniqueNo",
+        Name = "WorkOrder", Caption = "Work Orders", Table = "WorkOrder", OrderBy = "UniqueNo",
         HasModifiedOn = true, TitleField = "UniqueNo", ReportGroupBy = "ContractorCode",
         Children = [("ContractItem", "WorkOrderId"), ("RaBill", "WorkOrderId"), ("RateMaster", "WorkOrderId"), ("Package", "WorkOrderId")],
         Fields =
@@ -192,7 +194,7 @@ public static class EntityCatalog
     public static readonly EntityDef RateMaster = new()
     {
         Name = "RateMaster", Caption = "WO Activity Rates (Int / Ext)", Table = "RateMaster", OrderBy = "WorkOrderId, ActivityId, ItemCode",
-        Module = "Contract", TitleField = "Description", ReportGroupBy = "ContractorCode",
+        Module = "2. CONTRACT & BILLING", TitleField = "Description", ReportGroupBy = "ContractorCode",
         Fields =
         [
             L("WorkOrderId", "Work Order", WorkOrderLookup), L("ActivityId", "Activity", ActivityLookup),
@@ -211,7 +213,7 @@ public static class EntityCatalog
     public static readonly EntityDef Package = new()
     {
         Name = "Package", Caption = "Packages / BOM Sheets", Table = "Package", OrderBy = "PackageCode",
-        Module = "Drawings & BOM", TitleField = "PackageCode", ReportGroupBy = "Area",
+        Module = "3. ENGINEERING – DRAWINGS & BOM", TitleField = "PackageCode", ReportGroupBy = "Area",
         Children = [("DrawingMaster", "PackageId"), ("BomItem", "PackageId")],
         Fields =
         [
@@ -228,7 +230,7 @@ public static class EntityCatalog
     public static readonly EntityDef ContractItem = new()
     {
         Name = "ContractItem", Caption = "Contract BOQ Items", Table = "ContractItem", OrderBy = "SortOrder, Id",
-        Module = "Contract", TitleField = "Description", ReportGroupBy = "GroupName",
+        Module = "2. CONTRACT & BILLING", TitleField = "Description", ReportGroupBy = "GroupName",
         Children = [("RaBillLine", "ContractItemId"), ("DrawingMaster", "ContractItemId")],
         Fields =
         [
@@ -259,7 +261,7 @@ public static class EntityCatalog
     public static readonly EntityDef RaBill = new()
     {
         Name = "RaBill", Caption = "RA Bills", Table = "RaBill", OrderBy = "WorkOrderId, RaNo",
-        Module = "Contract", TitleField = "RaNo", ReportGroupBy = "AgencyCode",
+        Module = "2. CONTRACT & BILLING", TitleField = "RaNo", ReportGroupBy = "AgencyCode",
         Children = [("RaBillLine", "RaBillId")],
         Fields =
         [
@@ -273,7 +275,7 @@ public static class EntityCatalog
     public static readonly EntityDef RaBillLine = new()
     {
         Name = "RaBillLine", Caption = "RA Bill Lines", Table = "RaBillLine", OrderBy = "RaBillId, ContractItemId",
-        Module = "Contract", TitleField = "ItemDescription", ReportGroupBy = "RaNo",
+        Module = "2. CONTRACT & BILLING", TitleField = "ItemDescription", ReportGroupBy = "RaNo",
         Fields =
         [
             L("RaBillId", "RA Bill", RaBillLookup, req: true), L("ContractItemId", "BOQ Item", ContractItemLookup, req: true),
@@ -288,7 +290,7 @@ public static class EntityCatalog
     public static readonly EntityDef DrawingMaster = new()
     {
         Name = "DrawingMaster", Caption = "Drawing Master", Table = "DrawingMaster", OrderBy = "DrawingNo",
-        Module = "Drawings & BOM", TitleField = "DrawingNo", ReportGroupBy = "PackageCode",
+        Module = "3. ENGINEERING – DRAWINGS & BOM", TitleField = "DrawingNo", ReportGroupBy = "PackageCode",
         Children = [("DrawingRegister", "DrawingId"), ("BomItem", "DrawingId")],
         Fields =
         [
@@ -305,14 +307,15 @@ public static class EntityCatalog
             R("PackageCode", "Package Code"), R("OriginatorCode", "Originator"), R("AgencyCode", "Agency"),
             R("TechSpecItem", "Spec Item"), R("SheetCount", "Sheets in register", FieldKind.Int), R("LatestRevision", "Latest Rev"),
             R("LastReceived", "Last received", FieldKind.Date), R("BomLines", "BOM Lines", FieldKind.Int),
-            R("BomWeightKg", "BOM Wt (kg)", FieldKind.Decimal), R("BomWeightTon", "BOM Wt (MT)", FieldKind.Decimal)
+            R("BomWeightKg", "BOM Wt (kg)", FieldKind.Decimal), R("BomWeightTon", "BOM Wt (MT)", FieldKind.Decimal),
+            R("FileCount", "Files", FieldKind.Int), R("NoteCount", "Notes", FieldKind.Int)
         ]
     };
 
     public static readonly EntityDef DrawingRegister = new()
     {
-        Name = "DrawingRegister", Caption = "Drawing Register (Sheets / Revisions)", Table = "DrawingRegister", OrderBy = "DrawingId, SheetNo, Revision",
-        Module = "Drawings & BOM", TitleField = "DrawingNo", ReportGroupBy = "PackageCode",
+        Name = "DrawingRegister", Caption = "Drawing Register", Table = "DrawingRegister", OrderBy = "DrawingId, SheetNo, Revision",
+        Module = "3. ENGINEERING – DRAWINGS & BOM", TitleField = "DrawingNo", ReportGroupBy = "PackageCode",
         Fields =
         [
             L("DrawingId", "Drawing", DrawingLookup, req: true), T("SheetNo", "Sheet", 20, w: 60), T("Revision", "Rev", 10, w: 50),
@@ -320,14 +323,15 @@ public static class EntityCatalog
             C("Purpose", "Purpose", "Purpose", "Transmittal"), L("IssuedToId", "Issued To", ContractorLookup, "Transmittal"),
             D("IssuedDate", "Issued On", "Transmittal"), C("Status", "Status", "RegisterStatus"),
             T("SourceRef", "Source text", 150, grp: "Other", w: 220), M("Remarks", "Remarks"),
-            R("DrawingNo", "Drawing No"), R("Title", "Title"), R("PackageCode", "Package"), R("IssuedToCode", "Issued To Code")
+            R("DrawingNo", "Drawing No"), R("Title", "Title"), R("PackageCode", "Package"), R("IssuedToCode", "Issued To Code"),
+            R("FileCount", "Files", FieldKind.Int)
         ]
     };
 
     public static readonly EntityDef BomItem = new()
     {
-        Name = "BomItem", Caption = "BOM Items (all packages)", Table = "BomItem", OrderBy = "PackageId, SourceRow, Id",
-        Module = "Drawings & BOM", TitleField = "ItemDescription", ReportGroupBy = "PackageCode",
+        Name = "BomItem", Caption = "BOM Items", Table = "BomItem", OrderBy = "PackageId, SourceRow, Id",
+        Module = "3. ENGINEERING – DRAWINGS & BOM", TitleField = "ItemDescription", ReportGroupBy = "PackageCode",
         Fields =
         [
             L("PackageId", "Package", PackageLookup, req: true), L("DrawingId", "Drawing", DrawingLookup, "Drawing"),
@@ -349,17 +353,44 @@ public static class EntityCatalog
         ]
     };
 
+    public static readonly EntityDef RecordNote = new()
+    {
+        Name = "RecordNote", Caption = "Notes Register", Table = "RecordNote", OrderBy = "NoteDate DESC, Id DESC",
+        Module = "4. DOCUMENTS", TitleField = "NoteText", ReportGroupBy = "EntityName", AllowNew = false,
+        Fields =
+        [
+            D("NoteDate", "Date"), C("Category", "Category", "NoteCategory"), B("IsImportant", "Important"),
+            M("NoteText", "Note", "General", 4000),
+            R("EntityName", "Screen", grp: "Record"), R("RecordId", "Record Id", FieldKind.Int, "Record"),
+            R("CreatedBy", "By", grp: "Record"), R("CreatedOn", "Entered On", FieldKind.Date, "Record")
+        ]
+    };
+
+    public static readonly EntityDef Attachment = new()
+    {
+        Name = "Attachment", Caption = "Uploaded Files & Drawings", Table = "Attachment", OrderBy = "UploadedOn DESC, Id DESC",
+        Module = "4. DOCUMENTS", TitleField = "FileName", ReportGroupBy = "DocType", AllowNew = false,
+        Fields =
+        [
+            C("DocType", "Document Type", "DocType"), T("Revision", "Rev", 10, w: 50), T("Description", "Description", 400, w: 220),
+            R("FileName", "File", grp: "File"), R("FileExt", "Type", grp: "File"), R("FileSizeKb", "Size (KB)", FieldKind.Int, "File"),
+            R("EntityName", "Screen", grp: "Linked record"), R("RecordRef", "Record", grp: "Linked record"),
+            R("RecordId", "Record Id", FieldKind.Int, "Linked record"),
+            R("UploadedBy", "Uploaded By", grp: "File"), R("UploadedOn", "Uploaded On", FieldKind.Date, "File")
+        ]
+    };
+
     public static readonly EntityDef LookupValue = new()
     {
         Name = "LookupValue", Caption = "Drop-down Lists", Table = "LookupValue", OrderBy = "Category, SortOrder, Value",
-        Module = "Settings", TitleField = "Value", ReportGroupBy = "Category",
+        Module = "7. SETTINGS", TitleField = "Value", ReportGroupBy = "Category",
         Fields = [T("Category", "List", 50, true, w: 150), T("Value", "Value", 100, true, w: 220), N("SortOrder", "Sort", FieldKind.Int, "General")]
     };
 
     public static readonly EntityDef ImportBatch = new()
     {
-        Name = "ImportBatch", Caption = "Import History", Table = "ImportBatch", OrderBy = "Id DESC",
-        Module = "Settings", TitleField = "FileName",
+        Name = "ImportBatch", Caption = "Import History", Table = "ImportBatch", OrderBy = "Id DESC", AllowNew = false,
+        Module = "7. SETTINGS", TitleField = "FileName",
         Fields =
         [
             R("ImportType", "Type", grp: "General"), R("FileName", "File", grp: "General"), R("ImportedOn", "On", FieldKind.Date, "General"),
@@ -368,7 +399,11 @@ public static class EntityCatalog
     };
 
     public static IReadOnlyList<EntityDef> All { get; } =
-        [Contractor, WorkOrder, Activity, ContractorActivity, RateMaster, ContractItem, RaBill, RaBillLine, Package, DrawingMaster, DrawingRegister, BomItem, LookupValue, ImportBatch];
+        [Contractor, Activity, ContractorActivity, WorkOrder,
+         RateMaster, ContractItem, RaBill, RaBillLine,
+         Package, DrawingMaster, DrawingRegister, BomItem,
+         RecordNote, Attachment,
+         LookupValue, ImportBatch];
 
     public static EntityDef Get(string name) => All.First(e => e.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
 }

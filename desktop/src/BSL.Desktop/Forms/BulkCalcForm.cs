@@ -9,7 +9,7 @@ namespace BSL.Desktop.Forms;
 /// "Use a formula" on a normal (stored) column: e.g. set Total Wt = L x W x T x 7.85 for all plates,
 /// copy the agency rate from a contractor rule, fill Status with IIF(...). Changes are saved with Save.
 /// </summary>
-public sealed class BulkCalcForm : Form
+public sealed class BulkCalcForm : StyledForm
 {
     public string ResultText { get; private set; } = "";
     readonly DataTable _table;

@@ -51,7 +51,7 @@ public static class StandardBomWriter
 
     public static void Write(BomWorkbook src, string path)
     {
-        using var wb = new XLWorkbook();
+        using var wb = TableExcel.NewWorkbook();
         var used = new HashSet<string>();
         WriteReadme(wb, src, used);
         WriteSummary(wb, src, used);

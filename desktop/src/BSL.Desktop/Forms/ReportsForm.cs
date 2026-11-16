@@ -7,7 +7,7 @@ namespace BSL.Desktop.Forms;
 /// <summary>Standard reports: preview in a grid, filter by package / agency / text, export to PDF or Excel.</summary>
 public sealed class ReportsForm : UserControl
 {
-    readonly TreeView _list = new() { Dock = DockStyle.Fill, HideSelection = false, FullRowSelect = true, Font = new Font("Segoe UI", 9.5f) };
+    readonly TreeView _list = new() { Dock = DockStyle.Fill, HideSelection = false, FullRowSelect = true, Font = new Font("Arial", 10f) };
     readonly DataGridView _grid = new()
     {
         Dock = DockStyle.Fill, ReadOnly = true, AllowUserToAddRows = false, RowHeadersVisible = false, BackgroundColor = SystemColors.Window,

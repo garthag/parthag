@@ -83,12 +83,38 @@ Every entity is described once in `EntityCatalog.cs` (field, caption, type, look
 
 ### Screens
 
+The screens are grouped like an ERP; the menu bar and the navigation use the same numbers:
+
 | Module | Screens |
 |---|---|
-| Masters | Contractor Master, Work Orders, Activity Master, Contractor Activities |
-| Contract | WO Activity Rates (internal / external), Contract BOQ Items, RA Bills, RA Bill Lines |
-| Drawings & BOM | Packages / BOM Sheets, Drawing Master, Drawing Register, BOM Items |
-| Settings | Drop-down Lists, Import History |
+| 1. Masters | Contractor Master, Activity Master, Contractor Activities, Work Orders |
+| 2. Contract & billing | WO Activity Rates (internal / external), Contract BOQ Items, RA Bills, RA Bill Lines |
+| 3. Engineering – drawings & BOM | Packages / BOM Sheets, Drawing Master, Drawing Register, BOM Items |
+| 4. Documents | Notes Register, Uploaded Files & Drawings |
+| 5. Reports | 21 standard reports, PDF / Excel |
+| 6. Import / Export | BOM workbook, contractor workbook |
+| 7. Settings | Company, logo & database; user defined fields; drop-down lists; import history |
+
+**House style.**
+* All screens, menus, grids, dialogs, PDF and Excel output use **Arial 10** in **capitals**.
+* Text is typed in capitals and stored in capitals. E-mail, password, server names and formulas keep their case.
+* Dialogs shrink to fit smaller screens.
+* Toolbars wrap onto a second line instead of hiding buttons, and buttons grow to fit their text.
+
+**Notes and attachments on every record.**
+* Every form view has a **NOTES** tab and an **ATTACHMENTS** tab.
+* **Notes** have a date, a category (general, instruction, hindrance, query, decision, follow-up), an important flag and the user's name.
+* **Attachments**: upload, drag and drop, open, save a copy and delete. Files are stored in the database (up to 100 MB each), so every user sees them and they are included in database backups.
+* **Drawings.** Drawing Master and Drawing Register have:
+  * **UPLOAD DRAWING**, which stores the file as type DRAWING with the drawing's revision.
+  * **BULK UPLOAD DRAWINGS**: choose many files at once. Each is matched to its drawing by the number in the file name, e.g. `ERC_SMS_TSSS_F-006 R1.pdf` → drawing ERC_SMS_TSSS_F-006, revision R1. Files that don't match are listed for you to rename.
+* File and note counts appear on the drawing screens.
+* Reports: *Drawings without uploaded file*, *Uploaded files register*, *Notes register*.
+
+**Company logo.**
+* Set it under *7. Settings → Company, logo & database*: company name, an address / project line and the logo. Any PNG / JPG works; it is saved as a standard PNG.
+* PDF reports: every page header has a logo box on the left, then company name and address, with the report title on the right. Without a logo, the space is kept blank.
+* Excel exports carry the logo at the top right; the dashboard shows it top right.
 
 **Form view related records:**
 
@@ -224,7 +250,7 @@ bsl selftest                                     # formula engine + standardisat
 
 Tested against **SQL Server 2022**:
 
-* schema, views and seed data (idempotent)
+* schema, views, procedures and seed data (idempotent, and upgrades an existing database)
 * importing both workbooks (15,959 BOM lines, 631 drawings, 577 register entries, 14 WOs, 479 BOQ items, 195 RA lines)
 * loading all 12 screens
 * all 14 reports rendered to PDF

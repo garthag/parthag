@@ -38,9 +38,25 @@ public static class ReportCatalog
             """, "Package", true, "Drawing master with weight from the BOM."),
         new("Drawings & BOM", "Drawing register", """
             SELECT PackageCode AS [Package], DrawingNo AS [Drawing No], SheetNo AS [Sheet], Revision AS [Rev], Purpose, Status,
-                   TransmittalNo AS [Transmittal], ReceivedDate AS [Received], IssuedToCode AS [Issued To], IssuedDate AS [Issued On], Remarks
+                   TransmittalNo AS [Transmittal], ReceivedDate AS [Received], IssuedToCode AS [Issued To], IssuedDate AS [Issued On],
+                   FileCount AS [Files], Remarks
             FROM dbo.vw_DrawingRegister ORDER BY PackageCode, DrawingNo, SheetNo, Revision
             """, "Package", true, "Every sheet / revision with transmittal and issue status."),
+        new("Drawings & BOM", "Drawings without uploaded file", """
+            SELECT PackageCode AS [Package], DrawingNo AS [Drawing No], Title, CurrentRevision AS [Rev], Status, OriginatorCode AS [Originator],
+                   BomLines AS [BOM Lines], BomWeightTon AS [BOM Wt (MT)]
+            FROM dbo.vw_DrawingMaster WHERE ISNULL(FileCount, 0) = 0 ORDER BY PackageCode, DrawingNo
+            """, "Package", true, "Drawings in the master that have no uploaded PDF / DWG yet."),
+        new("Documents", "Uploaded files register", """
+            SELECT DocType AS [Type], EntityName AS [Screen], RecordRef AS [Record], FileName AS [File], Revision AS [Rev],
+                   FileSizeKb AS [Size KB], Description, UploadedBy AS [Uploaded By], UploadedOn AS [Uploaded On]
+            FROM dbo.vw_Attachment ORDER BY DocType, RecordRef, FileName
+            """, "Type", true, "Every uploaded drawing and document."),
+        new("Documents", "Notes register", """
+            SELECT EntityName AS [Screen], RecordId AS [Record Id], NoteDate AS [Date], Category,
+                   CASE WHEN IsImportant = 1 THEN N'YES' ELSE N'' END AS [Important], NoteText AS [Note], CreatedBy AS [By]
+            FROM dbo.vw_RecordNote ORDER BY EntityName, NoteDate DESC
+            """, "Screen", true, "All notes written on any record."),
         new("Drawings & BOM", "Drawings pending (no BOM / no drawing no.)", """
             SELECT Status, DrawingNo AS [Drawing No], Title, Area, SubArea AS [Sub Area], PackageCode AS [Package], EstQty AS [Est. Qty],
                    EstWeightKg AS [Est. Wt (kg)], Remarks

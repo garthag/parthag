@@ -11,6 +11,9 @@ using BSL.Core.Reports;
 // bsl dbtest <conn> <folder>                      load every screen, run every report to PDF, CRUD + UDF round trip
 // bsl export <conn> <out.xlsx>                     normalised masters from the database to one workbook
 // bsl selftest                                     formula engine + standardisation rules (no files needed)
+PdfReport.LogoPath = Environment.GetEnvironmentVariable("BSL_LOGO");
+PdfReport.CompanyAddress = Environment.GetEnvironmentVariable("BSL_ADDRESS") ?? "";
+TableExcel.LogoPath = PdfReport.LogoPath;
 switch (args.FirstOrDefault())
 {
     case "selftest":
@@ -171,6 +174,26 @@ switch (args.FirstOrDefault())
         var x = ci.NewRow(); x["Description"] = "test"; ci.Rows.Add(x);
         x["WorkOrderId"] = Convert.ToInt32(db.Scalar("SELECT Id FROM dbo.WorkOrder WHERE UniqueNo = 'BM07'"));
         Console.WriteLine($"BOQ item: activity={x["ActivityId"]} int={x["InternalRate"]} ext={x["ExternalRate"]} type={x["ActivityType"]}");
+        return 0;
+    }
+    case "doctest" when args.Length >= 3:
+    {
+        var db = new Database(args[1]);
+        db.EnsureCreated();
+        var docs = new DocumentService(db);
+        var drg = db.Query("SELECT TOP 1 Id, DrawingNo FROM dbo.DrawingMaster WHERE DrawingNo LIKE 'ERC%' ORDER BY Id").Rows[0];
+        var dir = Path.Combine(args[2], "drawings"); Directory.CreateDirectory(dir);
+        var f1 = Path.Combine(dir, ((string)drg[1]).Replace('/', '_') + " R2.pdf"); File.WriteAllText(f1, "%PDF-1.4 test");
+        var f2 = Path.Combine(dir, "UNKNOWN-123.pdf"); File.WriteAllText(f2, "%PDF-1.4 test");
+        foreach (var m in docs.MatchDrawings([f1, f2])) Console.WriteLine($"match {Path.GetFileName(m.File)} -> {m.DrawingNo} {m.Revision}");
+        var id = docs.Upload("DrawingMaster", (int)drg[0], f1, "DRAWING", "R2", "test upload");
+        var back = docs.Extract(id);
+        Console.WriteLine($"uploaded #{id}, extracted {new FileInfo(back).Length} bytes, files on drawing = {docs.Count("Attachment", "DrawingMaster", (int)drg[0])}");
+        var nid = docs.AddNote("DrawingMaster", (int)drg[0], "check revision with consultant", "query", true);
+        Console.WriteLine($"note #{nid}: {docs.Notes("DrawingMaster", (int)drg[0]).Rows[0]["NoteText"]}");
+        Console.WriteLine("view file count = " + db.Scalar("SELECT FileCount FROM dbo.vw_DrawingMaster WHERE Id = @i", ("@i", drg[0])));
+        docs.DeleteAttachment(id); docs.DeleteNote(nid);
+        Console.WriteLine("cleaned up: files = " + docs.Count("Attachment", "DrawingMaster", (int)drg[0]));
         return 0;
     }
     case "pdftest" when args.Length >= 3:

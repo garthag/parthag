@@ -6,17 +6,17 @@ using Microsoft.Data.SqlClient;
 namespace BSL.Desktop.Forms;
 
 /// <summary>Main window: menu, navigation tree, tabbed screens, dashboard.</summary>
-public sealed class MainForm : Form
+public sealed class MainForm : StyledForm
 {
     readonly TabControl _tabs = new() { Dock = DockStyle.Fill, Padding = new Point(14, 4) };
-    readonly TreeView _nav = new() { Dock = DockStyle.Fill, HideSelection = false, FullRowSelect = true, ItemHeight = 24, Font = new Font("Segoe UI", 9.75f), BorderStyle = BorderStyle.None };
+    readonly TreeView _nav = new() { Dock = DockStyle.Fill, HideSelection = false, FullRowSelect = true, ItemHeight = 24, Font = new Font("Arial", 10f), BorderStyle = BorderStyle.None };
     readonly ToolStripStatusLabel _db = new() { Spring = true, TextAlign = ContentAlignment.MiddleLeft };
 
     public MainForm()
     {
         Text = "BSL Project Control – Drawings, BOM, Contractors & RA Bills";
         Width = 1400; Height = 860; StartPosition = FormStartPosition.CenterScreen; WindowState = FormWindowState.Maximized;
-        Font = new Font("Segoe UI", 9f);
+        Font = new Font("Arial", 10f);
         KeyPreview = true;
 
         MainMenuStrip = BuildMenu();
@@ -26,7 +26,7 @@ public sealed class MainForm : Form
         split.Panel2.Controls.Add(_tabs);
         var status = new StatusStrip();
         status.Items.Add(_db);
-        status.Items.Add(new ToolStripStatusLabel("Ctrl+S save • Ctrl+N new • F2 table/form • F5 refresh • Ctrl+F search • Ctrl+U user fields • Ctrl+K formula • Ctrl+P PDF • Ctrl+E Excel • Ctrl+W close tab"));
+        status.Items.Add(new ToolStripStatusLabel("Ctrl+S save • Ctrl+N new • F2 table/form • F5 refresh • Ctrl+F find • Ctrl+P PDF • Ctrl+E Excel"));
         Controls.Add(split);
         Controls.Add(MainMenuStrip);
         Controls.Add(status);
@@ -45,7 +45,7 @@ public sealed class MainForm : Form
             var dirty = _tabs.TabPages.Cast<TabPage>().Select(p => p.Controls.OfType<EntityBrowser>().FirstOrDefault()).Where(b => b?.HasChanges == true).ToList();
             if (dirty.Count > 0 && !Ui.Confirm($"{dirty.Count} screen(s) have unsaved changes:\n{string.Join("\n", dirty.Select(d => d!.Title))}\n\nExit without saving?")) e.Cancel = true;
         };
-        Ui.SplitterWhenSized(split, 270);
+        Ui.SplitterWhenSized(split, 320);
         Load += (_, _) => { UpdateDbLabel(); ShowHome(); };
     }
 
@@ -55,87 +55,103 @@ public sealed class MainForm : Form
         return base.ProcessCmdKey(ref msg, keyData);
     }
 
+    const string SettingsModule = "7. SETTINGS";
+    static IEnumerable<IGrouping<string, EntityDef>> Modules => EntityCatalog.All.GroupBy(e => e.Module).OrderBy(g => g.Key);
+
+    /// <summary>ERP-style menu: FILE · 1 MASTERS · 2 CONTRACT & BILLING · 3 ENGINEERING · 4 DOCUMENTS · 5 REPORTS · 6 IMPORT/EXPORT · 7 SETTINGS · HELP</summary>
     MenuStrip BuildMenu()
     {
         var m = new MenuStrip();
         var file = new ToolStripMenuItem("&File");
-        file.DropDownItems.Add("&Home / dashboard", null, (_, _) => ShowHome());
+        file.DropDownItems.Add("&Dashboard", null, (_, _) => ShowHome());
+        file.DropDownItems.Add(new ToolStripSeparator());
         file.DropDownItems.Add("New &contractor…", null, (_, _) => OpenNew(EntityCatalog.Contractor));
         file.DropDownItems.Add("New &work order…", null, (_, _) => OpenNew(EntityCatalog.WorkOrder));
         file.DropDownItems.Add("New &activity…", null, (_, _) => OpenNew(EntityCatalog.Activity));
         file.DropDownItems.Add("Link contractor to activity…", null, (_, _) => OpenNew(EntityCatalog.ContractorActivity));
         file.DropDownItems.Add("New work-order activity rate…", null, (_, _) => OpenNew(EntityCatalog.RateMaster));
-        file.DropDownItems.Add(new ToolStripSeparator());
-        file.DropDownItems.Add("&Settings (database, report header)…", null, (_, _) => OpenSettings());
+        file.DropDownItems.Add("New drawing…", null, (_, _) => OpenNew(EntityCatalog.DrawingMaster));
         file.DropDownItems.Add(new ToolStripSeparator());
         file.DropDownItems.Add("E&xit", null, (_, _) => Close());
         m.Items.Add(file);
 
-        foreach (var module in EntityCatalog.All.GroupBy(e => e.Module))
+        foreach (var module in Modules.Where(g => g.Key != SettingsModule))
         {
             var mi = new ToolStripMenuItem(module.Key.Replace("&", "&&"));
             foreach (var e in module) mi.DropDownItems.Add(e.Caption.Replace("&", "&&"), null, (_, _) => Open(e));
+            if (module.Key.StartsWith("2."))
+            {
+                mi.DropDownItems.Add(new ToolStripSeparator());
+                mi.DropDownItems.Add("Apply activity rates to BOQ – blank rates only", null, (_, _) => ApplyRates(false));
+                mi.DropDownItems.Add("Apply activity rates to BOQ – overwrite all item rates", null, (_, _) => ApplyRates(true));
+            }
             m.Items.Add(mi);
         }
 
-        var io = new ToolStripMenuItem("&Import / Export");
+        var rep = new ToolStripMenuItem("5. &Reports");
+        rep.DropDownItems.Add("Open reports (PDF / Excel)…", null, (_, _) => OpenReports());
+        m.Items.Add(rep);
+
+        var io = new ToolStripMenuItem("6. &Import / Export");
         io.DropDownItems.Add("Import / standardise &BOM workbook…", null, (_, _) => Wizard(WorkbookKind.Bom));
         io.DropDownItems.Add("Import &contractor workbook (contractors, WOs, BOQ, RA)…", null, (_, _) => Wizard(WorkbookKind.Contractor));
         io.DropDownItems.Add(new ToolStripSeparator());
         io.DropDownItems.Add("Each screen has Excel > Export / Import / Template", null, null!).Enabled = false;
         m.Items.Add(io);
 
-        var rep = new ToolStripMenuItem("&Reports");
-        rep.DropDownItems.Add("Open &reports…", null, (_, _) => OpenReports());
-        m.Items.Add(rep);
-
-        var tools = new ToolStripMenuItem("&Tools");
-        tools.DropDownItems.Add("User defined fields – choose screen…", null, (_, _) =>
-        {
-            var e = PickDialog.Show("User defined fields", "Screen:", EntityCatalog.All.Where(x => x.Fields.Any(f => !f.ReadOnly)).Select(x => x.Caption).ToList());
-            if (e == null) return;
-            var def = EntityCatalog.All.First(x => x.Caption == e);
-            using var f = new UdfManagerForm(def, Program.Repo.Load(def, "1 = 0"));
-            f.ShowDialog(this);
-            foreach (var b in Browsers().Where(b => b.Entity == def)) b.Reload();
-        });
-        tools.DropDownItems.Add("Auto-link activities (work orders, BOQ, contractors, rates, packages, drawings)", null, (_, _) => LinkActivities());
-        tools.DropDownItems.Add("Apply activity rates to BOQ – blank rates only", null, (_, _) => ApplyRates(false));
-        tools.DropDownItems.Add("Apply activity rates to BOQ – overwrite all item rates", null, (_, _) => ApplyRates(true));
-        tools.DropDownItems.Add(new ToolStripSeparator());
-        tools.DropDownItems.Add("Drop-down lists…", null, (_, _) => Open(EntityCatalog.LookupValue));
-        tools.DropDownItems.Add("Import history…", null, (_, _) => Open(EntityCatalog.ImportBatch));
-        m.Items.Add(tools);
+        var set = new ToolStripMenuItem("7. &Settings");
+        set.DropDownItems.Add("Company, logo && database…", null, (_, _) => OpenSettings());
+        set.DropDownItems.Add("User defined fields – choose screen…", null, (_, _) => OpenUdfManager());
+        set.DropDownItems.Add("Auto-link activities", null, (_, _) => LinkActivities());
+        set.DropDownItems.Add(new ToolStripSeparator());
+        foreach (var e in Modules.Where(g => g.Key == SettingsModule).SelectMany(g => g)) set.DropDownItems.Add(e.Caption, null, (_, _) => Open(e));
+        m.Items.Add(set);
 
         var help = new ToolStripMenuItem("&Help");
         help.DropDownItems.Add("&About", null, (_, _) => Ui.Info(
-            "BSL Project Control 1.0\n\nDrawing register & master, standardised BOM, contractor & work order master, " +
-            "internal / external rates, BOQ, RA bills, user defined fields with formulas, Excel import/export and PDF reports.\n\n" +
+            "BSL Project Control 1.1\n\nMasters, contract & billing (BOQ, RA bills, internal / external rates), engineering (drawing master, " +
+            "drawing register with uploaded drawings, standardised BOM), notes and attachments on every record, user defined fields with " +
+            "formulas, Excel import / export and PDF reports with company logo.\n\n" +
             "Database: " + new SqlConnectionStringBuilder(Program.Db.ConnectionString).InitialCatalog));
         m.Items.Add(help);
         return m;
     }
 
+    void OpenUdfManager()
+    {
+        var e = PickDialog.Show("User defined fields", "Screen:", EntityCatalog.All.Where(x => x.Fields.Any(f => !f.ReadOnly)).Select(x => x.Caption).ToList());
+        if (e == null) return;
+        var def = EntityCatalog.All.First(x => x.Caption == e);
+        using var f = new UdfManagerForm(def, Program.Repo.Load(def, "1 = 0"));
+        f.ShowDialog(this);
+        foreach (var b in Browsers().Where(b => b.Entity == def)) b.Reload();
+    }
+
     void BuildNav()
     {
+        var bold = new Font("Arial", 10f, FontStyle.Bold);
         var home = _nav.Nodes.Add("Dashboard");
-        home.Tag = "home";
-        foreach (var module in EntityCatalog.All.GroupBy(e => e.Module))
+        home.Tag = "home"; home.NodeFont = bold;
+        foreach (var module in Modules.Where(g => g.Key != SettingsModule))
         {
             var n = _nav.Nodes.Add(module.Key);
-            n.NodeFont = new Font("Segoe UI", 9.75f, FontStyle.Bold);
+            n.NodeFont = bold;
             foreach (var e in module) n.Nodes.Add(new TreeNode(e.Caption) { Tag = e });
             n.Expand();
         }
-        var io = _nav.Nodes.Add("Import / Export");
-        io.NodeFont = new Font("Segoe UI", 9.75f, FontStyle.Bold);
-        io.Nodes.Add(new TreeNode("Import / standardise BOM workbook") { Tag = WorkbookKind.Bom });
+        var rep = _nav.Nodes.Add("5. Reports (PDF / Excel)");
+        rep.NodeFont = bold; rep.Tag = "reports";
+        var io = _nav.Nodes.Add("6. Import / Export");
+        io.NodeFont = bold;
+        io.Nodes.Add(new TreeNode("Import BOM workbook") { Tag = WorkbookKind.Bom });
         io.Nodes.Add(new TreeNode("Import contractor workbook") { Tag = WorkbookKind.Contractor });
         io.Expand();
-        var rep = _nav.Nodes.Add("Reports (PDF / Excel)");
-        rep.NodeFont = new Font("Segoe UI", 9.75f, FontStyle.Bold);
-        home.NodeFont = new Font("Segoe UI", 9.75f, FontStyle.Bold);
-        rep.Tag = "reports";
+        var set = _nav.Nodes.Add(SettingsModule);
+        set.NodeFont = bold;
+        set.Nodes.Add(new TreeNode("Company, logo & database") { Tag = "settings" });
+        set.Nodes.Add(new TreeNode("User defined fields") { Tag = "udf" });
+        foreach (var e in Modules.Where(g => g.Key == SettingsModule).SelectMany(g => g)) set.Nodes.Add(new TreeNode(e.Caption) { Tag = e });
+        set.Expand();
         _nav.NodeMouseClick += (_, e) =>
         {
             switch (e.Node.Tag)
@@ -144,6 +160,8 @@ public sealed class MainForm : Form
                 case WorkbookKind k: Wizard(k); break;
                 case "home": ShowHome(); break;
                 case "reports": OpenReports(); break;
+                case "settings": OpenSettings(); break;
+                case "udf": OpenUdfManager(); break;
             }
         };
     }
@@ -239,7 +257,7 @@ public sealed class MainForm : Form
     void UpdateDbLabel()
     {
         var b = new SqlConnectionStringBuilder(Program.Db.ConnectionString);
-        _db.Text = $"Database: {b.InitialCatalog} on {b.DataSource}   •   User: {Program.Settings.PreparedBy}";
+        _db.Text = $"DB: {b.InitialCatalog} ON {b.DataSource} • {Program.Settings.PreparedBy}";
     }
 
     // ------------------------------------------------------------------ dashboard
@@ -285,9 +303,22 @@ public sealed class MainForm : Form
                        (SELECT COUNT(*) FROM dbo.ContractItem WHERE IsGroupHeader = 0 AND ActivityId IS NULL) AS NoActItems
                 """).Rows[0];
             decimal D(string c) => k[c] is DBNull ? 0 : Convert.ToDecimal(k[c]);
-            var head = new Label { Text = "Project dashboard", Font = new Font("Segoe UI", 16f, FontStyle.Bold), ForeColor = Ui.Accent, Dock = DockStyle.Top, Height = 48, Padding = new Padding(20, 12, 0, 0) };
+            // header: company / dashboard title on the left, company logo on the right
+            var head = new Panel { Dock = DockStyle.Top, Height = 72, Padding = new Padding(20, 8, 20, 4) };
+            var title = new Label
+            {
+                Text = Program.Settings.CompanyName + "\nProject dashboard" + (Program.Settings.CompanyAddress.Length > 0 ? "  –  " + Program.Settings.CompanyAddress : ""),
+                Font = new Font("Arial", 14f, FontStyle.Bold), ForeColor = Ui.Accent, Dock = DockStyle.Fill
+            };
+            head.Controls.Add(title);
+            if (Program.Settings.LogoPath is { } lp && File.Exists(lp))
+            {
+                var pic = new PictureBox { Dock = DockStyle.Right, Width = 220, SizeMode = PictureBoxSizeMode.Zoom };
+                using (var fs = File.OpenRead(lp)) pic.Image = Image.FromStream(fs).Clone() as Image;
+                head.Controls.Add(pic);
+            }
             page.Controls.Add(head);
-            var quick = new FlowLayoutPanel { Dock = DockStyle.Top, Height = 44, Padding = new Padding(16, 4, 0, 0) };
+            var quick = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, Padding = new Padding(16, 4, 0, 4) };
             quick.Controls.AddRange(
             [
                 Ui.Button("+ New contractor", (_, _) => OpenNew(EntityCatalog.Contractor), 140),
@@ -305,8 +336,8 @@ public sealed class MainForm : Form
             {
                 var p = new Panel { Width = 250, Height = 110, Margin = new Padding(8), BackColor = Color.White, BorderStyle = BorderStyle.FixedSingle, Cursor = click != null ? Cursors.Hand : Cursors.Default };
                 p.Controls.Add(new Label { Text = sub, Dock = DockStyle.Top, Height = 22, ForeColor = Color.DimGray, Padding = new Padding(10, 2, 0, 0) });
-                p.Controls.Add(new Label { Text = value, Dock = DockStyle.Top, Height = 46, Font = new Font("Segoe UI", 20f, FontStyle.Bold), ForeColor = Ui.Accent, Padding = new Padding(8, 0, 0, 0) });
-                p.Controls.Add(new Label { Text = title, Dock = DockStyle.Top, Height = 26, Font = new Font("Segoe UI", 9.5f, FontStyle.Bold), Padding = new Padding(10, 6, 0, 0) });
+                p.Controls.Add(new Label { Text = value, Dock = DockStyle.Top, Height = 46, Font = new Font("Arial", 20f, FontStyle.Bold), ForeColor = Ui.Accent, Padding = new Padding(8, 0, 0, 0) });
+                p.Controls.Add(new Label { Text = title, Dock = DockStyle.Top, Height = 26, Font = new Font("Arial", 10f, FontStyle.Bold), Padding = new Padding(10, 6, 0, 0) });
                 if (click != null) foreach (Control c in p.Controls.Cast<Control>().Append(p)) c.Click += (_, _) => click();
                 flow.Controls.Add(p);
             }
@@ -316,17 +347,18 @@ public sealed class MainForm : Form
             Tile("BOM weight (all sets)", $"{D("BomTon"):N1} MT", $"{k["Packages"]} packages • {k["BomLines"]:N0} lines", () => Open(EntityCatalog.Package));
             Tile("Contract scope (R1)", $"{D("ScopeTon"):N1} MT", $"executed {D("ExecTon"):N1} MT", () => Open(EntityCatalog.ContractItem));
             Tile("Margin (both rates known)", $"₹ {D("MarginAmt") / 100000m:N1} L", $"{k["NoRate"]} items missing a rate", OpenReports);
-            Tile("Activities", $"{k["Activities"]}", $"{k["ConAct"]} contractor links • {k["NoActItems"]} items w/o activity", () => Open(EntityCatalog.Activity));
+            Tile("Activities", $"{k["Activities"]}", $"{k["ConAct"]} links • {k["NoActItems"]} w/o activity", () => Open(EntityCatalog.Activity));
             Tile("BOM lines with flags", $"{k["Flags"]:N0}", "corrected / to check", OpenReports);
 
             var help = new Label
             {
-                AutoSize = false, Width = 1100, Height = 170, UseMnemonic = false, Margin = new Padding(8, 24, 8, 8), ForeColor = Color.DimGray, Font = new Font("Segoe UI", 9.5f),
+                AutoSize = false, Width = 1150, Height = 200, UseMnemonic = false, Margin = new Padding(8, 24, 8, 8), ForeColor = Color.DimGray, Font = new Font("Arial", 10f),
                 Text = "Getting started\n" +
-                       "1.  Import / Export > Import contractor workbook – loads contractors, work orders (BM01…), BOQ with external (supply) and internal (agency) rates, RA bills and the drawing scope list.\n" +
-                       "2.  Import / Export > Import / standardise BOM workbook – all BOM sheets are mapped to one standard layout; packages, drawing master and drawing register are created.\n" +
-                       "3.  Open any screen: switch between Table view and Form view (F2). Add your own fields under 'Fields & formulas' – formulas can use contractor details and rates.\n" +
-                       "4.  Reports: preview, filter by package / agency and export to PDF or Excel. Every screen also has Excel export / import and PDF list / record card."
+                       "1.  6. Import / Export > Import contractor workbook – contractors, work orders, BOQ with external (supply) and internal (agency) rates, RA bills, drawing scope. Activities are linked automatically.\n" +
+                       "2.  6. Import / Export > Import BOM workbook – all BOM sheets in one standard layout; packages, drawing master and drawing register are created.\n" +
+                       "3.  3. Engineering > Drawing Master / Drawing Register – Upload drawing (or Bulk upload drawings: files are matched by drawing number). Every record has NOTES and ATTACHMENTS tabs.\n" +
+                       "4.  Any screen: Table view / Form view (F2), Fields & formulas for your own fields, Excel import / export, PDF list and record card.\n" +
+                       "5.  5. Reports – preview, filter by package / agency, export to PDF or Excel (with your logo from 7. Settings > Company, logo & database)."
             };
             flow.SetFlowBreak(flow.Controls[^1], true);
             flow.Controls.Add(help);

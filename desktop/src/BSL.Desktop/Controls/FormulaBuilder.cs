@@ -9,7 +9,7 @@ namespace BSL.Desktop.Controls;
 /// </summary>
 public sealed class FormulaBuilder : UserControl
 {
-    readonly TextBox _formula = new() { Multiline = true, Dock = DockStyle.Fill, Font = new Font("Consolas", 10f), ScrollBars = ScrollBars.Vertical };
+    readonly TextBox _formula = new() { Multiline = true, Dock = DockStyle.Fill, Font = new Font("Arial", 10f), ScrollBars = ScrollBars.Vertical };
     readonly ListBox _fields = new() { Dock = DockStyle.Fill, IntegralHeight = false };
     readonly TextBox _fieldFilter = new() { Dock = DockStyle.Top, PlaceholderText = "find field…" };
     readonly ListBox _functions = new() { Dock = DockStyle.Fill, IntegralHeight = false };

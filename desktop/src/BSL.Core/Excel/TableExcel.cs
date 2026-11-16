@@ -11,10 +11,24 @@ public static class TableExcel
     public static void Export(string path, string title, DataTable table, IList<FieldDef> fields, IEnumerable<DataRow>? rows = null,
                               string? subtitle = null, bool includeIdColumn = true)
     {
-        using var wb = new XLWorkbook();
+        using var wb = NewWorkbook();
         AddSheet(wb, title, table, fields, rows, subtitle, includeIdColumn);
         wb.SaveAs(path);
     }
+
+    /// <summary>PNG / JPG logo placed at the top right of exported sheets (optional).</summary>
+    public static string? LogoPath { get; set; }
+
+    /// <summary>Workbook with the house style: Arial 10.</summary>
+    public static XLWorkbook NewWorkbook()
+    {
+        var wb = new XLWorkbook();
+        wb.Style.Font.FontName = "Arial";
+        wb.Style.Font.FontSize = 10;
+        return wb;
+    }
+
+    static string U(string s) => s.Contains('@') ? s : s.ToUpperInvariant();
 
     public static IXLWorksheet AddSheet(XLWorkbook wb, string title, DataTable table, IList<FieldDef> fields, IEnumerable<DataRow>? rows = null,
                                         string? subtitle = null, bool includeIdColumn = true)
@@ -26,12 +40,12 @@ public static class TableExcel
             cols.Add((f.Name, f.Caption, f));
         var data = (rows ?? table.Rows.Cast<DataRow>()).Where(r => r.RowState != DataRowState.Deleted).ToList();
 
-        ws.Cell(1, 1).Value = title;
-        ws.Cell(1, 1).Style.Font.SetBold().Font.SetFontSize(14);
-        ws.Cell(2, 1).Value = subtitle ?? $"Exported {DateTime.Now:dd-MM-yyyy HH:mm}  •  {data.Count} rows";
+        ws.Cell(1, 1).Value = U(title);
+        ws.Cell(1, 1).Style.Font.SetBold().Font.SetFontSize(12);
+        ws.Cell(2, 1).Value = U(subtitle ?? $"Exported {DateTime.Now:dd-MM-yyyy HH:mm}  •  {data.Count} rows");
         ws.Cell(2, 1).Style.Font.SetItalic();
         const int hr = 4;
-        for (int c = 0; c < cols.Count; c++) ws.Cell(hr, c + 1).Value = cols[c].Caption;
+        for (int c = 0; c < cols.Count; c++) ws.Cell(hr, c + 1).Value = U(cols[c].Caption);
 
         var lookups = new Dictionary<string, Dictionary<int, string>>();
         for (int i = 0; i < data.Count; i++)
@@ -49,7 +63,7 @@ public static class TableExcel
                 cell.Value = v switch
                 {
                     decimal d => (double)d, double d => d, int n => n, long l => l, short s => s,
-                    DateTime dt => dt, bool b => b ? "Yes" : "No", _ => v.ToString()
+                    DateTime dt => dt, bool b => b ? "YES" : "NO", _ => U(v.ToString() ?? "")
                 };
             }
         int last = hr + data.Count;
@@ -76,6 +90,16 @@ public static class TableExcel
         var h = ws.Range(hr, 1, hr, Math.Max(1, cols.Count));
         h.Style.Font.SetBold().Font.SetFontColor(XLColor.White).Fill.SetBackgroundColor(XLColor.FromHtml("#1F4E78")).Alignment.SetWrapText();
         ws.SheetView.FreezeRows(hr);
+        if (!string.IsNullOrWhiteSpace(LogoPath) && File.Exists(LogoPath))
+        {
+            try
+            {
+                var pic = ws.AddPicture(LogoPath).MoveTo(ws.Cell(1, Math.Max(4, cols.Count)));
+                pic.Scale(48.0 / Math.Max(1, pic.OriginalHeight));
+                ws.Row(1).Height = 22; ws.Row(2).Height = 18;
+            }
+            catch { /* unreadable image: export without logo */ }
+        }
         return ws;
     }
 
@@ -85,13 +109,13 @@ public static class TableExcel
     /// <summary>Blank template with the entity's columns (for filling in Excel and importing back).</summary>
     public static void Template(string path, EntityDef e, IList<FieldDef> fields)
     {
-        using var wb = new XLWorkbook();
+        using var wb = NewWorkbook();
         var ws = wb.AddWorksheet(ExcelUtil.SafeSheetName(e.Name));
         var writable = fields.Where(f => !f.ReadOnly).ToList();
-        ws.Cell(1, 1).Value = "Id";
+        ws.Cell(1, 1).Value = "ID";
         for (int c = 0; c < writable.Count; c++)
         {
-            ws.Cell(1, c + 2).Value = writable[c].Caption;
+            ws.Cell(1, c + 2).Value = writable[c].Caption.ToUpperInvariant();
             var note = writable[c].Kind switch
             {
                 FieldKind.Lookup => "Type the code (e.g. GRE / BM05 / drawing no.) or the text shown in the app",

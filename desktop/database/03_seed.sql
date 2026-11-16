@@ -24,7 +24,11 @@ USING (VALUES
     (N'Discipline', N'Refractory', 4), (N'Discipline', N'Electrical', 5),
     (N'DrawingType', N'GA', 1), (N'DrawingType', N'Fabrication', 2), (N'DrawingType', N'Erection / Marking Plan', 3),
     (N'DrawingType', N'Detail', 4), (N'DrawingType', N'Scope item', 5),
-    (N'RowType', N'PART', 1), (N'RowType', N'ASSEMBLY', 2)
+    (N'RowType', N'PART', 1), (N'RowType', N'ASSEMBLY', 2),
+    (N'NoteCategory', N'GENERAL', 1), (N'NoteCategory', N'INSTRUCTION', 2), (N'NoteCategory', N'HINDRANCE', 3),
+    (N'NoteCategory', N'QUERY', 4), (N'NoteCategory', N'DECISION', 5), (N'NoteCategory', N'FOLLOW-UP', 6),
+    (N'DocType', N'DRAWING', 1), (N'DocType', N'TRANSMITTAL', 2), (N'DocType', N'WORK ORDER', 3), (N'DocType', N'RA BILL', 4),
+    (N'DocType', N'PHOTO', 5), (N'DocType', N'LETTER', 6), (N'DocType', N'DOCUMENT', 7)
 ) AS s (Category, Value, SortOrder)
 ON t.Category = s.Category AND t.Value = s.Value
 WHEN NOT MATCHED THEN INSERT (Category, Value, SortOrder) VALUES (s.Category, s.Value, s.SortOrder);
@@ -83,4 +87,8 @@ USING (VALUES
 ON t.ActivityCode = s.ActivityCode
 WHEN NOT MATCHED THEN INSERT (ActivityCode, Name, ServiceType, WorkCategory, Unit, SortOrder)
      VALUES (s.ActivityCode, s.Name, s.ServiceType, s.WorkCategory, s.Unit, s.SortOrder);
+GO
+
+/* house style: drop-down values in capitals (collation is case-insensitive, so no duplicates arise) */
+UPDATE dbo.LookupValue SET Value = UPPER(Value) WHERE Value COLLATE Latin1_General_CS_AS <> UPPER(Value);
 GO

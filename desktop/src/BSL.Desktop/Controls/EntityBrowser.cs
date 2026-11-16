@@ -40,7 +40,8 @@ public sealed class EntityBrowser : UserControl
     readonly HashSet<string> _hiddenCols = [];
     string _advancedFilter = "";
 
-    readonly ToolStrip _tools = new() { GripStyle = ToolStripGripStyle.Hidden, Padding = new Padding(4, 2, 4, 2), ImageScalingSize = new Size(16, 16) };
+    // Flow layout: the toolbar wraps onto a second line on smaller screens instead of hiding buttons
+    readonly ToolStrip _tools = new() { GripStyle = ToolStripGripStyle.Hidden, Padding = new Padding(4, 2, 4, 2), ImageScalingSize = new Size(16, 16), LayoutStyle = ToolStripLayoutStyle.Flow };
     readonly ToolStripButton _btnGrid = new("Table view") { CheckOnClick = false, Checked = true };
     readonly ToolStripButton _btnForm = new("Form view") { CheckOnClick = false };
     readonly ToolStripTextBox _search = new() { Width = 180, ToolTipText = "Quick search in all text columns" };
@@ -135,6 +136,13 @@ public sealed class EntityBrowser : UserControl
             new ToolStripSeparator(), new ToolStripLabel("Search:"), _search,
             new ToolStripSeparator(), excel, pdf, fields
         });
+        if (HasDocuments)
+        {
+            _tools.Items.Add(new ToolStripSeparator());
+            var drawing = Entity.Name is "DrawingMaster" or "DrawingRegister";
+            _tools.Items.Add(B(drawing ? "Upload drawing" : "Attach file", "Upload files for the current record", ShowAttachments));
+            if (drawing) _tools.Items.Add(B("Bulk upload drawings", "Upload many drawing files; they are matched to drawings by the number in the file name", BulkUploadDrawings));
+        }
     }
 
     static string ShortcutText(Keys k) =>
@@ -248,8 +256,50 @@ public sealed class EntityBrowser : UserControl
         _statusText.Text = $"Saved: {i} added, {u} updated, {d} deleted.";
     }
 
+    bool HasDocuments => Entity.Name is not ("RecordNote" or "Attachment" or "LookupValue" or "ImportBatch");
+
+    static bool IsCaseSensitive(FieldDef f) =>
+        f.Name.Contains("Email", StringComparison.OrdinalIgnoreCase) || f.Name.Contains("Mail", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>Switches to the form view on the ATTACHMENTS tab (upload drawings / documents for the current record).</summary>
+    void ShowAttachments()
+    {
+        if (Current?[Entity.Key] is not int id || id <= 0) { Ui.Error("Select a saved record first."); return; }
+        ShowGrid(false);
+        var page = _children.TabPages.Cast<TabPage>().FirstOrDefault(p => p.Tag is "files");
+        if (page != null) _children.SelectedTab = page;
+    }
+
+    void BulkUploadDrawings()
+    {
+        using var d = new OpenFileDialog
+        {
+            Title = "Bulk upload drawings – file names must contain the drawing number", Multiselect = true,
+            Filter = "Drawings|*.pdf;*.dwg;*.dxf;*.tif;*.tiff;*.jpg;*.png|All files|*.*"
+        };
+        if (d.ShowDialog(this) != DialogResult.OK) return;
+        var docs = new DocumentService(Program.Db);
+        var matches = docs.MatchDrawings(d.FileNames);
+        var ok = matches.Where(m => m.DrawingId != null).ToList();
+        var miss = matches.Where(m => m.DrawingId == null).Select(m => Path.GetFileName(m.File)).ToList();
+        var msg = $"{ok.Count} of {matches.Count} files match a drawing number:\n" +
+                  string.Join("\n", ok.Take(15).Select(m => $"  {Path.GetFileName(m.File)}  ->  {m.DrawingNo} {m.Revision}")) +
+                  (ok.Count > 15 ? $"\n  ... {ok.Count - 15} more" : "") +
+                  (miss.Count > 0 ? $"\n\nNot matched ({miss.Count}) - rename them or upload from the drawing's ATTACHMENTS tab:\n  " + string.Join("\n  ", miss.Take(10)) : "");
+        if (ok.Count == 0) { Ui.Info(msg); return; }
+        msg += "\n\nUpload the matched files now?";
+        if (!Ui.Confirm(msg)) return;
+        Ui.Busy(this, () =>
+        {
+            foreach (var m in ok) docs.Upload("DrawingMaster", m.DrawingId!.Value, m.File, "DRAWING", m.Revision);
+            Reload();
+            Ui.Info($"{ok.Count} drawings uploaded.");
+        });
+    }
+
     void AddNew()
     {
+        if (!Entity.AllowNew) { _statusText.Text = "Records here are created by the system (upload / notes / import)."; return; }
         if (!Entity.WritableFields.Any()) { _statusText.Text = "This list is read only."; return; }
         var v = (DataRowView)_bs.AddNew()!;
         foreach (var f in _fields.Where(f => !f.ReadOnly))
@@ -258,7 +308,7 @@ public sealed class EntityBrowser : UserControl
             else if (f.Kind == FieldKind.Bool && !f.IsUdf) v[f.Name] = false;
             if (f.Name == "NoOfSets") v[f.Name] = 1;
             if (f.Name == "Status" && f.ChoiceCategory != null && Program.Repo.Choices(f.ChoiceCategory).FirstOrDefault() is { } st) v[f.Name] = st;
-            if (f.Name == "ContractorType") v[f.Name] = "Executing Agency";
+            if (f.Name == "ContractorType") v[f.Name] = "EXECUTING AGENCY";
             if (f.Name == "IsApproved") v[f.Name] = true;
             if (f.Name == "Unit" && Entity.Name == "Activity") v[f.Name] = "MT";
         }
@@ -342,7 +392,7 @@ public sealed class EntityBrowser : UserControl
         _grid.EnableHeadersVisualStyles = false;
         _grid.ColumnHeadersDefaultCellStyle.BackColor = Ui.Accent;
         _grid.ColumnHeadersDefaultCellStyle.ForeColor = Color.White;
-        _grid.ColumnHeadersDefaultCellStyle.Font = new Font("Segoe UI", 9f, FontStyle.Bold);
+        _grid.ColumnHeadersDefaultCellStyle.Font = new Font("Arial", 10f, FontStyle.Bold);
         _grid.ColumnHeadersDefaultCellStyle.WrapMode = DataGridViewTriState.True;
         _grid.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.AutoSize;
         _grid.AlternatingRowsDefaultCellStyle.BackColor = Color.FromArgb(248, 250, 252);
@@ -443,7 +493,7 @@ public sealed class EntityBrowser : UserControl
 
     void ChooseColumns()
     {
-        using var f = new Form { Text = "Show / hide columns", Width = 360, Height = 520, StartPosition = FormStartPosition.CenterParent, FormBorderStyle = FormBorderStyle.SizableToolWindow };
+        using var f = new StyledForm { Text = "Show / hide columns", Width = 360, Height = 520, StartPosition = FormStartPosition.CenterParent, FormBorderStyle = FormBorderStyle.SizableToolWindow };
         var list = new CheckedListBox { Dock = DockStyle.Fill, CheckOnClick = true };
         var cols = _grid.Columns.Cast<DataGridViewColumn>().Where(c => c.Tag is FieldDef).ToList();
         foreach (var c in cols) list.Items.Add(c.HeaderText, c.Visible);
@@ -527,7 +577,21 @@ public sealed class EntityBrowser : UserControl
             page.Controls.Add(bar);
             _children.TabPages.Add(page);
         }
-        _formSplit.Panel2Collapsed = Entity.Children.Count == 0;
+        if (HasDocuments)
+        {
+            var np = new TabPage("NOTES") { Tag = "notes" };
+            var notes = new NotesPanel();
+            notes.CountChanged += n => np.Text = $"NOTES ({n})";
+            np.Controls.Add(notes);
+            var fp = new TabPage("ATTACHMENTS") { Tag = "files" };
+            var files = new AttachmentsPanel();
+            files.CountChanged += n => fp.Text = $"ATTACHMENTS ({n})";
+            fp.Controls.Add(files);
+            // drawings: files first – that is where uploaded drawings are looked for
+            if (Entity.Name is "DrawingMaster" or "DrawingRegister") { _children.TabPages.Insert(0, fp); _children.TabPages.Add(np); }
+            else { _children.TabPages.Add(np); _children.TabPages.Add(fp); }
+        }
+        _formSplit.Panel2Collapsed = _children.TabPages.Count == 0;
     }
 
     void FormFieldsResize(object? sender, EventArgs e)
@@ -559,7 +623,9 @@ public sealed class EntityBrowser : UserControl
             {
                 var cb = new ComboBox { DropDownStyle = ComboBoxStyle.DropDown, AutoCompleteMode = AutoCompleteMode.SuggestAppend, AutoCompleteSource = AutoCompleteSource.ListItems };
                 cb.Items.AddRange(Program.Repo.Choices(f.ChoiceCategory!).Cast<object>().ToArray());
-                cb.DataBindings.Add(new Binding("Text", _bs, f.Name, true, mode, "") { DataSourceNullValue = DBNull.Value });
+                var cbb = new Binding("Text", _bs, f.Name, true, mode, "") { DataSourceNullValue = DBNull.Value };
+                cbb.Format += (_, e) => { if (e.Value is string sv) e.Value = sv.ToUpperInvariant(); };
+                cb.DataBindings.Add(cbb);
                 cb.Enabled = !f.ReadOnly;
                 c = cb;
                 break;
@@ -584,6 +650,9 @@ public sealed class EntityBrowser : UserControl
                     FieldKind.Date => "dd-MM-yyyy", _ => ""
                 };
                 var b = new Binding("Text", _bs, f.Name, true, mode, "", fmt) { DataSourceNullValue = DBNull.Value };
+                if (IsCaseSensitive(f)) tb.Tag = UiStyle.NoCaps;
+                else if (f.Kind is FieldKind.Text or FieldKind.Memo)
+                    b.Format += (_, e) => { if (e.Value is string sv) e.Value = sv.ToUpperInvariant(); };
                 if (f.Kind == FieldKind.Date)
                 {
                     b.Parse += (_, e) =>
@@ -624,6 +693,19 @@ public sealed class EntityBrowser : UserControl
         var id = Current?[Entity.Key] as int?;
         foreach (TabPage page in _children.TabPages)
         {
+            if (page.Tag is "notes" && page.Controls[0] is NotesPanel np)
+            {
+                var n = id is > 0 ? np.SetRecord(Entity.Name, id.Value) : 0;
+                page.Text = $"NOTES ({n})";
+                continue;
+            }
+            if (page.Tag is "files" && page.Controls[0] is AttachmentsPanel ap)
+            {
+                var n = id is > 0 ? ap.SetRecord(Entity.Name, id.Value, () => Current is { } cr && cr.Table.Columns.Contains("Revision") ? cr["Revision"] as string
+                                                                            : Current is { } cr2 && cr2.Table.Columns.Contains("CurrentRevision") ? cr2["CurrentRevision"] as string : null) : 0;
+                page.Text = $"ATTACHMENTS ({n})";
+                continue;
+            }
             var (def, fk) = ((EntityDef, string))page.Tag!;
             var grid = page.Controls.OfType<DataGridView>().First();
             var info = page.Controls.OfType<FlowLayoutPanel>().First().Controls.OfType<Label>().First();
@@ -715,7 +797,8 @@ public sealed class EntityBrowser : UserControl
             var numeric = kind is ColKind.Money or ColKind.Number or ColKind.Int;
             t.Columns.Add(f.Name, numeric ? typeof(decimal) : kind == ColKind.Date ? typeof(DateTime) : typeof(string));
             var total = numeric && kind != ColKind.Int && !f.Name.Contains("Rate") && !f.Name.Contains("Pct");
-            cols.Add(new ReportColumn(f.Name, f.Caption, kind, kind == ColKind.Text ? Math.Max(1, f.Width / 80.0) : 0.9, total));
+            cols.Add(new ReportColumn(f.Name, f.Caption, kind,
+                kind switch { ColKind.Text => Math.Max(1, f.Width / 80.0), ColKind.Money => 1.45, ColKind.Date => 1.15, ColKind.Number => 1.1, _ => 0.8 }, total));
         }
         foreach (var r in FilteredRows())
         {

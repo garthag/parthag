@@ -6,7 +6,7 @@ using BSL.Desktop.Controls;
 namespace BSL.Desktop.Forms;
 
 /// <summary>Add / edit / delete user defined fields of one entity (Text, Number, Date, Yes/No, List, Formula).</summary>
-public sealed class UdfManagerForm : Form
+public sealed class UdfManagerForm : StyledForm
 {
     readonly EntityDef _entity;
     readonly DataTable _schema;
@@ -70,7 +70,7 @@ public sealed class UdfManagerForm : Form
     }
 }
 
-public sealed class UdfEditForm : Form
+public sealed class UdfEditForm : StyledForm
 {
     public UdfDefinition Definition { get; }
     readonly TextBox _caption = new() { Width = 300 };

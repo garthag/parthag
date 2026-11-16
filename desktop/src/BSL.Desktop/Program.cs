@@ -15,6 +15,7 @@ internal static class Program
     static void Main()
     {
         Settings = AppSettings.Load();
+        Application.SetDefaultFont(new Font(UiStyle.FontName, UiStyle.FontSize));   // house style: Arial 10
         Application.SetHighDpiMode(Enum.TryParse<HighDpiMode>(Settings.HighDpiMode, true, out var dpi) ? dpi : HighDpiMode.SystemAware);
         Application.EnableVisualStyles();
         Application.SetCompatibleTextRenderingDefault(false);
@@ -49,6 +50,9 @@ internal static class Program
         Repo = new EntityRepository(db);
         PdfReport.CompanyName = Settings.CompanyName;
         PdfReport.PreparedBy = Settings.PreparedBy;
+        PdfReport.CompanyAddress = Settings.CompanyAddress;
+        PdfReport.LogoPath = Settings.LogoPath;
+        TableExcel.LogoPath = Settings.LogoPath;
         TableExcel.LookupText = lk => Repo.LookupData(lk).Rows.Cast<System.Data.DataRow>()
                                           .ToDictionary(r => Convert.ToInt32(r[0]), r => r[1]?.ToString() ?? "");
         Cursor.Current = Cursors.Default;

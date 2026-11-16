@@ -10,6 +10,11 @@ public sealed class AppSettings
     public string CompanyName { get; set; } = "BSL BF#3 Revamp – Project Control";
     public string PreparedBy { get; set; } = Environment.UserName;
     public string? LastFolder { get; set; }
+    /// <summary>Second report header line: address / project / contract reference.</summary>
+    public string CompanyAddress { get; set; } = "";
+    /// <summary>Logo copied into the settings folder (PNG / JPG); printed on reports, Excel and the dashboard.</summary>
+    public string? LogoPath { get; set; }
+    public static string Folder => Dir;
     /// <summary>SystemAware (default), PerMonitorV2 or DpiUnaware (useful on remote desktop / Citrix).</summary>
     public string HighDpiMode { get; set; } = "SystemAware";
 

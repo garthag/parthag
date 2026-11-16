@@ -5,13 +5,13 @@ public static class InputDialog
 {
     public static string? Show(string title, string prompt, string value = "", bool multiline = false)
     {
-        using var f = new Form
+        using var f = new StyledForm
         {
             Text = title, Width = 640, Height = multiline ? 380 : 190, StartPosition = FormStartPosition.CenterParent,
             FormBorderStyle = FormBorderStyle.SizableToolWindow, MinimizeBox = false, MaximizeBox = false
         };
         var lbl = new Label { Text = prompt, Dock = DockStyle.Top, Height = multiline ? 120 : 36, Padding = new Padding(8) };
-        var tb = new TextBox { Text = value, Dock = DockStyle.Fill, Multiline = multiline, Font = new Font("Consolas", 10f) };
+        var tb = new TextBox { Text = value, Dock = DockStyle.Fill, Multiline = multiline, Font = new Font("Arial", 10f) };
         var bar = new FlowLayoutPanel { Dock = DockStyle.Bottom, Height = 40, FlowDirection = FlowDirection.RightToLeft };
         var ok = Ui.Button("OK", (_, _) => f.DialogResult = DialogResult.OK);
         var cancel = Ui.Button("Cancel", (_, _) => f.DialogResult = DialogResult.Cancel);
@@ -28,7 +28,7 @@ public static class PickDialog
 {
     public static string? Show(string title, string prompt, IList<string> items, string? selected = null)
     {
-        using var f = new Form
+        using var f = new StyledForm
         {
             Text = title, Width = 420, Height = 170, StartPosition = FormStartPosition.CenterParent,
             FormBorderStyle = FormBorderStyle.FixedToolWindow

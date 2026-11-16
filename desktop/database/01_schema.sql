@@ -360,3 +360,44 @@ BEGIN
     ALTER TABLE dbo.Activity ADD DefaultMargin AS (DefaultExternalRate - DefaultInternalRate);
 END
 GO
+
+/* =====================================================================
+   DOCUMENTS – notes and file attachments for ANY record
+   (drawings, contractors, work orders, BOQ items, RA bills ...)
+   ===================================================================== */
+IF OBJECT_ID(N'dbo.RecordNote', N'U') IS NULL
+CREATE TABLE dbo.RecordNote (
+    Id           INT IDENTITY(1,1) CONSTRAINT PK_RecordNote PRIMARY KEY,
+    EntityName   NVARCHAR(50)   NOT NULL,          -- Contractor, WorkOrder, DrawingMaster ...
+    RecordId     INT            NOT NULL,
+    NoteDate     DATE           NOT NULL CONSTRAINT DF_RecordNote_Date DEFAULT (CAST(SYSDATETIME() AS DATE)),
+    Category     NVARCHAR(30)   NOT NULL CONSTRAINT DF_RecordNote_Cat DEFAULT (N'GENERAL'),
+    NoteText     NVARCHAR(4000) NOT NULL,
+    IsImportant  BIT            NOT NULL CONSTRAINT DF_RecordNote_Imp DEFAULT (0),
+    CreatedBy    NVARCHAR(128)  NOT NULL CONSTRAINT DF_RecordNote_By DEFAULT (SUSER_SNAME()),
+    CreatedOn    DATETIME2(0)   NOT NULL CONSTRAINT DF_RecordNote_On DEFAULT (SYSDATETIME())
+);
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_RecordNote_Record')
+    CREATE INDEX IX_RecordNote_Record ON dbo.RecordNote(EntityName, RecordId);
+GO
+
+IF OBJECT_ID(N'dbo.Attachment', N'U') IS NULL
+CREATE TABLE dbo.Attachment (
+    Id           INT IDENTITY(1,1) CONSTRAINT PK_Attachment PRIMARY KEY,
+    EntityName   NVARCHAR(50)   NOT NULL,
+    RecordId     INT            NOT NULL,
+    DocType      NVARCHAR(30)   NOT NULL CONSTRAINT DF_Attachment_Type DEFAULT (N'DOCUMENT'),  -- DRAWING / TRANSMITTAL / PHOTO ...
+    FileName     NVARCHAR(260)  NOT NULL,
+    FileExt      NVARCHAR(20)   NULL,
+    FileSizeKb   INT            NOT NULL,
+    Content      VARBINARY(MAX) NOT NULL,          -- stored in the database: shared by every user, included in backups
+    Revision     NVARCHAR(10)   NULL,
+    Description  NVARCHAR(400)  NULL,
+    UploadedBy   NVARCHAR(128)  NOT NULL CONSTRAINT DF_Attachment_By DEFAULT (SUSER_SNAME()),
+    UploadedOn   DATETIME2(0)   NOT NULL CONSTRAINT DF_Attachment_On DEFAULT (SYSDATETIME())
+);
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_Attachment_Record')
+    CREATE INDEX IX_Attachment_Record ON dbo.Attachment(EntityName, RecordId);
+GO

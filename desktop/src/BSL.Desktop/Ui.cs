@@ -3,7 +3,7 @@ namespace BSL.Desktop;
 /// <summary>Small UI helpers: message boxes, file dialogs, busy cursor.</summary>
 public static class Ui
 {
-    public static readonly Font HeaderFont = new("Segoe UI", 11f, FontStyle.Bold);
+    public static readonly Font HeaderFont = new("Arial", 12f, FontStyle.Bold);
     public static readonly Color ReadOnlyBack = Color.FromArgb(242, 242, 242);
     public static readonly Color Accent = Color.FromArgb(31, 78, 120);
 
@@ -24,9 +24,9 @@ public static class Ui
         }
         catch { /* logging must never crash the app */ }
     }
-    public static void Error(string msg) => MessageBox.Show(msg, "BSL Project Control", MessageBoxButtons.OK, MessageBoxIcon.Error);
-    public static void Info(string msg) => MessageBox.Show(msg, "BSL Project Control", MessageBoxButtons.OK, MessageBoxIcon.Information);
-    public static bool Confirm(string msg) => MessageBox.Show(msg, "BSL Project Control", MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes;
+    public static void Error(string msg) => MessageBox.Show(UiStyle.U(msg), "BSL PROJECT CONTROL", MessageBoxButtons.OK, MessageBoxIcon.Error);
+    public static void Info(string msg) => MessageBox.Show(UiStyle.U(msg), "BSL PROJECT CONTROL", MessageBoxButtons.OK, MessageBoxIcon.Information);
+    public static bool Confirm(string msg) => MessageBox.Show(UiStyle.U(msg), "BSL PROJECT CONTROL", MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes;
 
     public static string? OpenExcel(string title = "Open Excel workbook")
     {
@@ -84,7 +84,8 @@ public static class Ui
 
     public static Button Button(string text, EventHandler click, int width = 100)
     {
-        var b = new Button { Text = text, Width = width, Height = 28, Margin = new Padding(3) };
+        // grows to fit its (capitalised) text; "width" is the minimum
+        var b = new Button { Text = text, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowOnly, MinimumSize = new Size(width, 30), Height = 30, Margin = new Padding(3), Padding = new Padding(6, 0, 6, 0) };
         b.Click += click;
         return b;
     }

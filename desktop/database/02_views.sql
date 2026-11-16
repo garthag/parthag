@@ -120,35 +120,6 @@ OUTER APPLY (SELECT COUNT(DISTINCT b.DrawingId) AS DrawingCount, COUNT(*) AS Bom
              FROM dbo.BomItem b WHERE b.PackageId = p.Id) s;
 GO
 
-CREATE OR ALTER VIEW dbo.vw_DrawingMaster AS
-SELECT d.*, p.PackageCode, o.ContractorCode AS OriginatorCode,
-       w.UniqueNo AS AgencyUniqueNo, ac.ContractorCode AS AgencyCode,
-       ci.TechSpecItem, act.ActivityCode, act.Name AS ActivityName, r.SheetCount, r.LatestRevision, r.LastReceived,
-       b.BomLines, b.BomWeightKg,
-       CAST(ISNULL(b.BomWeightKg,0) / 1000.0 AS DECIMAL(18,3)) AS BomWeightTon
-FROM dbo.DrawingMaster d
-LEFT JOIN dbo.Package p       ON p.Id = d.PackageId
-LEFT JOIN dbo.Contractor o    ON o.Id = d.OriginatorId
-LEFT JOIN dbo.WorkOrder w     ON w.Id = d.AgencyWorkOrderId
-LEFT JOIN dbo.Contractor ac   ON ac.Id = w.ContractorId
-LEFT JOIN dbo.ContractItem ci ON ci.Id = d.ContractItemId
-LEFT JOIN dbo.Activity act    ON act.Id = d.ActivityId
-OUTER APPLY (SELECT COUNT(DISTINCT g.SheetNo) AS SheetCount, MAX(g.Revision) AS LatestRevision,
-                    MAX(g.ReceivedDate) AS LastReceived
-             FROM dbo.DrawingRegister g WHERE g.DrawingId = d.Id AND g.Status <> N'Void') r
-OUTER APPLY (SELECT COUNT(*) AS BomLines,
-                    SUM(CASE WHEN x.IsExcluded = 0 THEN x.TotalWeightKg END) AS BomWeightKg
-             FROM dbo.BomItem x WHERE x.DrawingId = d.Id) b;
-GO
-
-CREATE OR ALTER VIEW dbo.vw_DrawingRegister AS
-SELECT g.*, d.DrawingNo, d.Title, p.PackageCode, c.ContractorCode AS IssuedToCode, c.Name AS IssuedToName
-FROM dbo.DrawingRegister g
-JOIN dbo.DrawingMaster d   ON d.Id = g.DrawingId
-LEFT JOIN dbo.Package p    ON p.Id = d.PackageId
-LEFT JOIN dbo.Contractor c ON c.Id = g.IssuedToId;
-GO
-
 CREATE OR ALTER VIEW dbo.vw_BomItem AS
 SELECT b.*, p.PackageCode, p.NoOfSets, d.DrawingNo,
        CAST(ISNULL(b.TotalWeightKg,0) * p.NoOfSets AS DECIMAL(18,3)) AS TotalWeightAllSetsKg
@@ -193,4 +164,55 @@ SELECT ca.*, c.ContractorCode, c.Name AS ContractorName, a.ActivityCode, a.Name 
 FROM dbo.ContractorActivity ca
 JOIN dbo.Contractor c ON c.Id = ca.ContractorId
 JOIN dbo.Activity a   ON a.Id = ca.ActivityId;
+GO
+
+/* ---------- documents ---------- */
+CREATE OR ALTER VIEW dbo.vw_RecordNote AS SELECT n.* FROM dbo.RecordNote n;
+GO
+CREATE OR ALTER VIEW dbo.vw_Attachment AS     -- everything except the file content
+SELECT a.Id, a.EntityName, a.RecordId, a.DocType, a.FileName, a.FileExt, a.FileSizeKb, a.Revision, a.Description,
+       a.UploadedBy, a.UploadedOn,
+       CASE a.EntityName WHEN N'DrawingMaster' THEN d.DrawingNo WHEN N'DrawingRegister' THEN rd.DrawingNo
+                         WHEN N'Contractor' THEN c.ContractorCode WHEN N'WorkOrder' THEN w.UniqueNo END AS RecordRef
+FROM dbo.Attachment a
+LEFT JOIN dbo.DrawingMaster d   ON a.EntityName = N'DrawingMaster' AND d.Id = a.RecordId
+LEFT JOIN dbo.DrawingRegister r ON a.EntityName = N'DrawingRegister' AND r.Id = a.RecordId
+LEFT JOIN dbo.DrawingMaster rd  ON rd.Id = r.DrawingId
+LEFT JOIN dbo.Contractor c      ON a.EntityName = N'Contractor' AND c.Id = a.RecordId
+LEFT JOIN dbo.WorkOrder w       ON a.EntityName = N'WorkOrder' AND w.Id = a.RecordId;
+GO
+
+/* drawing views with file counts (re-created here so they include the attachment columns) */
+CREATE OR ALTER VIEW dbo.vw_DrawingMaster AS
+SELECT d.*, p.PackageCode, o.ContractorCode AS OriginatorCode,
+       w.UniqueNo AS AgencyUniqueNo, ac.ContractorCode AS AgencyCode,
+       ci.TechSpecItem, act.ActivityCode, act.Name AS ActivityName, r.SheetCount, r.LatestRevision, r.LastReceived,
+       b.BomLines, b.BomWeightKg,
+       CAST(ISNULL(b.BomWeightKg,0) / 1000.0 AS DECIMAL(18,3)) AS BomWeightTon,
+       (SELECT COUNT(*) FROM dbo.Attachment f
+        WHERE (f.EntityName = N'DrawingMaster' AND f.RecordId = d.Id)
+           OR (f.EntityName = N'DrawingRegister' AND f.RecordId IN (SELECT g.Id FROM dbo.DrawingRegister g WHERE g.DrawingId = d.Id))) AS FileCount,
+       (SELECT COUNT(*) FROM dbo.RecordNote n WHERE n.EntityName = N'DrawingMaster' AND n.RecordId = d.Id) AS NoteCount
+FROM dbo.DrawingMaster d
+LEFT JOIN dbo.Package p       ON p.Id = d.PackageId
+LEFT JOIN dbo.Contractor o    ON o.Id = d.OriginatorId
+LEFT JOIN dbo.WorkOrder w     ON w.Id = d.AgencyWorkOrderId
+LEFT JOIN dbo.Contractor ac   ON ac.Id = w.ContractorId
+LEFT JOIN dbo.ContractItem ci ON ci.Id = d.ContractItemId
+LEFT JOIN dbo.Activity act    ON act.Id = d.ActivityId
+OUTER APPLY (SELECT COUNT(DISTINCT g.SheetNo) AS SheetCount, MAX(g.Revision) AS LatestRevision,
+                    MAX(g.ReceivedDate) AS LastReceived
+             FROM dbo.DrawingRegister g WHERE g.DrawingId = d.Id AND g.Status <> N'Void') r
+OUTER APPLY (SELECT COUNT(*) AS BomLines,
+                    SUM(CASE WHEN x.IsExcluded = 0 THEN x.TotalWeightKg END) AS BomWeightKg
+             FROM dbo.BomItem x WHERE x.DrawingId = d.Id) b;
+GO
+
+CREATE OR ALTER VIEW dbo.vw_DrawingRegister AS
+SELECT g.*, d.DrawingNo, d.Title, p.PackageCode, c.ContractorCode AS IssuedToCode, c.Name AS IssuedToName,
+       (SELECT COUNT(*) FROM dbo.Attachment f WHERE f.EntityName = N'DrawingRegister' AND f.RecordId = g.Id) AS FileCount
+FROM dbo.DrawingRegister g
+JOIN dbo.DrawingMaster d   ON d.Id = g.DrawingId
+LEFT JOIN dbo.Package p    ON p.Id = d.PackageId
+LEFT JOIN dbo.Contractor c ON c.Id = g.IssuedToId;
 GO
