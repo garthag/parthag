@@ -50,8 +50,9 @@ jobs:
         run: |
           $nsis = "${env:ProgramFiles(x86)}\NSIS\makensis.exe"
           if (-not (Test-Path $nsis)) { choco install nsis -y --no-progress; $nsis = "${env:ProgramFiles(x86)}\NSIS\makensis.exe" }
-          & $nsis -DVERSION=1.1.0 -DSRC=..\publish\release BSLProjectControl.nsi
-          if (Test-Path redist) { Rename-Item redist redist.off; & $nsis -DVERSION=1.1.0 -DSRC=..\publish\release BSLProjectControl.nsi; Rename-Item redist.off redist }
+          & $nsis '-DVERSION=1.1.0' '-DSRC=..\publish\release' BSLProjectControl.nsi
+          if (Test-Path redist) { Rename-Item redist redist.off; & $nsis '-DVERSION=1.1.0' '-DSRC=..\publish\release' BSLProjectControl.nsi; Rename-Item redist.off redist }
+          if ($LASTEXITCODE -ne 0) { throw "makensis failed ($LASTEXITCODE)" }
           Get-ChildItem *.exe | Format-Table Name, Length
 
       - name: Portable zip
