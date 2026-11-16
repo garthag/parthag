@@ -31,9 +31,9 @@ public sealed class UdfManagerForm : Form
         var bar = new FlowLayoutPanel { Dock = DockStyle.Bottom, Height = 42, Padding = new Padding(4) };
         bar.Controls.AddRange(
         [
-            Ui.Button("＋ Add field", (_, _) => Edit(null)),
-            Ui.Button("✎ Edit", (_, _) => Edit(Selected)),
-            Ui.Button("✖ Delete", (_, _) => DeleteSel()),
+            Ui.Button("+ Add field", (_, _) => Edit(null)),
+            Ui.Button("Edit", (_, _) => Edit(Selected)),
+            Ui.Button("Delete", (_, _) => DeleteSel()),
             Ui.Button("Close", (_, _) => Close())
         ]);
         _grid.CellDoubleClick += (_, e) => { if (e.RowIndex >= 0) Edit(Selected); };

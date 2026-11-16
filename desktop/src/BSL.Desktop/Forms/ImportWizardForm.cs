@@ -173,7 +173,7 @@ public sealed class ImportWizardForm : Form
             }
             else return;
             _status.Text = res.Text;
-            Ui.Info(res.Text + "\n\nWarnings were saved in Settings ▸ Import history.");
+            Ui.Info(res.Text + "\n\nWarnings were saved in Settings > Import history.");
         }
         catch (Exception ex) { Ui.Error(ex); }
         finally { UseWaitCursor = false; Enabled = true; }

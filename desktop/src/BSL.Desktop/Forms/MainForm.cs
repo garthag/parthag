@@ -21,7 +21,7 @@ public sealed class MainForm : Form
 
         MainMenuStrip = BuildMenu();
         BuildNav();
-        var split = new SplitContainer { Dock = DockStyle.Fill, SplitterDistance = 240, FixedPanel = FixedPanel.Panel1 };
+        var split = new SplitContainer { Dock = DockStyle.Fill, FixedPanel = FixedPanel.Panel1 };
         split.Panel1.Controls.Add(_nav);
         split.Panel2.Controls.Add(_tabs);
         var status = new StatusStrip();
@@ -45,7 +45,7 @@ public sealed class MainForm : Form
             var dirty = _tabs.TabPages.Cast<TabPage>().Select(p => p.Controls.OfType<EntityBrowser>().FirstOrDefault()).Where(b => b?.HasChanges == true).ToList();
             if (dirty.Count > 0 && !Ui.Confirm($"{dirty.Count} screen(s) have unsaved changes:\n{string.Join("\n", dirty.Select(d => d!.Title))}\n\nExit without saving?")) e.Cancel = true;
         };
-        Load += (_, _) => { UpdateDbLabel(); ShowHome(); };
+        Load += (_, _) => { split.SplitterDistance = 270; UpdateDbLabel(); ShowHome(); };
     }
 
     protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
@@ -66,8 +66,8 @@ public sealed class MainForm : Form
 
         foreach (var module in EntityCatalog.All.GroupBy(e => e.Module))
         {
-            var mi = new ToolStripMenuItem(module.Key);
-            foreach (var e in module) mi.DropDownItems.Add(e.Caption, null, (_, _) => Open(e));
+            var mi = new ToolStripMenuItem(module.Key.Replace("&", "&&"));
+            foreach (var e in module) mi.DropDownItems.Add(e.Caption.Replace("&", "&&"), null, (_, _) => Open(e));
             m.Items.Add(mi);
         }
 
@@ -75,7 +75,7 @@ public sealed class MainForm : Form
         io.DropDownItems.Add("Import / standardise &BOM workbook…", null, (_, _) => Wizard(WorkbookKind.Bom));
         io.DropDownItems.Add("Import &contractor workbook (contractors, WOs, BOQ, RA)…", null, (_, _) => Wizard(WorkbookKind.Contractor));
         io.DropDownItems.Add(new ToolStripSeparator());
-        io.DropDownItems.Add("Each screen has Excel ▸ Export / Import / Template", null, null!).Enabled = false;
+        io.DropDownItems.Add("Each screen has Excel > Export / Import / Template", null, null!).Enabled = false;
         m.Items.Add(io);
 
         var rep = new ToolStripMenuItem("&Reports");
@@ -107,7 +107,7 @@ public sealed class MainForm : Form
 
     void BuildNav()
     {
-        var home = _nav.Nodes.Add("🏠  Dashboard");
+        var home = _nav.Nodes.Add("Dashboard");
         home.Tag = "home";
         foreach (var module in EntityCatalog.All.GroupBy(e => e.Module))
         {
@@ -121,7 +121,9 @@ public sealed class MainForm : Form
         io.Nodes.Add(new TreeNode("Import / standardise BOM workbook") { Tag = WorkbookKind.Bom });
         io.Nodes.Add(new TreeNode("Import contractor workbook") { Tag = WorkbookKind.Contractor });
         io.Expand();
-        var rep = _nav.Nodes.Add("📄  Reports (PDF / Excel)");
+        var rep = _nav.Nodes.Add("Reports (PDF / Excel)");
+        rep.NodeFont = new Font("Segoe UI", 9.75f, FontStyle.Bold);
+        home.NodeFont = new Font("Segoe UI", 9.75f, FontStyle.Bold);
         rep.Tag = "reports";
         _nav.NodeMouseClick += (_, e) =>
         {
@@ -237,9 +239,8 @@ public sealed class MainForm : Form
                        (SELECT COUNT(*) FROM dbo.BomItem WHERE QualityFlags IS NOT NULL AND QualityFlags NOT LIKE N'detail of%') AS Flags
                 """).Rows[0];
             decimal D(string c) => k[c] is DBNull ? 0 : Convert.ToDecimal(k[c]);
-            var head = new Label { Text = "Project dashboard", Font = new Font("Segoe UI", 16f, FontStyle.Bold), ForeColor = Ui.Accent, AutoSize = true, Margin = new Padding(4, 4, 4, 12) };
-            flow.Controls.Add(head);
-            flow.SetFlowBreak(head, true);
+            var head = new Label { Text = "Project dashboard", Font = new Font("Segoe UI", 16f, FontStyle.Bold), ForeColor = Ui.Accent, Dock = DockStyle.Top, Height = 48, Padding = new Padding(20, 12, 0, 0) };
+            page.Controls.Add(head);
             void Tile(string title, string value, string sub, Action? click = null)
             {
                 var p = new Panel { Width = 250, Height = 110, Margin = new Padding(8), BackColor = Color.White, BorderStyle = BorderStyle.FixedSingle, Cursor = click != null ? Cursors.Hand : Cursors.Default };
@@ -259,10 +260,10 @@ public sealed class MainForm : Form
 
             var help = new Label
             {
-                AutoSize = false, Width = 1100, Height = 170, Margin = new Padding(8, 24, 8, 8), ForeColor = Color.DimGray, Font = new Font("Segoe UI", 9.5f),
+                AutoSize = false, Width = 1100, Height = 170, UseMnemonic = false, Margin = new Padding(8, 24, 8, 8), ForeColor = Color.DimGray, Font = new Font("Segoe UI", 9.5f),
                 Text = "Getting started\n" +
-                       "1.  Import / Export ▸ Import contractor workbook – loads contractors, work orders (BM01…), BOQ with external (supply) and internal (agency) rates, RA bills and the drawing scope list.\n" +
-                       "2.  Import / Export ▸ Import / standardise BOM workbook – all BOM sheets are mapped to one standard layout; packages, drawing master and drawing register are created.\n" +
+                       "1.  Import / Export > Import contractor workbook – loads contractors, work orders (BM01…), BOQ with external (supply) and internal (agency) rates, RA bills and the drawing scope list.\n" +
+                       "2.  Import / Export > Import / standardise BOM workbook – all BOM sheets are mapped to one standard layout; packages, drawing master and drawing register are created.\n" +
                        "3.  Open any screen: switch between Table view and Form view (F2). Add your own fields under 'Fields & formulas' – formulas can use contractor details and rates.\n" +
                        "4.  Reports: preview, filter by package / agency and export to PDF or Excel. Every screen also has Excel export / import and PDF list / record card."
             };

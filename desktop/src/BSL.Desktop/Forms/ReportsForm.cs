@@ -46,7 +46,7 @@ public sealed class ReportsForm : UserControl
         bar.Controls.AddRange(
         [
             L("Package:"), _pkg, L("Agency:"), _agency, L("Group by:"), _group, _search,
-            Ui.Button("⟳ Run", (_, _) => { if (_current != null) Ui.Busy(this, () => Run(_current)); }, 70),
+            Ui.Button("Run", (_, _) => { if (_current != null) Ui.Busy(this, () => Run(_current)); }, 70),
             Ui.Button("PDF…", (_, _) => Ui.Busy(this, Pdf), 70),
             Ui.Button("Excel…", (_, _) => Ui.Busy(this, Excel), 70)
         ]);

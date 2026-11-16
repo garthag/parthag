@@ -89,14 +89,14 @@ public sealed class FormulaBuilder : UserControl
     {
         if (Formula.Length == 0) { _result.Text = ""; return false; }
         var err = FormulaEngine.Validate(_schema, Formula, _self);
-        if (err != null) { _result.ForeColor = Color.DarkRed; _result.Text = "✖ " + err; return false; }
+        if (err != null) { _result.ForeColor = Color.DarkRed; _result.Text = "Error: " + err; return false; }
         _result.ForeColor = Color.DarkGreen;
         try
         {
             var v = _sample != null ? FormulaEngine.Evaluate(_sample, Formula) : null;
-            _result.Text = "✔ Valid." + (_sample != null ? $"  Current record → {v ?? "(blank)"}" : "");
+            _result.Text = "OK - valid." + (_sample != null ? $"  Current record = {v ?? "(blank)"}" : "");
         }
-        catch (Exception ex) { _result.Text = "✔ Valid syntax. (preview: " + ex.Message + ")"; }
+        catch (Exception ex) { _result.Text = "OK - valid syntax. (preview: " + ex.Message + ")"; }
         return true;
     }
 }

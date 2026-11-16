@@ -33,8 +33,8 @@ public sealed class EntityBrowser : UserControl
     string _advancedFilter = "";
 
     readonly ToolStrip _tools = new() { GripStyle = ToolStripGripStyle.Hidden, Padding = new Padding(4, 2, 4, 2), ImageScalingSize = new Size(16, 16) };
-    readonly ToolStripButton _btnGrid = new("▦ Table view") { CheckOnClick = false, Checked = true };
-    readonly ToolStripButton _btnForm = new("▤ Form view") { CheckOnClick = false };
+    readonly ToolStripButton _btnGrid = new("Table view") { CheckOnClick = false, Checked = true };
+    readonly ToolStripButton _btnForm = new("Form view") { CheckOnClick = false };
     readonly ToolStripTextBox _search = new() { Width = 180, ToolTipText = "Quick search in all text columns" };
     readonly ToolStripLabel _pos = new("0 / 0");
     readonly DataGridView _grid = new();
@@ -116,13 +116,13 @@ public sealed class EntityBrowser : UserControl
 
         _tools.Items.AddRange(new ToolStripItem[]
         {
-            B("＋ New", "Add a record", AddNew, Keys.Control | Keys.N),
-            B("💾 Save", "Save all changes", Save, Keys.Control | Keys.S),
-            B("✖ Delete", "Delete selected record(s)", Delete),
-            B("⟳ Refresh", "Reload from database", () => Reload(true), Keys.F5),
+            B("+ New", "Add a record", AddNew, Keys.Control | Keys.N),
+            B("Save", "Save all changes", Save, Keys.Control | Keys.S),
+            B("Delete", "Delete selected record(s)", Delete),
+            B("Refresh", "Reload from database", () => Reload(true), Keys.F5),
             new ToolStripSeparator(), _btnGrid, _btnForm, new ToolStripSeparator(),
-            B("⏮", "First", () => _bs.MoveFirst()), B("◀", "Previous", () => _bs.MovePrevious()), _pos,
-            B("▶", "Next", () => _bs.MoveNext()), B("⏭", "Last", () => _bs.MoveLast()),
+            B("|<", "First", () => _bs.MoveFirst()), B("<", "Previous", () => _bs.MovePrevious()), _pos,
+            B(">", "Next", () => _bs.MoveNext()), B(">|", "Last", () => _bs.MoveLast()),
             new ToolStripSeparator(), new ToolStripLabel("Search:"), _search,
             new ToolStripSeparator(), excel, pdf, fields
         });
@@ -201,7 +201,7 @@ public sealed class EntityBrowser : UserControl
     void UpdateChanges()
     {
         var ch = _table.GetChanges();
-        _changes.Text = ch == null ? "" : $"● {ch.Rows.Count} unsaved change(s) – press Save (Ctrl+S)";
+        _changes.Text = ch == null ? "" : $"* {ch.Rows.Count} unsaved change(s) – press Save (Ctrl+S)";
     }
 
     void Save()
