@@ -207,7 +207,7 @@ public static class DrawingParser
         // Type: folder, then discipline code in the number, then keywords.
         DrawingType? type = null;
         var typeIdx = -1;
-        foreach (var f in folders.Reverse())
+        foreach (var f in Enumerable.Reverse(folders))
         {
             if (UnitFolder.IsMatch(CleanFolder(f)) || PlantFolder.IsMatch(StripPrefix(f))) continue;
             type = TypeFromFolder(f);
