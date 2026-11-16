@@ -85,8 +85,7 @@ public static class PdfReport
 
         var groups = groupBy != null && data.Columns.Contains(groupBy)
             ? list.GroupBy(r => Format(r[groupBy], ColKind.Text)).ToList()
-            : [list.GroupBy(_ => "").First()];
-        if (list.Count == 0) groups = [];
+            : list.GroupBy(_ => "").ToList();     // empty list -> no groups (an empty report must not crash)
 
         foreach (var g in groups)
         {
