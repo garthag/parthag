@@ -210,7 +210,12 @@ The **Reports** screen has 14 standard reports. You can filter each one by packa
 ## 3. Install and run
 
 1. **SQL Server.** SQL Server **2017 or later**. Any of these will do: **LocalDB** (installed with Visual Studio), **SQL Server Express** (free) or a full server.
-2. **Build.** Open `desktop/BSL.ProjectControl.sln` in Visual Studio 2022 (.NET 8 SDK) and run **BSL.Desktop**. Or download the ready-made zip from the GitHub Actions run *Desktop (C# / SQL Server)* (artifact `bsl-project-control-windows`). It is self-contained, so .NET does not need to be installed.
+2. **Install the app.** Either:
+   * **`BSLProjectControl-Setup-1.1.0.exe`** (recommended): installs to *Program Files* with Start-menu and desktop shortcuts and an entry in *Add/Remove Programs*. The uninstaller keeps your database and settings.
+   * **`BSLProjectControl-1.1.0-portable.zip`**: unzip anywhere and run `BSLProjectControl.exe`. No installation needed.
+
+   Both are self-contained: .NET does **not** need to be installed. The GitHub Actions job *Desktop (C# / SQL Server)* builds both on every push (artifact `bsl-project-control-windows`).
+   To build them yourself, open `desktop/BSL.ProjectControl.sln` in Visual Studio 2022 (.NET 8), publish `BSL.Desktop` (win-x64, self-contained, single file) to `desktop/publish/release`, then run `makensis BSLProjectControl.nsi` in `desktop/installer` (NSIS 3).
 3. **First start.** The default connection is `(localdb)\MSSQLLocalDB`, database `BSL_ProjectControl`. If that fails, the Settings window opens; enter the server (for example `.\SQLEXPRESS`) and press **Test / create DB**. The app creates the database, tables, views and seed data by itself. The scripts in `desktop/database/*.sql` are the same and can also be run by hand.
 4. **Load your data.**
    1. Import the contractor workbook.

@@ -10,7 +10,10 @@
     <RootNamespace>BSL.Desktop</RootNamespace>
     <ApplicationHighDpiMode>SystemAware</ApplicationHighDpiMode>
     <ApplicationVisualStyles>true</ApplicationVisualStyles>
-    <Version>1.0.0</Version>
+    <Version>1.1.0</Version>
+    <ApplicationIcon>app.ico</ApplicationIcon>
+    <Company>BSL BF#3 Revamp</Company>
+    <Description>BSL Project Control – drawings, BOM, contractors, work orders, BOQ and RA bills</Description>
     <Product>BSL Project Control</Product>
   </PropertyGroup>
   <ItemGroup>

@@ -26,16 +26,29 @@ jobs:
       - name: Publish Windows app (self-contained, single file)
         run: >
           dotnet publish desktop/src/BSL.Desktop/BSL.Desktop.csproj -c Release -r win-x64 --self-contained true
-          -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o desktop/publish/BSLProjectControl
+          -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true
+          -p:DebugType=none -o desktop/publish/release
 
-      - name: Zip
+      - name: Build installer (NSIS is preinstalled on windows-latest)
+        shell: pwsh
+        working-directory: desktop/installer
+        run: |
+          $nsis = "${env:ProgramFiles(x86)}\NSIS\makensis.exe"
+          if (-not (Test-Path $nsis)) { choco install nsis -y --no-progress; $nsis = "${env:ProgramFiles(x86)}\NSIS\makensis.exe" }
+          & $nsis -DVERSION=1.1.0 -DSRC=..\publish\release BSLProjectControl.nsi
+
+      - name: Portable zip
         shell: pwsh
         run: |
-          Copy-Item desktop/README.md desktop/publish/BSLProjectControl/
-          Copy-Item -Recurse desktop/database desktop/publish/BSLProjectControl/database
-          Compress-Archive -Path desktop/publish/BSLProjectControl -DestinationPath BSLProjectControl-windows-x64.zip
+          $p = "BSLProjectControl-portable"
+          New-Item -ItemType Directory -Force "$p/database", "$p/fonts" | Out-Null
+          Copy-Item desktop/publish/release/BSLProjectControl.exe, desktop/README.md, desktop/installer/app.ico $p
+          Copy-Item desktop/database/*.sql "$p/database"
+          Compress-Archive -Path $p -DestinationPath BSLProjectControl-portable.zip
 
       - uses: actions/upload-artifact@v4
         with:
           name: bsl-project-control-windows
-          path: BSLProjectControl-windows-x64.zip
+          path: |
+            desktop/installer/BSLProjectControl-Setup-*.exe
+            BSLProjectControl-portable.zip
