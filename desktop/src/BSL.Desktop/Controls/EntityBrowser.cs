@@ -437,7 +437,8 @@ public sealed class EntityBrowser : UserControl
 
         foreach (var g in _fields.Where(f => _table.Columns.Contains(f.Name)).GroupBy(f => f.Group))
         {
-            var box = new GroupBox { Text = g.Key, Width = width, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, Padding = new Padding(8), Margin = new Padding(3, 3, 3, 10) };
+            // GrowOnly + MinimumSize: the box keeps the full width and grows in height with its fields
+            var box = new GroupBox { Text = g.Key, Width = width, MinimumSize = new Size(width, 0), AutoSize = true, AutoSizeMode = AutoSizeMode.GrowOnly, Padding = new Padding(8), Margin = new Padding(3, 3, 3, 10) };
             var tl = new TableLayoutPanel { ColumnCount = 4, Dock = DockStyle.Top, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink };
             tl.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 160));
             tl.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
@@ -496,7 +497,7 @@ public sealed class EntityBrowser : UserControl
     void FormFieldsResize(object? sender, EventArgs e)
     {
         var w = Math.Max(760, _formFields.ClientSize.Width - 40);
-        foreach (var gb in _formFields.Controls.OfType<GroupBox>()) gb.Width = w;
+        foreach (var gb in _formFields.Controls.OfType<GroupBox>()) { gb.MinimumSize = new Size(w, 0); gb.Width = w; }
     }
 
     Control CreateEditor(FieldDef f)
