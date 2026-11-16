@@ -1,0 +1,34 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{C5624157-AB24-47AF-BF09-4CFC63A969D4}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BSL.Core", "src\BSL.Core\BSL.Core.csproj", "{756EC56C-235E-4BAA-B79B-9477E18C99B8}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BSL.Cli", "src\BSL.Cli\BSL.Cli.csproj", "{31D573E1-7B9D-4EC0-94C6-83AB904AFF8B}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{756EC56C-235E-4BAA-B79B-9477E18C99B8}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{756EC56C-235E-4BAA-B79B-9477E18C99B8}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{756EC56C-235E-4BAA-B79B-9477E18C99B8}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{756EC56C-235E-4BAA-B79B-9477E18C99B8}.Release|Any CPU.Build.0 = Release|Any CPU
+		{31D573E1-7B9D-4EC0-94C6-83AB904AFF8B}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{31D573E1-7B9D-4EC0-94C6-83AB904AFF8B}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{31D573E1-7B9D-4EC0-94C6-83AB904AFF8B}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{31D573E1-7B9D-4EC0-94C6-83AB904AFF8B}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{756EC56C-235E-4BAA-B79B-9477E18C99B8} = {C5624157-AB24-47AF-BF09-4CFC63A969D4}
+		{31D573E1-7B9D-4EC0-94C6-83AB904AFF8B} = {C5624157-AB24-47AF-BF09-4CFC63A969D4}
+	EndGlobalSection
+EndGlobal

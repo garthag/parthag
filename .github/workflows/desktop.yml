@@ -1,0 +1,41 @@
+name: Desktop (C# / SQL Server)
+
+on:
+  push:
+    paths: ['desktop/**', '.github/workflows/desktop.yml']
+  pull_request:
+    paths: ['desktop/**', '.github/workflows/desktop.yml']
+  workflow_dispatch:
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Build solution
+        run: dotnet build desktop/BSL.ProjectControl.sln -c Release
+
+      - name: Self-test (formulas, drawing / section / grade rules)
+        run: dotnet run --project desktop/src/BSL.Cli -c Release --no-build -- selftest
+
+      - name: Publish Windows app (self-contained, single file)
+        run: >
+          dotnet publish desktop/src/BSL.Desktop/BSL.Desktop.csproj -c Release -r win-x64 --self-contained true
+          -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o desktop/publish/BSLProjectControl
+
+      - name: Zip
+        shell: pwsh
+        run: |
+          Copy-Item desktop/README.md desktop/publish/BSLProjectControl/
+          Copy-Item -Recurse desktop/database desktop/publish/BSLProjectControl/database
+          Compress-Archive -Path desktop/publish/BSLProjectControl -DestinationPath BSLProjectControl-windows-x64.zip
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bsl-project-control-windows
+          path: BSLProjectControl-windows-x64.zip

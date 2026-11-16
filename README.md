@@ -1,5 +1,7 @@
 # Site DPR – Daily Progress Report app for construction sites
 
+> **Also in this repository:** `desktop/` – **BSL Project Control**, a C# / SQL Server Windows app for drawing register, standardised BOM, contractor master, internal/external rates, BOQ and RA bills. See [desktop/README.md](desktop/README.md).
+
 A Flutter (Google) mobile app for Android and iOS that lets site engineers record the **Daily Progress Report (DPR)** of a construction project the way Indian sites do it: IS-code units and specs, a hindrance register, safety records under the BOCW Act, geo-tagged photos and videos, signatures, and a PDF ready to print or share on WhatsApp.
 
 It works fully **offline** on site. You can optionally turn on **Google sign-in and cloud sync** through Firebase.
