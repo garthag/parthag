@@ -7,7 +7,23 @@ public static class Ui
     public static readonly Color ReadOnlyBack = Color.FromArgb(242, 242, 242);
     public static readonly Color Accent = Color.FromArgb(31, 78, 120);
 
-    public static void Error(Exception ex) => Error(ex is InvalidOperationException ? ex.Message : ex.Message + "\n\n" + ex.GetType().Name);
+    public static void Error(Exception ex)
+    {
+        LogError(ex);
+        Error(ex is InvalidOperationException ? ex.Message : ex.Message + "\n\n" + ex.GetType().Name + "  (details in error.log)");
+    }
+
+    /// <summary>Full exception details to %AppData%\BSLProjectControl\error.log for support.</summary>
+    public static void LogError(Exception ex)
+    {
+        try
+        {
+            var dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "BSLProjectControl");
+            Directory.CreateDirectory(dir);
+            File.AppendAllText(Path.Combine(dir, "error.log"), $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] {ex}{Environment.NewLine}{Environment.NewLine}");
+        }
+        catch { /* logging must never crash the app */ }
+    }
     public static void Error(string msg) => MessageBox.Show(msg, "BSL Project Control", MessageBoxButtons.OK, MessageBoxIcon.Error);
     public static void Info(string msg) => MessageBox.Show(msg, "BSL Project Control", MessageBoxButtons.OK, MessageBoxIcon.Information);
     public static bool Confirm(string msg) => MessageBox.Show(msg, "BSL Project Control", MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes;
@@ -52,6 +68,18 @@ public static class Ui
         try { a(); }
         catch (Exception ex) { Error(ex); }
         finally { owner.Cursor = old; }
+    }
+
+    /// <summary>Sets a splitter position once the container has its real size (setting it in the constructor is ignored).</summary>
+    public static void SplitterWhenSized(SplitContainer split, int distance)
+    {
+        void Apply(object? s, EventArgs e)
+        {
+            if (split.Width < distance + split.Panel2MinSize + 50) return;
+            try { split.SplitterDistance = distance; split.SizeChanged -= Apply; } catch (InvalidOperationException) { }
+        }
+        split.SizeChanged += Apply;
+        split.HandleCreated += Apply;
     }
 
     public static Button Button(string text, EventHandler click, int width = 100)

@@ -1,6 +1,5 @@
 using System.Data;
 using System.Globalization;
-using System.Runtime.InteropServices;
 using MigraDoc.DocumentObjectModel;
 using MigraDoc.DocumentObjectModel.Tables;
 using MigraDoc.Rendering;
@@ -23,7 +22,8 @@ public static class PdfReport
     public static void EnsureFonts()
     {
         if (_fontsReady) return;
-        if (GlobalFontSettings.FontResolver == null) GlobalFontSettings.FontResolver = new FileFontResolver();
+        // always our resolver: PDFsharp's own Windows lookup returns no font (and crashes) when Arial is missing
+        GlobalFontSettings.FontResolver = new FileFontResolver();
         _fontsReady = true;
     }
 
@@ -232,14 +232,21 @@ public static class PdfReport
 /// <summary>Loads TrueType files from the Windows fonts folder (or common Linux folders).</summary>
 public sealed class FileFontResolver : IFontResolver
 {
-    static readonly string[] Dirs = RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
-        ? [Environment.GetFolderPath(Environment.SpecialFolder.Fonts)]
-        : ["/usr/share/fonts/truetype/liberation", "/usr/share/fonts/truetype/dejavu", "/usr/share/fonts/truetype", "/usr/share/fonts"];
+    /// <summary>Font folders in search order: app-local "fonts" folder, Windows fonts, per-user fonts, Linux fonts.</summary>
+    static readonly string[] Dirs = new[]
+    {
+        Path.Combine(AppContext.BaseDirectory, "fonts"),
+        Environment.GetFolderPath(Environment.SpecialFolder.Fonts),
+        Path.Combine(Environment.GetEnvironmentVariable("WINDIR") ?? @"C:\Windows", "Fonts"),
+        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Microsoft", "Windows", "Fonts"),
+        "/usr/share/fonts/truetype/liberation", "/usr/share/fonts/truetype/dejavu", "/usr/share/fonts/truetype", "/usr/share/fonts"
+    }.Where(d => !string.IsNullOrWhiteSpace(d)).Distinct().ToArray();
 
     static readonly (string Regular, string Bold, string Italic, string BoldItalic)[] Candidates =
     [
         ("arial.ttf", "arialbd.ttf", "ariali.ttf", "arialbi.ttf"),
         ("segoeui.ttf", "segoeuib.ttf", "segoeuii.ttf", "segoeuiz.ttf"),
+        ("calibri.ttf", "calibrib.ttf", "calibrii.ttf", "calibriz.ttf"),
         ("LiberationSans-Regular.ttf", "LiberationSans-Bold.ttf", "LiberationSans-Italic.ttf", "LiberationSans-BoldItalic.ttf"),
         ("DejaVuSans.ttf", "DejaVuSans-Bold.ttf", "DejaVuSans-Oblique.ttf", "DejaVuSans-BoldOblique.ttf")
     ];
@@ -258,7 +265,8 @@ public sealed class FileFontResolver : IFontResolver
                 if (p != null) return File.ReadAllBytes(p);
             }
         }
-        throw new FileNotFoundException("No TrueType font (Arial / Segoe UI / Liberation Sans / DejaVu Sans) found for PDF output.");
+        throw new FileNotFoundException("No TrueType font found for PDF output. Install Arial, or copy arial.ttf / arialbd.ttf / ariali.ttf / arialbi.ttf " +
+                                        "into a 'fonts' folder next to the program. Searched: " + string.Join("; ", Dirs));
     }
 
     static string? FindFile(string dir, string file)

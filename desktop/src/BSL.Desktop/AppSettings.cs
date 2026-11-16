@@ -10,6 +10,8 @@ public sealed class AppSettings
     public string CompanyName { get; set; } = "BSL BF#3 Revamp – Project Control";
     public string PreparedBy { get; set; } = Environment.UserName;
     public string? LastFolder { get; set; }
+    /// <summary>SystemAware (default), PerMonitorV2 or DpiUnaware (useful on remote desktop / Citrix).</summary>
+    public string HighDpiMode { get; set; } = "SystemAware";
 
     static string Dir => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "BSLProjectControl");
     static string FilePath => Path.Combine(Dir, "settings.json");

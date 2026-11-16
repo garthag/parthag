@@ -26,7 +26,7 @@ public sealed class MainForm : Form
         split.Panel2.Controls.Add(_tabs);
         var status = new StatusStrip();
         status.Items.Add(_db);
-        status.Items.Add(new ToolStripStatusLabel("Ctrl+S save • Ctrl+N new • F2 table/form • F5 refresh • Ctrl+F search • Ctrl+W close tab"));
+        status.Items.Add(new ToolStripStatusLabel("Ctrl+S save • Ctrl+N new • F2 table/form • F5 refresh • Ctrl+F search • Ctrl+U user fields • Ctrl+K formula • Ctrl+P PDF • Ctrl+E Excel • Ctrl+W close tab"));
         Controls.Add(split);
         Controls.Add(MainMenuStrip);
         Controls.Add(status);
@@ -45,7 +45,8 @@ public sealed class MainForm : Form
             var dirty = _tabs.TabPages.Cast<TabPage>().Select(p => p.Controls.OfType<EntityBrowser>().FirstOrDefault()).Where(b => b?.HasChanges == true).ToList();
             if (dirty.Count > 0 && !Ui.Confirm($"{dirty.Count} screen(s) have unsaved changes:\n{string.Join("\n", dirty.Select(d => d!.Title))}\n\nExit without saving?")) e.Cancel = true;
         };
-        Load += (_, _) => { split.SplitterDistance = 270; UpdateDbLabel(); ShowHome(); };
+        Ui.SplitterWhenSized(split, 270);
+        Load += (_, _) => { UpdateDbLabel(); ShowHome(); };
     }
 
     protected override bool ProcessCmdKey(ref Message msg, Keys keyData)

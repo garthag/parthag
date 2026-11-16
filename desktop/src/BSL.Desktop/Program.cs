@@ -14,11 +14,14 @@ internal static class Program
     [STAThread]
     static void Main()
     {
-        Application.SetHighDpiMode(HighDpiMode.SystemAware);
+        Settings = AppSettings.Load();
+        Application.SetHighDpiMode(Enum.TryParse<HighDpiMode>(Settings.HighDpiMode, true, out var dpi) ? dpi : HighDpiMode.SystemAware);
         Application.EnableVisualStyles();
         Application.SetCompatibleTextRenderingDefault(false);
+        Application.SetUnhandledExceptionMode(UnhandledExceptionMode.CatchException);
         Application.ThreadException += (_, e) => Ui.Error(e.Exception);
-        Settings = AppSettings.Load();
+        AppDomain.CurrentDomain.UnhandledException += (_, e) => { if (e.ExceptionObject is Exception ex) Ui.LogError(ex); };
+        TaskScheduler.UnobservedTaskException += (_, e) => { Ui.LogError(e.Exception); e.SetObserved(); };
 
         while (true)
         {

@@ -164,6 +164,12 @@ The **Reports** screen has 14 standard reports. You can filter each one by packa
 | Ctrl+F | Search |
 | Ctrl+W | Close tab |
 | Delete | Delete the selected rows |
+| Ctrl+U | User-defined fields |
+| Ctrl+K | Calculate a column with a formula |
+| Ctrl+P | PDF list report |
+| Ctrl+E | Export filtered rows to Excel |
+
+**Settings file and support:** `%AppData%\BSLProjectControl\settings.json` holds the connection, report header and `HighDpiMode` (`SystemAware` by default; `DpiUnaware` can help on remote desktop / Citrix). Any error is written with full details to `%AppData%\BSLProjectControl\error.log`. PDF reports use Arial (or Segoe UI / Calibri); if a PC has none of these, put the `.ttf` files in a `fonts` folder next to the program.
 
 ### Command line (`BSL.Cli`)
 
@@ -188,7 +194,7 @@ Tested against **SQL Server 2022**:
 * formulas that use contractor fields and rates
 * friendly errors for a duplicate code and for deleting a record that is in use
 
-The WinForms project compiles against the .NET 8 Windows Desktop reference assemblies. The UI itself has not been run on Windows yet.
+**UI preview.** The real Windows build (published with Microsoft's official .NET 8 SDK) was run under Wine against the same database, and every module was opened: dashboard, contractors, work orders (table and form view with related records), BOQ, RA bills, packages, drawing master and register, BOM items (15,959 rows), reports with PDF export, the BOM import wizard (analyse and import), user-defined fields with the formula builder, and add / save / delete. Bugs found this way were fixed. Wine cannot open drop-down menus (it lacks a Windows 10 DPI function), so those menus were not clicked; the actions behind them were reached through the keyboard shortcuts above. A final check on a real Windows PC is still recommended.
 
 **Libraries (all free for commercial use):**
 

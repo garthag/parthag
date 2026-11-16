@@ -86,7 +86,7 @@ public sealed class EntityBrowser : UserControl
     {
         ToolStripButton B(string text, string tip, Action a, Keys keys = Keys.None)
         {
-            var b = new ToolStripButton(text) { ToolTipText = tip + (keys != Keys.None ? $"  ({keys})" : "") };
+            var b = new ToolStripButton(text) { ToolTipText = tip + (keys != Keys.None ? $"  ({ShortcutText(keys)})" : "") };
             b.Click += (_, _) => Ui.Busy(this, a);
             return b;
         }
@@ -95,20 +95,20 @@ public sealed class EntityBrowser : UserControl
         _btnForm.Click += (_, _) => ShowGrid(false);
         _search.TextChanged += (_, _) => { _searchTimer.Stop(); _searchTimer.Start(); };
 
-        var excel = new ToolStripDropDownButton("Excel");
+        var excel = new ToolStripDropDownButton("Excel") { ToolTipText = "Export, import, template" };
         excel.DropDownItems.Add("Export all rows…", null, (_, _) => Ui.Busy(this, () => ExportExcel(false)));
-        excel.DropDownItems.Add("Export filtered rows…", null, (_, _) => Ui.Busy(this, () => ExportExcel(true)));
+        excel.DropDownItems.Add("Export filtered rows…  (Ctrl+E)", null, (_, _) => Ui.Busy(this, () => ExportExcel(true)));
         excel.DropDownItems.Add(new ToolStripSeparator());
         excel.DropDownItems.Add("Import from Excel…", null, (_, _) => Ui.Busy(this, ImportExcel));
         excel.DropDownItems.Add("Download import template…", null, (_, _) => Ui.Busy(this, Template));
 
-        var pdf = new ToolStripDropDownButton("PDF");
-        pdf.DropDownItems.Add("List report (filtered rows)…", null, (_, _) => Ui.Busy(this, () => ListPdf()));
+        var pdf = new ToolStripDropDownButton("PDF") { ToolTipText = "List report or record card" };
+        pdf.DropDownItems.Add("List report (filtered rows)…  (Ctrl+P)", null, (_, _) => Ui.Busy(this, () => ListPdf()));
         pdf.DropDownItems.Add("Record card (current record)…", null, (_, _) => Ui.Busy(this, RecordPdf));
 
-        var fields = new ToolStripDropDownButton("Fields && formulas");
-        fields.DropDownItems.Add("User defined fields…", null, (_, _) => ManageUdfs());
-        fields.DropDownItems.Add("Calculate a column with a formula…", null, (_, _) => BulkCalculate());
+        var fields = new ToolStripDropDownButton("Fields && formulas") { ToolTipText = "User defined fields, formulas, columns and filters" };
+        fields.DropDownItems.Add("User defined fields…  (Ctrl+U)", null, (_, _) => ManageUdfs());
+        fields.DropDownItems.Add("Calculate a column with a formula…  (Ctrl+K)", null, (_, _) => BulkCalculate());
         fields.DropDownItems.Add(new ToolStripSeparator());
         fields.DropDownItems.Add("Show / hide columns…", null, (_, _) => ChooseColumns());
         fields.DropDownItems.Add("Advanced filter…", null, (_, _) => AdvancedFilter());
@@ -128,6 +128,9 @@ public sealed class EntityBrowser : UserControl
         });
     }
 
+    static string ShortcutText(Keys k) =>
+        ((k & Keys.Control) != 0 ? "Ctrl+" : "") + ((k & Keys.Shift) != 0 ? "Shift+" : "") + (k & Keys.KeyCode);
+
     protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
     {
         switch (keyData)
@@ -137,6 +140,10 @@ public sealed class EntityBrowser : UserControl
             case Keys.F5: Ui.Busy(this, () => Reload(true)); return true;
             case Keys.Control | Keys.F: _search.Focus(); return true;
             case Keys.F2: ShowGrid(!_grid.Visible); return true;
+            case Keys.Control | Keys.U: ManageUdfs(); return true;
+            case Keys.Control | Keys.K: BulkCalculate(); return true;
+            case Keys.Control | Keys.P: Ui.Busy(this, ListPdf); return true;
+            case Keys.Control | Keys.E: Ui.Busy(this, () => ExportExcel(true)); return true;
         }
         return base.ProcessCmdKey(ref msg, keyData);
     }
@@ -402,7 +409,7 @@ public sealed class EntityBrowser : UserControl
         _formHost.Visible = !grid;
         _btnGrid.Checked = grid;
         _btnForm.Checked = !grid;
-        if (!grid) LoadChildren();
+        if (!grid) { FormFieldsResize(null, EventArgs.Empty); LoadChildren(); }
     }
 
     void ChooseColumns()
@@ -430,7 +437,7 @@ public sealed class EntityBrowser : UserControl
         static void Unbind(Control c) { c.DataBindings.Clear(); foreach (Control k in c.Controls) Unbind(k); }
         foreach (var c in _formFields.Controls.Cast<Control>().ToList()) { Unbind(c); c.Dispose(); }
         _formFields.Controls.Clear();
-        var width = Math.Max(760, _formFields.ClientSize.Width - 40);
+        var width = Math.Max(600, _formFields.ClientSize.Width - SystemInformation.VerticalScrollBarWidth - 24);
 
         var title = new Label { Text = Entity.Caption, Font = Ui.HeaderFont, ForeColor = Ui.Accent, AutoSize = true, Margin = new Padding(3, 3, 3, 8) };
         _formFields.Controls.Add(title);
@@ -438,7 +445,7 @@ public sealed class EntityBrowser : UserControl
         foreach (var g in _fields.Where(f => _table.Columns.Contains(f.Name)).GroupBy(f => f.Group))
         {
             // GrowOnly + MinimumSize: the box keeps the full width and grows in height with its fields
-            var box = new GroupBox { Text = g.Key, Width = width, MinimumSize = new Size(width, 0), AutoSize = true, AutoSizeMode = AutoSizeMode.GrowOnly, Padding = new Padding(8), Margin = new Padding(3, 3, 3, 10) };
+            var box = new GroupBox { Text = g.Key.Replace("&", "&&"), Width = width, MinimumSize = new Size(width, 0), AutoSize = true, AutoSizeMode = AutoSizeMode.GrowOnly, Padding = new Padding(8), Margin = new Padding(3, 3, 3, 10) };
             var tl = new TableLayoutPanel { ColumnCount = 4, Dock = DockStyle.Top, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink };
             tl.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 160));
             tl.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
@@ -449,7 +456,7 @@ public sealed class EntityBrowser : UserControl
             {
                 var lbl = new Label
                 {
-                    Text = f.Caption + (f.Required ? " *" : "") + (f.Formula != null ? "  ƒ" : ""), AutoSize = false, Width = 155, Height = 24,
+                    Text = f.Caption + (f.Required ? " *" : "") + (f.Formula != null ? "  ƒ" : ""), UseMnemonic = false, AutoSize = false, Width = 155, Height = 24,
                     TextAlign = ContentAlignment.MiddleLeft, ForeColor = f.ReadOnly ? Color.DimGray : SystemColors.ControlText,
                     Font = f.Required ? new Font(Font, FontStyle.Bold) : Font
                 };
@@ -496,7 +503,7 @@ public sealed class EntityBrowser : UserControl
 
     void FormFieldsResize(object? sender, EventArgs e)
     {
-        var w = Math.Max(760, _formFields.ClientSize.Width - 40);
+        var w = Math.Max(600, _formFields.ClientSize.Width - SystemInformation.VerticalScrollBarWidth - 24);
         foreach (var gb in _formFields.Controls.OfType<GroupBox>()) { gb.MinimumSize = new Size(w, 0); gb.Width = w; }
     }
 

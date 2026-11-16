@@ -42,17 +42,19 @@ public sealed class ReportsForm : UserControl
         _agency.SelectedIndexChanged += (_, _) => Filter();
         _search.TextChanged += (_, _) => Filter();
 
-        var bar = new FlowLayoutPanel { Dock = DockStyle.Top, Height = 40, Padding = new Padding(4) };
+        // buttons first; the bar grows to a second line on narrow screens instead of hiding controls
+        var bar = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, Padding = new Padding(4) };
         bar.Controls.AddRange(
         [
-            L("Package:"), _pkg, L("Agency:"), _agency, L("Group by:"), _group, _search,
             Ui.Button("Run", (_, _) => { if (_current != null) Ui.Busy(this, () => Run(_current)); }, 70),
             Ui.Button("PDF…", (_, _) => Ui.Busy(this, Pdf), 70),
-            Ui.Button("Excel…", (_, _) => Ui.Busy(this, Excel), 70)
+            Ui.Button("Excel…", (_, _) => Ui.Busy(this, Excel), 70),
+            L("Package:"), _pkg, L("Agency:"), _agency, L("Group by:"), _group, _search
         ]);
         var right = new Panel { Dock = DockStyle.Fill };
         right.Controls.Add(_grid); right.Controls.Add(bar); right.Controls.Add(_title);
-        var split = new SplitContainer { Dock = DockStyle.Fill, SplitterDistance = 290, FixedPanel = FixedPanel.Panel1 };
+        var split = new SplitContainer { Dock = DockStyle.Fill, FixedPanel = FixedPanel.Panel1 };
+        Ui.SplitterWhenSized(split, 300);
         split.Panel1.Controls.Add(_list);
         split.Panel2.Controls.Add(right);
         Controls.Add(split);
@@ -65,6 +67,7 @@ public sealed class ReportsForm : UserControl
     {
         _current = r;
         _data = Program.Db.Query(r.Sql);
+        _data.TableName = "Report";   // a DataView can only bind to a named table
         _grid.DataSource = null;
         _view.Table = _data;
         _view.RowFilter = "";

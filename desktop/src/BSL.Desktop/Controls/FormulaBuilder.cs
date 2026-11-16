@@ -47,7 +47,8 @@ public sealed class FormulaBuilder : UserControl
         };
         _formula.TextChanged += (_, _) => Check();
 
-        var split = new SplitContainer { Dock = DockStyle.Fill, SplitterDistance = 260, FixedPanel = FixedPanel.Panel1 };
+        var split = new SplitContainer { Dock = DockStyle.Fill, FixedPanel = FixedPanel.Panel1 };
+        Ui.SplitterWhenSized(split, 280);
         var left = new TabControl { Dock = DockStyle.Fill };
         var tf = new TabPage("Fields (double-click)"); tf.Controls.Add(_fields); tf.Controls.Add(_fieldFilter);
         var tfn = new TabPage("Functions"); tfn.Controls.Add(_functions);

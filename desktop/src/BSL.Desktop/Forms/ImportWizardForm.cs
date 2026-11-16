@@ -38,7 +38,8 @@ public sealed class ImportWizardForm : Form
 
         var tabs = new TabControl { Dock = DockStyle.Fill };
         var t1 = new TabPage(kind == WorkbookKind.Bom ? "Sheets & reconciliation" : "Summary");
-        var split = new SplitContainer { Dock = DockStyle.Fill, SplitterDistance = 250 };
+        var split = new SplitContainer { Dock = DockStyle.Fill, FixedPanel = FixedPanel.Panel1 };
+        Ui.SplitterWhenSized(split, 250);
         split.Panel1.Controls.Add(_sheets);
         split.Panel1.Controls.Add(new Label { Text = "Sheets to import:", Dock = DockStyle.Top, Height = 20 });
         split.Panel2.Controls.Add(_summary);
