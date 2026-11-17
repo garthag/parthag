@@ -17,7 +17,7 @@ public class BslImportTests
         Assert.Equal(3, (int)stove["Sets"]);
         Assert.Equal(3.021m, (decimal)stove["Per set t"]);
         Assert.Equal("Matches", stove["Result"]);
-        Assert.Equal(9.063m, (decimal)stove["BOM t (all sets)"]);
+        Assert.Equal(9.063m, (decimal)stove["All sets t"]);
         Assert.Contains(plan.Issues, i => i.Code == "SHEET_AS_DATE");
         Assert.Contains(plan.Issues, i => i.Code == "GRADE_CORRECTED");
     }

@@ -31,7 +31,7 @@ public sealed class BslPlan
         var t = new DataTable("BOM check");
         t.Columns.Add("Sheet"); t.Columns.Add("Header row", typeof(int)); t.Columns.Add("Lines", typeof(int)); t.Columns.Add("Counted lines", typeof(int));
         t.Columns.Add("Drawings", typeof(int)); t.Columns.Add("Sets", typeof(int)); t.Columns.Add("Per set t", typeof(decimal));
-        t.Columns.Add("Sheet total t", typeof(decimal)); t.Columns.Add("Difference t", typeof(decimal)); t.Columns.Add("BOM t (all sets)", typeof(decimal)); t.Columns.Add("Result");
+        t.Columns.Add("Sheet total t", typeof(decimal)); t.Columns.Add("Difference t", typeof(decimal)); t.Columns.Add("All sets t", typeof(decimal)); t.Columns.Add("Result");
         if (Bom == null) return t;
         foreach (var p in Bom.Packages)
         {
