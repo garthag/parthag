@@ -204,13 +204,17 @@ def nearby_networks():
 
 def gateway_ip():
     if OS == "Windows":
+        # IPv4 routing table: "0.0.0.0  0.0.0.0  <gateway>  <interface>  <metric>"
+        for m in re.finditer(r"^\s*0\.0\.0\.0\s+0\.0\.0\.0\s+(\d+\.\d+\.\d+\.\d+)",
+                             run(["route", "print", "-4", "0.0.0.0"]), re.M):
+            return m.group(1)
+        # Fallback: ipconfig, where an IPv6 gateway may come first and IPv4 on the next line
         text = run(["ipconfig"])
-        for m in re.finditer(r"Default Gateway[ .]*:\s*([\d.]+)", text):
-            if m.group(1):
-                return m.group(1)
-        # Gateway is sometimes on the next line
-        m = re.search(r"Default Gateway[ .]*:\s*\n\s*([\d.]+)", text)
-        return m.group(1) if m else None
+        for m in re.finditer(r"Default Gateway[ .]*:(.*(?:\n\s{20,}\S.*)*)", text):
+            v4 = re.search(r"\b(\d+\.\d+\.\d+\.\d+)\b", m.group(1))
+            if v4:
+                return v4.group(1)
+        return None
     if OS == "Linux":
         m = re.search(r"default via ([\d.]+)", run(["ip", "route"]))
         return m.group(1) if m else None
@@ -417,7 +421,7 @@ def _upload_worker(counter, stop_at, chunk_bytes):
             req = urllib.request.Request(SPEED_UP_URL, data=payload, method="POST",
                                          headers={"User-Agent": "NetBoost/1.0",
                                                   "Content-Type": "application/octet-stream"})
-            with urllib.request.urlopen(req, timeout=15) as r:
+            with urllib.request.urlopen(req, timeout=30) as r:
                 r.read()
             counter.add(len(payload))
         except Exception as e:
@@ -456,8 +460,9 @@ def speed_test(seconds=8, connections=None, upload=True):
     u1 = un = None
     if upload:
         print("  Upload:")
-        u1 = throughput(_upload_worker, 1, seconds, 2_000_000)
-        un = throughput(_upload_worker, connections, seconds, 2_000_000)
+        # Upload lines are slow: a few connections with small chunks avoids timeouts.
+        u1 = throughput(_upload_worker, 1, seconds, 1_000_000)
+        un = throughput(_upload_worker, min(connections, 4), seconds, 500_000)
     if d1 > 0 and dn > d1 * 1.2:
         print(f"\n  Parallel connections are {dn / d1:.1f}x faster than one. Use a multi-connection")
         print("  downloader (e.g. `netboost.py download URL`) for big files.")
@@ -555,10 +560,15 @@ def recommend(w, lat, dns_best, chans, speed):
                 best = min((1, 6, 11), key=lambda c: sum(n for k, n in chans.items() if abs(k - c) < 5))
                 tips.append(f"Channel {mine} is crowded ({crowd} networks overlap). In the router admin page "
                             f"set the 2.4 GHz channel to {best} (use only 1, 6 or 11).")
+        if (w.get("rx_mbps") or 0) <= 72.2 and sum(chans.values() or [0]) <= 3:
+            tips.append("Your link is 72 Mbps, which means a 20 MHz channel. Few networks are nearby, so in "
+                        "the router's Wi-Fi settings set 2.4 GHz channel width to 40 MHz - this can double "
+                        "the link (up to 150 Mbps) for free.")
     rx = w.get("rx_mbps")
-    if rx and speed and speed.get("down_n") and speed["down_n"] > 0.6 * rx:
-        tips.append(f"Wi-Fi link rate ({rx:.0f} Mbps) is the bottleneck, not your ISP. Better signal, "
-                    "5 GHz, or a LAN cable will raise it.")
+    if rx and speed and speed.get("down_n") and speed["down_n"] > 0.4 * rx:
+        tips.append(f"Wi-Fi link rate ({rx:.0f} Mbps) is likely the bottleneck: real-world Wi-Fi gives only "
+                    f"about half the link rate (~{rx * 0.55:.0f} Mbps here). A faster link (5 GHz, 40 MHz "
+                    "channel width, better adapter) or a LAN cable will raise it.")
     radio = (w.get("radio") or "").lower()
     if "802.11n" in radio or "802.11g" in radio:
         tips.append("Your adapter/router link is Wi-Fi 4 (802.11n) or older. A Wi-Fi 5/6 USB adapter "
@@ -574,7 +584,10 @@ def recommend(w, lat, dns_best, chans, speed):
         if net["avg"] - gw["avg"] > 80 or net["loss"] > 1:
             tips.append("Wi-Fi is fine but the internet side is slow/lossy - that is your ISP line. "
                         "Restart the modem, check cables, and if it continues, complain to your ISP.")
-    if dns_best:
+    if dns_best and dns_best[0].startswith("Current"):
+        tips.append(f"Your current DNS ({dns_best[1][0]}) is already the fastest. Keep it - "
+                    "--apply will not change it.")
+    elif dns_best:
         tips.append(f"Use the fastest DNS: {dns_best[0]} {', '.join(dns_best[1])}  "
                     "(run with --apply as Administrator to set it automatically).")
     if speed and speed.get("down_1") and speed["down_n"] > 1.3 * speed["down_1"]:
