@@ -13,6 +13,7 @@ sealed class BillEditorForm : Form
     readonly List<CustomField> _lineFields;
     const string ExtraCol = "x:";
     readonly Dictionary<long, BomItem> _bom = new();
+    readonly Dictionary<long, BoqItem> _boq = new();
     bool _dirty;
     bool _loading;
     bool _ready;
@@ -54,6 +55,7 @@ sealed class BillEditorForm : Form
         _acts = repo.Activities();
         _lineFields = repo.CustomFields(Entities.BillLine);
         foreach (var b in repo.BomItems()) _bom[b.Id] = b;
+        foreach (var q in repo.BoqItems()) _boq[q.Id] = q;
 
         Font = Ui.Base;
         BackColor = Ui.Back;
@@ -84,8 +86,9 @@ sealed class BillEditorForm : Form
         // ── Lines toolbar ──
         var linesBar = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, Padding = new Padding(14, 4, 14, 6), WrapContents = true };
         linesBar.Controls.Add(Ui.Lbl("Bill lines", Ui.Section));
-        linesBar.Controls.Add(Ui.Lbl("BOM lines are billed in tonnes against a drawing or item. Free lines are for anything else.", Ui.Small, Ui.Muted));
+        linesBar.Controls.Add(Ui.Lbl("BOM lines are billed in tonnes against a drawing; BOQ lines against a contract item's R1 scope. Free lines are for anything else.", Ui.Small, Ui.Muted));
         linesBar.Controls.Add(Ui.Btn("+ BOM line", (_, _) => AddBomLines(), primary: true));
+        linesBar.Controls.Add(Ui.Btn("+ BOQ line", (_, _) => AddBoqLines(), primary: true));
         linesBar.Controls.Add(Ui.Btn("+ Free line", (_, _) => AddFreeLine()));
         linesBar.Controls.Add(Ui.Btn("Remove selected", (_, _) => RemoveSelected()));
 
@@ -304,7 +307,16 @@ sealed class BillEditorForm : Form
         var l = _lines[i];
         var r = _grid.Rows[i];
         r.Cells[CNo].Value = (i + 1).ToString(Fmt.Culture);
-        if (l.IsBom)
+        if (l.IsBoq)
+        {
+            r.Cells[CItem].Value = "BOQ › " + (_boq.TryGetValue(l.BoqItemId!.Value, out var q) ? q.Label : l.Description);
+            r.Cells[CItem].ReadOnly = true;
+            r.Cells[CItem].ToolTipText = "BOQ item of the work order";
+            r.Cells[CItem].Style.BackColor = ColorTranslator.FromHtml("#F1F7EC");
+            r.Cells[CUnit].ReadOnly = true;
+            r.Cells[CUnit].Style.ForeColor = Ui.Muted;
+        }
+        else if (l.IsBom)
         {
             r.Cells[CItem].Value = _bom.TryGetValue(l.BomItemId!.Value, out var b) ? b.Label : "(BOM row deleted)";
             r.Cells[CItem].ReadOnly = true;
@@ -327,7 +339,7 @@ sealed class BillEditorForm : Form
         }
         r.Cells[CAct].Value = l.ActivityId is long a ? _acts.FirstOrDefault(x => x.Id == a)?.Name ?? "" : "";
         r.Cells[CUnit].Value = l.Unit;
-        r.Cells[CQty].Value = l.IsBom || l.Unit is "t" or "MT" ? l.Qty.ToString("N3", Fmt.Culture) : l.Qty.ToString("#,##0.###", Fmt.Culture);
+        r.Cells[CQty].Value = l.IsBom || l.IsBoq || l.Unit is "t" or "MT" ? l.Qty.ToString("N3", Fmt.Culture) : l.Qty.ToString("#,##0.###", Fmt.Culture);
         r.Cells[CRate].Value = l.Rate.ToString("#,##,##0.##", Fmt.Culture);
         r.Cells[CAmount].Value = Fmt.Money(l.Amount);
     }
@@ -340,14 +352,14 @@ sealed class BillEditorForm : Form
         var text = cell.Value?.ToString() ?? "";
         switch (_grid.Columns[col].Name)
         {
-            case CItem when !l.IsBom: l.Description = text.Trim(); break;
+            case CItem when l.IsFree: l.Description = text.Trim(); break;
             case CRemarks: l.Remarks = text.Trim(); break;
             case var name when name.StartsWith(ExtraCol, StringComparison.Ordinal):
                 var values = Extras.Parse(l.Extra);
                 values[name[ExtraCol.Length..]] = text.Trim();
                 l.Extra = Extras.Write(values);
                 break;
-            case CUnit when !l.IsBom: l.Unit = text.Trim(); break;
+            case CUnit when l.IsFree: l.Unit = text.Trim(); break;
             case CQty: l.Qty = Fmt.TryParse(text, out var q) ? q : 0; break;
             case CRate: l.Rate = Fmt.TryParse(text, out var r) ? r : 0; break;
             case CAct:
@@ -355,7 +367,7 @@ sealed class BillEditorForm : Form
                 l.ActivityId = a?.Id;
                 if (a != null)
                 {
-                    if (!l.IsBom && l.Unit.Length == 0) l.Unit = a.DefaultUnit;
+                    if (l.IsFree && l.Unit.Length == 0) l.Unit = a.DefaultUnit;
                     if (l.Rate == 0) ApplyRate(l);
                 }
                 break;
@@ -374,7 +386,7 @@ sealed class BillEditorForm : Form
         var rate = _repo.FindRate(w.Id, a);
         if (rate == null) return;
         l.Rate = rate.Amount;
-        if (!l.IsBom && rate.Unit.Length > 0) l.Unit = rate.Unit;
+        if (l.IsFree && rate.Unit.Length > 0) l.Unit = rate.Unit;
     }
 
     /// <summary>Recomputes the "Scope and progress" column, the warning and the totals.</summary>
@@ -384,11 +396,30 @@ sealed class BillEditorForm : Form
         var keys = bomLines.Select(l => (l.BomItemId!.Value, l.ActivityId ?? 0)).Distinct().ToList();
         var scope = _repo.ScopeFor(_bill.Id, keys);
         var over = 0;
+        var boqIds = _lines.Where(l => l.IsBoq).Select(l => l.BoqItemId!.Value).ToList();
+        var boqScope = _repo.BoqScopeFor(_bill.Id, boqIds);
+        var boqThis = _lines.Where(l => l.IsBoq).GroupBy(l => l.BoqItemId!.Value).ToDictionary(g => g.Key, g => g.Sum(l => l.Qty));
         var thisBill = bomLines.GroupBy(l => (l.BomItemId!.Value, l.ActivityId ?? 0)).ToDictionary(g => g.Key, g => g.Sum(l => l.Qty));
         for (var i = 0; i < _lines.Count; i++)
         {
             var l = _lines[i];
             var cell = _grid.Rows[i].Cells[CScope];
+            if (l.IsBoq)
+            {
+                var (bs, be) = boqScope[l.BoqItemId!.Value];
+                if (bs is not { } scopeT)
+                {
+                    cell.Value = $"BOQ item without R1 scope · earlier {Fmt.Tonnes(be)} t · this {Fmt.Tonnes(boqThis[l.BoqItemId.Value])} t";
+                    cell.Style.ForeColor = Ui.Muted;
+                    continue;
+                }
+                var bi = new ScopeInfo(scopeT, be, boqThis[l.BoqItemId.Value]);
+                var bt = $"R1 scope {Fmt.Tonnes(scopeT)} t: earlier {Fmt.Tonnes(be)} · this {Fmt.Tonnes(bi.This)} · {Fmt.Pct(bi.Percent)}% billed";
+                if (bi.Over) { over++; bt += $" · OVER SCOPE ({Fmt.Tonnes(bi.Cumulative)} of {Fmt.Tonnes(scopeT)} t)"; }
+                cell.Value = bt;
+                cell.Style.ForeColor = bi.Over ? Ui.Bad : Ui.Muted;
+                continue;
+            }
             if (!l.IsBom)
             {
                 cell.Value = "free line";
@@ -409,7 +440,7 @@ sealed class BillEditorForm : Form
             cell.Style.ForeColor = info.Over ? Ui.Bad : Ui.Muted;
         }
         _warn.Text = over > 0
-            ? $"{over} line(s) would take the cumulative billing above the BOM scope. You can still save; the line is flagged."
+            ? $"{over} line(s) would take the cumulative billing above the BOM or BOQ scope. You can still save; the line is flagged."
             : _lines.Any(l => l.IsBom && l.ActivityId == null) ? "Choose an activity for every BOM line: the scope is tracked per activity." : "";
         UpdateTotals();
     }
@@ -461,6 +492,30 @@ sealed class BillEditorForm : Form
             ApplyRate(l);
             l.Unit = "t";
             _lines.Add(l);
+        }
+        FillGrid();
+        MarkDirty();
+        FocusCell(_lines.Count - 1, CQty);
+    }
+
+    void AddBoqLines()
+    {
+        var wo = (_wo.SelectedItem as WorkOrder)?.Id;
+        if (_boq.Count == 0)
+        {
+            Ui.Info(this, "There are no BOQ items yet. Data › Import BSL workbooks loads them from the contractor master.");
+            return;
+        }
+        using var p = new BoqPickerForm(_repo, wo);
+        if (p.ShowDialog(this) != DialogResult.OK) return;
+        foreach (var q in p.Selected)
+        {
+            var act = _acts.FirstOrDefault(a => a.Name.Equals(q.Activity, StringComparison.OrdinalIgnoreCase));
+            _lines.Add(new BillLine
+            {
+                BoqItemId = q.Id, Description = q.Description, ActivityId = act?.Id, Unit = "t", Rate = q.InternalRate ?? 0,
+                Remarks = q.InternalRate == null ? "Agency rate not in the BOQ" : "",
+            });
         }
         FillGrid();
         MarkDirty();
@@ -601,7 +656,7 @@ sealed class BillEditorForm : Form
         if (!TryReadHeader(out var b, showErrors: true)) return;
         var wo = _wo.SelectedItem as WorkOrder;
         var lines = _lines.Select((l, i) => (Line: l,
-            Item: l.IsBom ? (_bom.TryGetValue(l.BomItemId!.Value, out var x) ? x.Label : "") : l.Description,
+            Item: l.IsBoq ? "BOQ › " + l.Description : l.IsBom ? (_bom.TryGetValue(l.BomItemId!.Value, out var x) ? x.Label : "") : l.Description,
             Activity: _acts.FirstOrDefault(a => a.Id == l.ActivityId)?.Name ?? "",
             Scope: _grid.Rows[i].Cells[CScope].Value?.ToString() ?? "")).ToList();
         Ui.Preview(this, new BillPrinter(b, wo, lines, _repo.GetSetting("ProjectName") ?? "BF#3"));

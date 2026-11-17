@@ -110,6 +110,40 @@ static class SelfTest
                 Log("ok  import window: sheets recognised, columns matched, data checked");
             }
 
+            var (sbom, scon) = Bf3Billing.Core.Bsl.BslSample.Write(Path.Combine(dir, "bsl"));
+            using (var bf = new BslImportForm(repo, sbom, scon))
+            {
+                bf.Show(main);
+                Application.DoEvents();
+                bf.Check();
+                Application.DoEvents();
+                bf.Close();
+                Log("ok  BSL import window: both workbooks checked");
+            }
+            Bf3Billing.Core.Bsl.BslImport.Apply(repo, Bf3Billing.Core.Bsl.BslImport.Analyze(sbom, scon));
+            main.DataChanged();
+            foreach (TabPage page in tabs.TabPages)
+            {
+                tabs.SelectedTab = page;
+                Application.DoEvents();
+            }
+            Log("ok  all tabs again with BSL data (BOM drawings and parts, BOQ)");
+            var boqBill = repo.BillSummaries().First(b => b.BillNo == "RA-2" && b.Remarks.StartsWith("Imported"));
+            using (var f = new BillEditorForm(repo, boqBill.Id, null))
+            {
+                f.Show(main);
+                Application.DoEvents();
+                f.Close();
+                Log("ok  bill editor with BOQ lines");
+            }
+            using (var p = new BoqPickerForm(repo, boqBill.WorkOrderId))
+            {
+                p.Show(main);
+                Application.DoEvents();
+                p.Close();
+                Log("ok  BOQ picker");
+            }
+
             foreach (var name in Reports.Names)
             {
                 var t = Reports.Run(repo, name);

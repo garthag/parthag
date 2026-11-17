@@ -25,6 +25,11 @@ sealed class DataView : Panel, ITabView
             Array.Empty<Control>(),
             ("Open data file…", OpenOther), ("New empty data file…", NewFile), ("Open demo data file", OpenDemo),
             ("Back to default data file", (_, _) => Switch(BillingDb.DefaultPath))));
+        stack.Controls.Add(Card("BSL workbooks",
+            "The BSL master BOM (every sheet: drawings with their part lines, sets, totals checked against each sheet) and the contractor master " +
+            "(contractors, work orders, the BOQ with client and agency rates, RA-1…RA-n bills, the DRAWING scope and REMARKS extra items). " +
+            "Shows what was found before anything is saved; importing again updates in place.",
+            Array.Empty<Control>(), ("Import BSL workbooks…", (_, _) => OpenBsl(_host))));
         stack.Controls.Add(Card("Import from Excel",
             "Import from Excel: open any workbook, even an untidy one with several sheets. For each sheet the app finds the heading row, guesses what it holds " +
             "(contractors, work orders, BOM or bill lines) and fits its columns to the app's fields. Columns that fit no field can be added as new fields. " +
@@ -47,7 +52,7 @@ sealed class DataView : Panel, ITabView
         inner.Controls.Add(new Label { Text = text, AutoSize = true, MaximumSize = new Size(860, 0), ForeColor = Ui.Muted, Margin = new Padding(0, 0, 0, 8) });
         foreach (var c in extra) inner.Controls.Add(c);
         var bar = new FlowLayoutPanel { AutoSize = true, WrapContents = true, MaximumSize = new Size(870, 0), Margin = new Padding(0) };
-        foreach (var (t, click) in buttons) bar.Controls.Add(Ui.Btn(t, click, primary: t.StartsWith("Import from Excel")));
+        foreach (var (t, click) in buttons) bar.Controls.Add(Ui.Btn(t, click, primary: t.StartsWith("Import from Excel") || t.StartsWith("Import BSL")));
         inner.Controls.Add(bar);
         card.Controls.Add(inner);
         return card;
@@ -62,6 +67,13 @@ sealed class DataView : Panel, ITabView
     }
 
     // ───────────────────────── Shared actions (also used by the dashboard) ─────────────────────────
+
+    public static void OpenBsl(IAppHost host)
+    {
+        using var f = new BslImportForm(host.Repo);
+        f.ShowDialog(host.Window);
+        if (f.Changed) host.DataChanged();
+    }
 
     public static void OpenWizard(IAppHost host)
     {

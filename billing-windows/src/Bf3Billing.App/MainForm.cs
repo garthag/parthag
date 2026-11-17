@@ -80,6 +80,8 @@ sealed class MainForm : Form, IAppHost
         Add("Dashboard", new DashboardView(this));
         Add("Bills", _bills);
         Add("BOM progress", new BomProgressView(this));
+        Add("BOM", new BomView(this));
+        Add("BOQ", new BoqView(this));
         Add("Work orders", new WorkOrdersView(this));
         Add("Contractors", new ContractorsView(this));
         Add("Reports", new ReportsView(this));

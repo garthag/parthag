@@ -36,6 +36,7 @@ To try the app with made-up bills, use **Data › Open demo data file**. It open
 | **Dashboard** | Totals for bills entered, gross, net payable, paid and outstanding. A **Needs attention** list (lines above BOM scope, draft bills, bills submitted but not certified, certified bills awaiting payment). BOM progress by activity, a summary by contractor, and work order utilisation. Before the first bill it shows the **No bills yet** card instead. |
 | **Bills** | Search; filter by status, contractor, work order, date range and "over BOM scope". Export to Excel, print or save as PDF, and **+ New bill** (Ctrl+N anywhere). Double-click a bill to open it. |
 | **Bill editor** | Work order (fills in the contractor and the next RA number), bill number, type, dates, period, status, GST/retention/TDS %, other deduction, paid amount and date, and remarks. **+ BOM line** picks one or more drawings or items from the BOM. **+ Free line** is for anything else. Each BOM line shows *scope · earlier · this · % billed* and is flagged **OVER SCOPE** when the total billed goes past the BOM tonnes. You can still save it. Totals: gross, + GST, − retention, − TDS, − other, net payable, paid, balance due. Also Delete, Duplicate (as the next RA number, Draft), and Print PDF. Ctrl+S saves. |
+| **BOM** / **BOQ** | The BOM drawings with their part lines; the BOQ items with R1 scope, billed tonnes, balance and rates (see *BSL workbooks* below). |
 | **BOM progress** | Tonnes billed per BOM activity at system, drawing or item level, with a %. Rows over scope are shown in red. Double-click a row to see the bill lines behind it. |
 | **Work orders / Contractors** | Add, edit and delete; value, gross billed, balance and % used. Validates GSTIN and PAN length. |
 | **Reports** | Contractor-wise, work order-wise and activity-wise abstracts, bill register, payment register, outstanding bills, all bill lines, and lines above BOM scope. Each can be filtered by bill date, exported to Excel, or printed / saved as PDF. |
@@ -43,6 +44,51 @@ To try the app with made-up bills, use **Data › Open demo data file**. It open
 | **Data** | Data file location and counts. Back up, restore (a safety copy of your data is taken first), open, new and demo data files. Import from Excel (with column matching and duplicate check), quick imports, Excel templates. Export everything. |
 
 **Print PDF** opens a print preview. Choose **Microsoft Print to PDF** to save a PDF.
+
+## BSL workbooks (master BOM and contractor master)
+
+**Data › Import BSL workbooks…** reads the two project workbooks and loads them as linked records:
+
+```
+Contractor ─< Work order ─< BOQ item (R1 scope t, client rate, agency rate)
+                  │              │
+                  └─< Bill ─< Bill line >─┤  BOQ line → BOQ item
+                                          └  BOM line → BOM drawing ─< BOM part lines
+```
+
+| From | Becomes |
+|---|---|
+| **Master BOM**, every sheet (STOVE, STOVE HOUSE, HOT BLAST, SCRUB&DEMIST, SDD …) | One **BOM row per drawing** (system = sheet, drawing no., sheet, rev, title, tonnes, no. of sets), with **all its part lines** under it (assembly / part mark, section, standard section, sizes, qty, unit and total weight, grade, notes). |
+| **Contractor_Master** | **Contractors** (one per firm; code, PAN, GSTIN, phone, contact person, e-mail) and their **work orders** (WO no., date, value, service, ref BM01…BM14, work category). |
+| **Sheet2 (BOQ)** | **BOQ items** linked to their work order by Unique_No: group, spec item, description, unit, qty, R1 weight as the **scope in tonnes**, Supply Unit Rate as the **client rate**, Agency Rate as the **agency rate**, activity. |
+| **Sheet2 RA-1 … RA-42 columns** | **RA bills**: one bill per work order and RA column, one **BOQ line** per item with a quantity, priced at the agency rate. |
+| **DRAWING** and **REMARKS** sheets | BOQ items without a work order (scope list and extra items not in the DOW). |
+
+The workbooks are checked before anything is saved:
+
+* **BOM sheets:**
+  * The header row is found (row 2 or 3), including the *UNIT / TOTAL* sub-header. Weights in MT are converted to kg.
+  * Sheet numbers that Excel turned into dates are turned back. Sheet and revision written inside the drawing number (`ERC_SMS_DSWG_F-0016_1 OF 1 - Rev 0`, `16282205R0`) are split out.
+  * Assembly rows and their part rows are recognised, so weights are not counted twice. Grade typos are corrected.
+  * Sets in the total formula (×3 stoves) are kept as the no. of sets.
+  * Each sheet's own total is compared with the lines, and drawings that appear in two sheets are reported.
+* **Contractor master:**
+  * Firms that repeat on every work order row become one contractor.
+  * Codes that clash with MCK, BSL, ERC or SMS are reported.
+  * PAN and GSTIN are checked.
+  * BOQ items whose RA quantities add up to more than the R1 scope are reported.
+  * RA lines without an agency rate get rate 0, with a note.
+* **The RA columns are read as each bill's own quantity, not a running total.** In most items billed more than once, the quantity goes down from one RA to the next, which a running total cannot do.
+
+The check can be saved to Excel. Importing again later (a new BOM revision, more RA columns) updates what is there. RA bills that are already saved are kept as they are.
+
+**What the workbooks do not say, and the import assumes** (change in the app as needed):
+
+* **RA bill dates** are not in the workbook. Each bill gets its work order's date.
+* **RA bill status** is set to *Certified*, **paid** is 0, and **GST, retention and TDS** are the defaults in Masters (GST 18 %).
+* **BOQ items are not linked to BOM drawings** in the workbooks, so RA quantities count against each BOQ item's R1 scope (BOQ tab), not against the BOM (BOM progress).
+
+The **BOM** tab shows the drawings with their part lines. The **BOQ** tab shows every item's R1 scope, tonnes billed, balance, % billed, client and agency rates; items over scope are shown in red. In the bill editor, **+ BOQ line** adds items of the bill's work order, with the same live scope check as BOM lines.
 
 ## Excel import
 

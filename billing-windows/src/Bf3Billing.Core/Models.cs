@@ -66,6 +66,10 @@ public sealed class BomItem
     public string Rev { get; set; } = "";
     public string Item { get; set; } = "";
     public decimal Tonnes { get; set; }
+    /// <summary>Drawing title (from the BOM).</summary>
+    public string Description { get; set; } = "";
+    /// <summary>Number of identical sets the tonnes include (e.g. 3 stoves).</summary>
+    public int Sets { get; set; } = 1;
     /// <summary>Values of user-added fields, as JSON: {"Field name": "value"}.</summary>
     public string Extra { get; set; } = "{}";
 
@@ -126,6 +130,8 @@ public sealed class BillLine
     public int LineNo { get; set; }
     /// <summary>Set for a BOM line (billed in tonnes against a drawing or item); null for a free line.</summary>
     public long? BomItemId { get; set; }
+    /// <summary>Set for a BOQ line (a contract item of the work order, billed in tonnes against its R1 scope).</summary>
+    public long? BoqItemId { get; set; }
     public string Description { get; set; } = "";
     public string Remarks { get; set; } = "";
     public long? ActivityId { get; set; }
@@ -136,6 +142,8 @@ public sealed class BillLine
     public string Extra { get; set; } = "{}";
     public decimal Amount => BillMath.LineAmount(Qty, Rate);
     public bool IsBom => BomItemId.HasValue;
+    public bool IsBoq => BoqItemId.HasValue;
+    public bool IsFree => !IsBom && !IsBoq;
 
     public BillLine Clone() => (BillLine)MemberwiseClone();
 }
@@ -314,4 +322,60 @@ public static class Extras
     }
 
     public static string Get(string? json, string field) => Parse(json).GetValueOrDefault(field, "");
+}
+
+/// <summary>A contract (BOQ) item: scope in tonnes, the client's rate (external) and the agency's rate (internal).</summary>
+public sealed class BoqItem
+{
+    public long Id { get; set; }
+    public long? WorkOrderId { get; set; }
+    public string WorkOrderNo { get; set; } = "";
+    public string Source { get; set; } = "";
+    public int SourceRow { get; set; }
+    public int SortOrder { get; set; }
+    public string SpecItem { get; set; } = "";
+    public string GroupName { get; set; } = "";
+    public string Description { get; set; } = "";
+    public string Unit { get; set; } = "";
+    public decimal? Qty { get; set; }
+    public decimal? UnitWeightKg { get; set; }
+    public decimal? ScopeTonnes { get; set; }
+    public decimal? ExternalRate { get; set; }
+    public decimal? InternalRate { get; set; }
+    public string Activity { get; set; } = "";
+    public string AgencyRef { get; set; } = "";
+    public string DrawingQty { get; set; } = "";
+    public string Remarks { get; set; } = "";
+    public string Extra { get; set; } = "{}";
+    public string Label => (SpecItem.Length > 0 ? SpecItem + " · " : "") + Description;
+    public override string ToString() => Label;
+}
+
+/// <summary>One line of a drawing's bill of materials (part or assembly), kept for reference under its BOM row.</summary>
+public sealed class BomPart
+{
+    public long Id { get; set; }
+    public long BomItemId { get; set; }
+    public string SourceSheet { get; set; } = "";
+    public int SourceRow { get; set; }
+    public string RowType { get; set; } = "PART";
+    /// <summary>False for detail rows already included in their assembly's weight.</summary>
+    public bool Counted { get; set; } = true;
+    public string AssemblyMark { get; set; } = "";
+    public string PartMark { get; set; } = "";
+    public string ItemNo { get; set; } = "";
+    public string Description { get; set; } = "";
+    public string Section { get; set; } = "";
+    public string SectionStd { get; set; } = "";
+    public decimal? LengthMm { get; set; }
+    public decimal? WidthMm { get; set; }
+    public decimal? ThicknessMm { get; set; }
+    public decimal? Qty { get; set; }
+    public string QtyText { get; set; } = "";
+    public decimal? UnitWeightKg { get; set; }
+    public decimal? TotalWeightKg { get; set; }
+    public string Grade { get; set; } = "";
+    public string GradeRaw { get; set; } = "";
+    public string Remarks { get; set; } = "";
+    public string Flags { get; set; } = "";
 }

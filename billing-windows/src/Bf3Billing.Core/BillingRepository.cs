@@ -227,8 +227,8 @@ public sealed class BillingRepository(BillingDb db)
             if (id == null)
             {
                 b.Id = c.ExecuteScalar<long>("""
-                    INSERT INTO BomItem(System, DrawingNo, Sheet, Rev, Item, Tonnes, Extra)
-                    VALUES (@System, @DrawingNo, @Sheet, @Rev, @Item, @Tonnes, @Extra) RETURNING Id
+                    INSERT INTO BomItem(System, DrawingNo, Sheet, Rev, Item, Tonnes, Description, Sets, Extra)
+                    VALUES (@System, @DrawingNo, @Sheet, @Rev, @Item, @Tonnes, @Description, @Sets, @Extra) RETURNING Id
                     """, b, tx);
                 added++;
             }
@@ -236,7 +236,12 @@ public sealed class BillingRepository(BillingDb db)
             {
                 b.Id = id.Value;
                 b.Extra = Extras.Merge(found!.Extra, Extras.Parse(b.Extra));
-                updated += c.Execute("UPDATE BomItem SET Tonnes=@Tonnes, Extra=@Extra WHERE Id=@Id AND (Tonnes<>@Tonnes OR Extra<>@Extra)", b, tx);
+                if (b.Description.Length == 0) b.Description = found.Description;
+                if (b.Sets < 1) b.Sets = found.Sets;
+                updated += c.Execute("""
+                    UPDATE BomItem SET Tonnes=@Tonnes, Extra=@Extra, Description=@Description, Sets=@Sets
+                    WHERE Id=@Id AND (Tonnes<>@Tonnes OR Extra<>@Extra OR Description<>@Description OR Sets<>@Sets)
+                    """, b, tx);
             }
         }
         tx.Commit();
@@ -408,8 +413,8 @@ public sealed class BillingRepository(BillingDb db)
             l.BillId = b.Id;
             l.LineNo = ++no;
             l.Id = c.ExecuteScalar<long>("""
-                INSERT INTO BillLine(BillId, LineNo, BomItemId, Description, Remarks, ActivityId, Unit, Qty, Rate, Extra)
-                VALUES (@BillId, @LineNo, @BomItemId, @Description, @Remarks, @ActivityId, @Unit, @Qty, @Rate, @Extra) RETURNING Id
+                INSERT INTO BillLine(BillId, LineNo, BomItemId, BoqItemId, Description, Remarks, ActivityId, Unit, Qty, Rate, Extra)
+                VALUES (@BillId, @LineNo, @BomItemId, @BoqItemId, @Description, @Remarks, @ActivityId, @Unit, @Qty, @Rate, @Extra) RETURNING Id
                 """, l, tx);
         }
         tx.Commit();
@@ -454,17 +459,26 @@ public sealed class BillingRepository(BillingDb db)
     public HashSet<long> OverScopeLineIds()
     {
         using var c = Open();
-        var rows = c.Query<(long LineId, long BomItemId, long ActivityId, decimal Qty, decimal Tonnes)>("""
+        // BOM lines: scope per BOM row and activity. BOQ lines: the item's R1 scope (key offset so the two never mix).
+        var rows = c.Query<(long LineId, long ItemKey, long ActivityId, decimal Qty, decimal Tonnes)>("""
             SELECT l.Id, l.BomItemId, COALESCE(l.ActivityId, 0), l.Qty, i.Tonnes
             FROM BillLine l JOIN Bill b ON b.Id = l.BillId JOIN BomItem i ON i.Id = l.BomItemId
             WHERE b.Status <> 'Cancelled'
-            ORDER BY b.BillDate, b.Id, l.LineNo
-            """);
+            UNION ALL
+            SELECT l.Id, -q.Id, 0, l.Qty, q.ScopeTonnes
+            FROM BillLine l JOIN Bill b ON b.Id = l.BillId JOIN BoqItem q ON q.Id = l.BoqItemId
+            WHERE b.Status <> 'Cancelled' AND q.ScopeTonnes IS NOT NULL
+            ORDER BY 1
+            """).ToList();
+        var order = c.Query<(long LineId, int Pos)>("""
+            SELECT l.Id, ROW_NUMBER() OVER (ORDER BY b.BillDate, b.Id, l.LineNo) FROM BillLine l JOIN Bill b ON b.Id = l.BillId
+            """).ToDictionary(x => x.LineId, x => x.Pos);
+        rows = rows.OrderBy(r => order.GetValueOrDefault(r.LineId)).ToList();
         var running = new Dictionary<(long, long), decimal>();
         var over = new HashSet<long>();
         foreach (var r in rows)
         {
-            var key = (r.BomItemId, r.ActivityId);
+            var key = (r.ItemKey, r.ActivityId);
             var total = running.GetValueOrDefault(key) + r.Qty;
             running[key] = total;
             if (total > r.Tonnes + 0.0005m) over.Add(r.LineId);
@@ -490,6 +504,129 @@ public sealed class BillingRepository(BillingDb db)
             result[k] = (scope, earlier);
         }
         return result;
+    }
+
+    /// <summary>For each BOQ item: its R1 scope and the tonnes billed in all other (not cancelled) bills.</summary>
+    public Dictionary<long, (decimal? Scope, decimal Earlier)> BoqScopeFor(long billId, IEnumerable<long> boqItemIds)
+    {
+        var result = new Dictionary<long, (decimal?, decimal)>();
+        using var c = Open();
+        foreach (var id in boqItemIds.Distinct())
+        {
+            var scope = c.ExecuteScalar<decimal?>("SELECT ScopeTonnes FROM BoqItem WHERE Id = @id", new { id });
+            var earlier = c.ExecuteScalar<decimal?>("""
+                SELECT SUM(l.Qty) FROM BillLine l JOIN Bill b ON b.Id = l.BillId
+                WHERE l.BoqItemId = @id AND b.Id <> @billId AND b.Status <> 'Cancelled'
+                """, new { id, billId }) ?? 0m;
+            result[id] = (scope, earlier);
+        }
+        return result;
+    }
+
+    // ───────────────────────── BOQ ─────────────────────────
+
+    public List<BoqItem> BoqItems(long? workOrderId = null)
+    {
+        using var c = Open();
+        return c.Query<BoqItem>("""
+            SELECT q.*, COALESCE(w.WoNo, '') AS WorkOrderNo FROM BoqItem q LEFT JOIN WorkOrder w ON w.Id = q.WorkOrderId
+            WHERE @workOrderId IS NULL OR q.WorkOrderId = @workOrderId ORDER BY q.SortOrder, q.Id
+            """, new { workOrderId }).ToList();
+    }
+
+    public BoqItem? GetBoqItem(long id)
+    {
+        using var c = Open();
+        return c.QueryFirstOrDefault<BoqItem>("SELECT q.*, COALESCE(w.WoNo, '') AS WorkOrderNo FROM BoqItem q LEFT JOIN WorkOrder w ON w.Id = q.WorkOrderId WHERE q.Id = @id", new { id });
+    }
+
+    public long SaveBoqItem(BoqItem q)
+    {
+        q.Description = q.Description.Trim();
+        if (q.Description.Length == 0) throw new BillingException("Enter the description of the BOQ item.");
+        using var c = Open();
+        if (q.Id == 0)
+        {
+            if (q.SortOrder == 0) q.SortOrder = c.ExecuteScalar<int>("SELECT COALESCE(MAX(SortOrder), 0) + 10 FROM BoqItem");
+            return q.Id = c.ExecuteScalar<long>("""
+                INSERT INTO BoqItem(WorkOrderId, Source, SourceRow, SortOrder, SpecItem, GroupName, Description, Unit, Qty, UnitWeightKg,
+                  ScopeTonnes, ExternalRate, InternalRate, Activity, AgencyRef, DrawingQty, Remarks, Extra)
+                VALUES (@WorkOrderId, @Source, @SourceRow, @SortOrder, @SpecItem, @GroupName, @Description, @Unit, @Qty, @UnitWeightKg,
+                  @ScopeTonnes, @ExternalRate, @InternalRate, @Activity, @AgencyRef, @DrawingQty, @Remarks, @Extra) RETURNING Id
+                """, q);
+        }
+        c.Execute("""
+            UPDATE BoqItem SET WorkOrderId=@WorkOrderId, Source=@Source, SourceRow=@SourceRow, SortOrder=@SortOrder, SpecItem=@SpecItem,
+              GroupName=@GroupName, Description=@Description, Unit=@Unit, Qty=@Qty, UnitWeightKg=@UnitWeightKg, ScopeTonnes=@ScopeTonnes,
+              ExternalRate=@ExternalRate, InternalRate=@InternalRate, Activity=@Activity, AgencyRef=@AgencyRef, DrawingQty=@DrawingQty,
+              Remarks=@Remarks, Extra=@Extra WHERE Id=@Id
+            """, q);
+        return q.Id;
+    }
+
+    public void DeleteBoqItem(long id)
+    {
+        using var c = Open();
+        var n = c.ExecuteScalar<long>("SELECT COUNT(*) FROM BillLine WHERE BoqItemId = @id", new { id });
+        if (n > 0) throw new BillingException($"{n} bill line(s) use this BOQ item. It cannot be deleted.");
+        c.Execute("DELETE FROM BoqItem WHERE Id = @id", new { id });
+    }
+
+    /// <summary>Tonnes and amount billed per BOQ item (not cancelled bills).</summary>
+    public Dictionary<long, (decimal Tonnes, decimal Amount, int Bills)> BoqBilled()
+    {
+        using var c = Open();
+        return c.Query<(long Id, decimal T, decimal A, int N)>("""
+            SELECT l.BoqItemId, SUM(l.Qty), SUM(ROUND(l.Qty * l.Rate, 2)), COUNT(DISTINCT l.BillId)
+            FROM BillLine l JOIN Bill b ON b.Id = l.BillId WHERE l.BoqItemId IS NOT NULL AND b.Status <> 'Cancelled' GROUP BY l.BoqItemId
+            """).ToDictionary(x => x.Id, x => (x.T, x.A, x.N));
+    }
+
+    public List<BillLineDetail> BoqLineDetails(long boqItemId)
+    {
+        using var c = Open();
+        return c.Query<BillLineDetail>("""
+            SELECT b.Id AS BillId, b.BillNo, b.BillDate, b.Status, k.Name AS Contractor, w.WoNo AS WorkOrder, l.LineNo,
+              l.Description AS Item, COALESCE(a.Name, '') AS Activity, l.Unit, l.Qty, l.Rate, ROUND(l.Qty * l.Rate, 2) AS Amount, l.Remarks
+            FROM BillLine l JOIN Bill b ON b.Id = l.BillId JOIN WorkOrder w ON w.Id = b.WorkOrderId JOIN Contractor k ON k.Id = w.ContractorId
+            LEFT JOIN Activity a ON a.Id = l.ActivityId WHERE l.BoqItemId = @boqItemId ORDER BY b.BillDate, b.Id, l.LineNo
+            """, new { boqItemId }).ToList();
+    }
+
+    // ───────────────────────── BOM parts ─────────────────────────
+
+    public List<BomPart> BomParts(long bomItemId)
+    {
+        using var c = Open();
+        return c.Query<BomPart>("SELECT * FROM BomPart WHERE BomItemId = @bomItemId ORDER BY SourceSheet, SourceRow", new { bomItemId }).ToList();
+    }
+
+    public Dictionary<long, int> BomPartCounts()
+    {
+        using var c = Open();
+        return c.Query<(long Id, int N)>("SELECT BomItemId, COUNT(*) FROM BomPart GROUP BY BomItemId").ToDictionary(x => x.Id, x => x.N);
+    }
+
+    /// <summary>Replaces the part lines of the given BOM rows (one transaction).</summary>
+    public void ReplaceBomParts(IEnumerable<(long BomItemId, IEnumerable<BomPart> Parts)> items)
+    {
+        using var c = Open();
+        using var tx = c.BeginTransaction();
+        foreach (var (id, parts) in items)
+        {
+            c.Execute("DELETE FROM BomPart WHERE BomItemId = @id", new { id }, tx);
+            foreach (var p in parts)
+            {
+                p.BomItemId = id;
+                c.Execute("""
+                    INSERT INTO BomPart(BomItemId, SourceSheet, SourceRow, RowType, Counted, AssemblyMark, PartMark, ItemNo, Description, Section,
+                      SectionStd, LengthMm, WidthMm, ThicknessMm, Qty, QtyText, UnitWeightKg, TotalWeightKg, Grade, GradeRaw, Remarks, Flags)
+                    VALUES (@BomItemId, @SourceSheet, @SourceRow, @RowType, @Counted, @AssemblyMark, @PartMark, @ItemNo, @Description, @Section,
+                      @SectionStd, @LengthMm, @WidthMm, @ThicknessMm, @Qty, @QtyText, @UnitWeightKg, @TotalWeightKg, @Grade, @GradeRaw, @Remarks, @Flags)
+                    """, p, tx);
+            }
+        }
+        tx.Commit();
     }
 
     public List<BillSummary> BillSummaries(BillFilter? f = null)
@@ -647,7 +784,8 @@ public sealed class BillingRepository(BillingDb db)
         using var c = Open();
         var sql = """
             SELECT b.Id AS BillId, b.BillNo, b.BillDate, b.Status, k.Name AS Contractor, w.WoNo AS WorkOrder, l.LineNo,
-              CASE WHEN l.BomItemId IS NULL THEN l.Description
+              CASE WHEN l.BoqItemId IS NOT NULL THEN 'BOQ › ' || l.Description
+                   WHEN l.BomItemId IS NULL THEN l.Description
                    ELSE i.System || ' › ' || i.DrawingNo
                         || CASE WHEN i.Sheet <> '' THEN ' · Sht ' || i.Sheet ELSE '' END
                         || CASE WHEN i.Rev <> '' THEN ' · Rev ' || i.Rev ELSE '' END

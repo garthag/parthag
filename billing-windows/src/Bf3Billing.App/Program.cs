@@ -5,13 +5,18 @@ namespace Bf3Billing.App;
 
 static class Program
 {
+    [System.Runtime.InteropServices.DllImport("kernel32.dll")]
+    static extern void ExitProcess(uint exitCode);
+
     [STAThread]
     static void Main(string[] args)
     {
         ApplicationConfiguration.Initialize();
         if (args.Length > 0 && args[0] == "--selftest")
         {
-            Environment.Exit(SelfTest.Run(args.Length > 1 ? args[1] : null));
+            var code = SelfTest.Run(args.Length > 1 ? args[1] : null);
+            // Leave at once: a normal exit can wait on Windows Forms' own threads after the windows are gone.
+            ExitProcess((uint)code);
             return;
         }
         Application.SetUnhandledExceptionMode(UnhandledExceptionMode.CatchException);

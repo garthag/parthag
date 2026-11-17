@@ -8,7 +8,7 @@ namespace Bf3Billing.Core;
 /// <summary>The SQLite data file (billing.db) and its schema.</summary>
 public sealed class BillingDb
 {
-    public const int SchemaVersion = 2;
+    public const int SchemaVersion = 3;
     public string FilePath { get; }
 
     static BillingDb()
@@ -68,6 +68,15 @@ public sealed class BillingDb
     static void EnsureSchema(IDbConnection c)
     {
         c.Execute(Schema);
+        // Version 3: drawing description on BOM rows, BOQ items on bill lines.
+        void AddColumn(string table, string column, string type)
+        {
+            if (!c.Query<string>($"SELECT name FROM pragma_table_info('{table}')").Contains(column, StringComparer.OrdinalIgnoreCase))
+                c.Execute($"ALTER TABLE {table} ADD COLUMN {column} {type}");
+        }
+        AddColumn("BomItem", "Description", "TEXT NOT NULL DEFAULT ''");
+        AddColumn("BomItem", "Sets", "INTEGER NOT NULL DEFAULT 1");
+        AddColumn("BillLine", "BoqItemId", "INTEGER REFERENCES BoqItem(Id)");
         // Version 2: user-added fields are kept as JSON in an Extra column.
         foreach (var table in new[] { "Contractor", "WorkOrder", "BomItem", "BillLine" })
             if (!c.Query<string>($"SELECT name FROM pragma_table_info('{table}')").Contains("Extra", StringComparer.OrdinalIgnoreCase))
@@ -158,6 +167,55 @@ public sealed class BillingDb
             Unit        TEXT NOT NULL DEFAULT '',
             Qty         REAL NOT NULL DEFAULT 0,
             Rate        REAL NOT NULL DEFAULT 0);
+
+        CREATE TABLE IF NOT EXISTS BoqItem(
+            Id           INTEGER PRIMARY KEY,
+            WorkOrderId  INTEGER REFERENCES WorkOrder(Id),
+            Source       TEXT NOT NULL DEFAULT '',
+            SourceRow    INTEGER NOT NULL DEFAULT 0,
+            SortOrder    INTEGER NOT NULL DEFAULT 0,
+            SpecItem     TEXT NOT NULL DEFAULT '',
+            GroupName    TEXT NOT NULL DEFAULT '',
+            Description  TEXT NOT NULL,
+            Unit         TEXT NOT NULL DEFAULT '',
+            Qty          REAL,
+            UnitWeightKg REAL,
+            ScopeTonnes  REAL,
+            ExternalRate REAL,
+            InternalRate REAL,
+            Activity     TEXT NOT NULL DEFAULT '',
+            AgencyRef    TEXT NOT NULL DEFAULT '',
+            DrawingQty   TEXT NOT NULL DEFAULT '',
+            Remarks      TEXT NOT NULL DEFAULT '',
+            Extra        TEXT NOT NULL DEFAULT '{}');
+
+        CREATE TABLE IF NOT EXISTS BomPart(
+            Id           INTEGER PRIMARY KEY,
+            BomItemId    INTEGER NOT NULL REFERENCES BomItem(Id) ON DELETE CASCADE,
+            SourceSheet  TEXT NOT NULL DEFAULT '',
+            SourceRow    INTEGER NOT NULL DEFAULT 0,
+            RowType      TEXT NOT NULL DEFAULT 'PART',
+            Counted      INTEGER NOT NULL DEFAULT 1,
+            AssemblyMark TEXT NOT NULL DEFAULT '',
+            PartMark     TEXT NOT NULL DEFAULT '',
+            ItemNo       TEXT NOT NULL DEFAULT '',
+            Description  TEXT NOT NULL DEFAULT '',
+            Section      TEXT NOT NULL DEFAULT '',
+            SectionStd   TEXT NOT NULL DEFAULT '',
+            LengthMm     REAL,
+            WidthMm      REAL,
+            ThicknessMm  REAL,
+            Qty          REAL,
+            QtyText      TEXT NOT NULL DEFAULT '',
+            UnitWeightKg REAL,
+            TotalWeightKg REAL,
+            Grade        TEXT NOT NULL DEFAULT '',
+            GradeRaw     TEXT NOT NULL DEFAULT '',
+            Remarks      TEXT NOT NULL DEFAULT '',
+            Flags        TEXT NOT NULL DEFAULT '');
+
+        CREATE INDEX IF NOT EXISTS IX_BomPart_Item ON BomPart(BomItemId);
+        CREATE INDEX IF NOT EXISTS IX_BoqItem_WorkOrder ON BoqItem(WorkOrderId);
 
         CREATE TABLE IF NOT EXISTS CustomField(
             Id        INTEGER PRIMARY KEY,

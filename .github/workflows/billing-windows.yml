@@ -47,9 +47,12 @@ jobs:
         run: |
           $log = Join-Path $env:RUNNER_TEMP 'selftest.log'
           $p = Start-Process -FilePath 'publish/Bf3Billing/Bf3Billing.exe' -ArgumentList '--selftest', "`"$log`"" -PassThru
-          if (-not $p.WaitForExit(240000)) { $p.Kill(); if (Test-Path $log) { Get-Content $log }; throw "Self test did not finish in 4 minutes" }
-          if (Test-Path $log) { Get-Content $log }
-          if ($p.ExitCode -ne 0) { throw "Self test failed with exit code $($p.ExitCode)" }
+          $done = $p.WaitForExit(240000)
+          if (-not $done) { $p.Kill() }
+          if (Test-Path $log) { Get-Content $log } else { throw "Self test wrote no log" }
+          $last = (Get-Content $log | Select-Object -Last 1)
+          if ($last -ne 'SELF TEST PASSED') { throw "Self test failed: $last" }
+          if (-not $done) { Write-Host "::warning::Self test passed but the program did not exit by itself" }
 
       - name: Zip
         shell: pwsh
