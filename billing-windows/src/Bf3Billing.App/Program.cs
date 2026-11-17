@@ -12,6 +12,11 @@ static class Program
     static void Main(string[] args)
     {
         ApplicationConfiguration.Initialize();
+        if (args.Length > 1 && args[0] == "--screenshots")
+        {
+            ExitProcess((uint)Screenshots.Run(args[1]));
+            return;
+        }
         if (args.Length > 0 && args[0] == "--selftest")
         {
             var code = SelfTest.Run(args.Length > 1 ? args[1] : null);

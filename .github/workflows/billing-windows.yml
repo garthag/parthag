@@ -54,6 +54,30 @@ jobs:
           if ($last -ne 'SELF TEST PASSED') { throw "Self test failed: $last" }
           if (-not $done) { Write-Host "::warning::Self test passed but the program did not exit by itself" }
 
+      - name: Screenshots of every screen (demo data)
+        timeout-minutes: 5
+        shell: pwsh
+        run: |
+          $dir = Join-Path $env:RUNNER_TEMP 'shots'
+          $p = Start-Process -FilePath 'publish/Bf3Billing/Bf3Billing.exe' -ArgumentList '--screenshots', "`"$dir`"" -PassThru
+          if (-not $p.WaitForExit(180000)) { $p.Kill() }
+          if (Test-Path "$dir/error.txt") { Get-Content "$dir/error.txt"; throw "Screenshots failed" }
+          New-Item -ItemType Directory -Force -Path screenshots | Out-Null
+          Copy-Item "$dir/*.png" screenshots/
+          Get-ChildItem screenshots | ForEach-Object { Write-Host "$($_.Name) $($_.Length) bytes" }
+          # Also written into the log (base64) so the images can be read where artifacts cannot be downloaded.
+          foreach ($f in Get-ChildItem screenshots -Filter *.png) {
+            $b = [Convert]::ToBase64String([IO.File]::ReadAllBytes($f.FullName))
+            Write-Host "##SHOT $($f.Name)"
+            for ($i = 0; $i -lt $b.Length; $i += 3000) { Write-Host ("#B " + $b.Substring($i, [Math]::Min(3000, $b.Length - $i))) }
+            Write-Host "##END"
+          }
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Bf3Billing-screenshots
+          path: billing-windows/screenshots/
+
       - name: Zip
         shell: pwsh
         run: |
