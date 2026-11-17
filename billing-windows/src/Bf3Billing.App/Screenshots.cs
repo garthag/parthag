@@ -45,7 +45,8 @@ static class Screenshots
                 {
                     // Pick the drawing with the most part lines so the lower grid shows something.
                     var grid = page.Controls[0].Controls.OfType<SplitContainer>().First().Panel1.Controls.OfType<DataGridView>().First();
-                    if (grid.Rows.Count > 0) { grid.CurrentCell = grid.Rows[0].Cells[1]; Settle(); }
+                    var best = grid.Rows.Cast<DataGridViewRow>().OrderByDescending(r => r.Cells["Part lines"].Value is int pl ? pl : 0).FirstOrDefault();
+                    if (best != null) { grid.CurrentCell = best.Cells[1]; Settle(); }
                 }
                 Save(main, outDir, ref n, "tab-" + page.Text);
             }
