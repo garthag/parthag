@@ -89,7 +89,7 @@ sealed class EditDialog : Form
         foreach (var (box, label) in _numbers)
             if (!Fmt.TryParse(box.Text, out _))
             {
-                MessageBox.Show(this, $"{label}: '{box.Text}' is not a number.", Text);
+                Ui.Ask(this, $"{label}: '{box.Text}' is not a number.", Text);
                 box.Focus();
                 return;
             }

@@ -13,7 +13,23 @@ static class SelfTest
     public static int Run(string? logPath)
     {
         var log = new List<string>();
-        void Log(string s) { log.Add(s); Console.WriteLine(s); }
+        var step = "start";
+        // Written line by line, so a hang still shows the last step that worked.
+        void Log(string s)
+        {
+            log.Add(s);
+            step = s;
+            Console.WriteLine(s);
+            if (logPath != null) try { File.AppendAllText(logPath, s + Environment.NewLine); } catch (IOException) { }
+        }
+        if (logPath != null) try { File.Delete(logPath); } catch (IOException) { }
+        Ui.SelfTestMode = true;
+        Application.SetUnhandledExceptionMode(UnhandledExceptionMode.ThrowException);
+        using var watchdog = new System.Threading.Timer(_ =>
+        {
+            Log($"FAIL timed out after 180 s; last step that finished: {step}");
+            Environment.Exit(3);
+        }, null, TimeSpan.FromSeconds(180), Timeout.InfiniteTimeSpan);
         var dir = Path.Combine(Path.GetTempPath(), "bf3-selftest-" + Guid.NewGuid().ToString("N"));
         var failed = false;
         try
@@ -116,7 +132,6 @@ static class SelfTest
             try { Directory.Delete(dir, true); } catch (IOException) { } catch (UnauthorizedAccessException) { }
         }
         Log(failed ? "SELF TEST FAILED" : "SELF TEST PASSED");
-        if (logPath != null) File.WriteAllLines(logPath, log);
         return failed ? 1 : 0;
     }
 

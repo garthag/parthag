@@ -170,14 +170,25 @@ static class Ui
     public static void Error(IWin32Window owner, Exception ex)
     {
         var msg = ex is BillingException ? ex.Message : ex.Message + Environment.NewLine + Environment.NewLine + ex.GetType().Name;
-        MessageBox.Show(owner, msg, "BF#3 Billing", MessageBoxButtons.OK, ex is BillingException ? MessageBoxIcon.Warning : MessageBoxIcon.Error);
+        Ask(owner, msg, "BF#3 Billing", MessageBoxButtons.OK, ex is BillingException ? MessageBoxIcon.Warning : MessageBoxIcon.Error);
+    }
+
+    /// <summary>Set by the self test: any message box would wait for a click, so it fails the test instead.</summary>
+    public static bool SelfTestMode { get; set; }
+
+    /// <summary>Every message box in the app goes through here.</summary>
+    public static DialogResult Ask(IWin32Window? owner, string text, string caption, MessageBoxButtons buttons = MessageBoxButtons.OK,
+        MessageBoxIcon icon = MessageBoxIcon.None, MessageBoxDefaultButton defaultButton = MessageBoxDefaultButton.Button1)
+    {
+        if (SelfTestMode) throw new InvalidOperationException($"A message box would have opened: [{caption}] {text}");
+        return owner == null ? MessageBox.Show(text, caption, buttons, icon, defaultButton) : MessageBox.Show(owner, text, caption, buttons, icon, defaultButton);
     }
 
     public static void Info(IWin32Window owner, string msg) =>
-        MessageBox.Show(owner, msg, "BF#3 Billing", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        Ask(owner, msg, "BF#3 Billing", MessageBoxButtons.OK, MessageBoxIcon.Information);
 
     public static bool Confirm(IWin32Window owner, string msg) =>
-        MessageBox.Show(owner, msg, "BF#3 Billing", MessageBoxButtons.YesNo, MessageBoxIcon.Question, MessageBoxDefaultButton.Button2) == DialogResult.Yes;
+        Ask(owner, msg, "BF#3 Billing", MessageBoxButtons.YesNo, MessageBoxIcon.Question, MessageBoxDefaultButton.Button2) == DialogResult.Yes;
 
     /// <summary>Runs an action and shows any failure as a message instead of closing the app.</summary>
     public static bool Try(IWin32Window owner, Action a)
@@ -212,7 +223,7 @@ static class Ui
 
     public static void OfferOpen(IWin32Window owner, string path, string message)
     {
-        if (MessageBox.Show(owner, message + Environment.NewLine + path + Environment.NewLine + Environment.NewLine + "Open it now?",
+        if (Ask(owner, message + Environment.NewLine + path + Environment.NewLine + Environment.NewLine + "Open it now?",
                 "BF#3 Billing", MessageBoxButtons.YesNo, MessageBoxIcon.Information) == DialogResult.Yes)
             OpenShell(path);
     }

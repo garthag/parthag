@@ -11,9 +11,14 @@ on:
       - '.github/workflows/billing-windows.yml'
   workflow_dispatch:
 
+concurrency:
+  group: billing-windows-${{ github.ref }}-${{ github.event_name }}
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: windows-latest
+    timeout-minutes: 30
     defaults:
       run:
         working-directory: billing-windows
@@ -37,10 +42,12 @@ jobs:
         run: dotnet publish src/Bf3Billing.App -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true -o publish/Bf3Billing
 
       - name: Self test (opens every screen on a temporary demo data file)
+        timeout-minutes: 6
         shell: pwsh
         run: |
           $log = Join-Path $env:RUNNER_TEMP 'selftest.log'
-          $p = Start-Process -FilePath 'publish/Bf3Billing/Bf3Billing.exe' -ArgumentList '--selftest', "`"$log`"" -PassThru -Wait
+          $p = Start-Process -FilePath 'publish/Bf3Billing/Bf3Billing.exe' -ArgumentList '--selftest', "`"$log`"" -PassThru
+          if (-not $p.WaitForExit(240000)) { $p.Kill(); if (Test-Path $log) { Get-Content $log }; throw "Self test did not finish in 4 minutes" }
           if (Test-Path $log) { Get-Content $log }
           if ($p.ExitCode -ne 0) { throw "Self test failed with exit code $($p.ExitCode)" }
 

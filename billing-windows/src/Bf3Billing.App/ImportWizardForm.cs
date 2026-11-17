@@ -351,7 +351,7 @@ sealed class ImportWizardForm : Form
         var open = st.Map!.Where(m => m.NeedsDecision).ToList();
         if (open.Count == 0) return true;
         var list = string.Join(Environment.NewLine, open.Select(m => $"   • {m.Header}   (e.g. {Shorten(m.Sample)})"));
-        var answer = AutoAddNewFields is bool auto ? (auto ? DialogResult.Yes : DialogResult.No) : MessageBox.Show(this,
+        var answer = AutoAddNewFields is bool auto ? (auto ? DialogResult.Yes : DialogResult.No) : Ui.Ask(this,
             $"{open.Count} column(s) do not fit any field of {ImportTargets.Label(st.Target)}:{Environment.NewLine}{Environment.NewLine}{list}{Environment.NewLine}{Environment.NewLine}" +
             "Add them as new fields so their data is kept?" + Environment.NewLine + Environment.NewLine +
             "Yes = add a new field for each and put the data there" + Environment.NewLine +

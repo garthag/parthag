@@ -15,6 +15,7 @@ sealed class BillEditorForm : Form
     readonly Dictionary<long, BomItem> _bom = new();
     bool _dirty;
     bool _loading;
+    bool _ready;
 
     public event Action? Saved;
 
@@ -122,7 +123,7 @@ sealed class BillEditorForm : Form
         {
             t.Validating += (_, e) =>
             {
-                if (!Fmt.TryParse(t.Text, out var v)) { e.Cancel = true; MessageBox.Show(this, $"'{t.Text}' is not a number.", Text); return; }
+                if (!Fmt.TryParse(t.Text, out var v)) { e.Cancel = true; Ui.Ask(this, $"'{t.Text}' is not a number.", Text); return; }
                 t.Text = t == _other || t == _paid ? Fmt.Money(v) : v.ToString("0.##", Fmt.Culture);
             };
             t.TextChanged += (_, _) => { MarkDirty(); UpdateTotals(); };
@@ -138,9 +139,11 @@ sealed class BillEditorForm : Form
         FormClosing += (_, e) =>
         {
             if (_dirty && DialogResult != DialogResult.OK &&
-                MessageBox.Show(this, "Discard the changes to this bill?", Text, MessageBoxButtons.YesNo, MessageBoxIcon.Question, MessageBoxDefaultButton.Button2) != DialogResult.Yes)
+                Ui.Ask(this, "Discard the changes to this bill?", Text, MessageBoxButtons.YesNo, MessageBoxIcon.Question, MessageBoxDefaultButton.Button2) != DialogResult.Yes)
                 e.Cancel = true;
         };
+
+        Shown += (_, _) => BeginInvoke(() => { _ready = true; _dirty = false; if (Text.EndsWith(" *")) Text = Text[..^2]; });
 
         // ── Load ──
         if (billId is long id && repo.GetBill(id) is { } loaded)
@@ -185,7 +188,8 @@ sealed class BillEditorForm : Form
 
     void MarkDirty()
     {
-        if (_loading) return;
+        // Controls raise change events while their windows are created; only count changes once the form is on screen.
+        if (_loading || !_ready) return;
         _dirty = true;
         if (!Text.EndsWith('*')) Text += " *";
     }
@@ -524,7 +528,7 @@ sealed class BillEditorForm : Form
         {
             if (!Fmt.TryParse(box.Text, out var v))
             {
-                if (showErrors) { MessageBox.Show(this, $"{name}: '{box.Text}' is not a number.", Text); box.Focus(); }
+                if (showErrors) { Ui.Ask(this, $"{name}: '{box.Text}' is not a number.", Text); box.Focus(); }
                 return false;
             }
             if (box == _gst) b.GstPct = v;
@@ -544,7 +548,7 @@ sealed class BillEditorForm : Form
         if (b.Status == BillStatus.Paid && b.PaidAmount == 0)
         {
             var net = BillMath.Totals(b, _lines).Net;
-            var answer = MessageBox.Show(this, $"The bill is marked Paid but the paid amount is 0.{Environment.NewLine}Set paid = net payable (₹ {Fmt.Money(net)}) on {Fmt.Date(b.PaidOn ?? DateTime.Today)}?",
+            var answer = Ui.Ask(this, $"The bill is marked Paid but the paid amount is 0.{Environment.NewLine}Set paid = net payable (₹ {Fmt.Money(net)}) on {Fmt.Date(b.PaidOn ?? DateTime.Today)}?",
                 Text, MessageBoxButtons.YesNoCancel, MessageBoxIcon.Question);
             if (answer == DialogResult.Cancel) return false;
             if (answer == DialogResult.Yes) { b.PaidAmount = net; b.PaidOn ??= DateTime.Today; }
