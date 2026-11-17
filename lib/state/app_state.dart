@@ -3,7 +3,9 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 
 import '../data/local_store.dart';
+import '../models/drawing.dart';
 import '../models/models.dart';
+import '../services/drawing_service.dart';
 
 class UserProfile {
   UserProfile({this.name = '', this.designation = 'Site Engineer', this.company = ''});
@@ -62,6 +64,7 @@ class AppState extends ChangeNotifier {
 
   final List<Project> projects = [];
   final List<DailyReport> reports = [];
+  final List<Drawing> drawings = [];
   UserProfile profile = UserProfile();
   bool loaded = false;
 
@@ -71,12 +74,16 @@ class AppState extends ChangeNotifier {
     final p = await _store.read('projects');
     final r = await _store.read('reports');
     final u = await _store.read('profile');
+    final d = await _store.read('drawings');
     projects
       ..clear()
       ..addAll((p as List? ?? []).map((e) => Project.fromJson(Map<String, dynamic>.from(e))));
     reports
       ..clear()
       ..addAll((r as List? ?? []).map((e) => DailyReport.fromJson(Map<String, dynamic>.from(e))));
+    drawings
+      ..clear()
+      ..addAll((d as List? ?? []).map((e) => Drawing.fromJson(Map<String, dynamic>.from(e))));
     if (u is Map) profile = UserProfile.fromJson(Map<String, dynamic>.from(u));
     loaded = true;
     notifyListeners();
@@ -87,6 +94,9 @@ class AppState extends ChangeNotifier {
 
   Future<void> _persistReports() =>
       _store.write('reports', reports.map((e) => e.toJson()).toList());
+
+  Future<void> _persistDrawings() =>
+      _store.write('drawings', drawings.map((e) => e.toJson()).toList());
 
   Future<void> saveProfile(UserProfile p) async {
     profile = p;
@@ -122,8 +132,14 @@ class AppState extends ChangeNotifier {
     }
     reports.removeWhere((r) => r.projectId == id);
     projects.removeWhere((p) => p.id == id);
+    final dws = drawings.where((d) => d.projectId == id).toList();
+    for (final d in dws) {
+      await DrawingService(_store).deleteFile(d);
+    }
+    drawings.removeWhere((d) => d.projectId == id);
     await _persistProjects();
     await _persistReports();
+    if (dws.isNotEmpty) await _persistDrawings();
     notifyListeners();
   }
 
@@ -194,6 +210,49 @@ class AppState extends ChangeNotifier {
         if (await f.exists()) await f.delete();
       } catch (_) {}
     }
+  }
+
+  // ---------------------------------------------------------------- drawings
+
+  List<Drawing> drawingsFor(String projectId) =>
+      drawings.where((d) => d.projectId == projectId).toList();
+
+  Drawing? drawing(String id) {
+    for (final d in drawings) {
+      if (d.id == id) return d;
+    }
+    return null;
+  }
+
+  /// All revisions of the drawing [d] belongs to, newest first.
+  List<Drawing> revisionsOf(Drawing d) => drawings
+      .where((x) => x.projectId == d.projectId && x.registerKey == d.registerKey)
+      .toList()
+    ..sort((a, b) => compareRevisions(b.revision, a.revision));
+
+  bool isCurrentRevision(Drawing d) => revisionsOf(d).first.id == d.id;
+
+  Future<void> addDrawings(Iterable<Drawing> list) async {
+    drawings.addAll(list);
+    await _persistDrawings();
+    notifyListeners();
+  }
+
+  Future<void> saveDrawing(Drawing d) async {
+    final i = drawings.indexWhere((e) => e.id == d.id);
+    i >= 0 ? drawings[i] = d : drawings.add(d);
+    await _persistDrawings();
+    notifyListeners();
+  }
+
+  Future<void> deleteDrawings(Iterable<Drawing> list) async {
+    final ids = list.map((d) => d.id).toSet();
+    for (final d in list) {
+      await DrawingService(_store).deleteFile(d);
+    }
+    drawings.removeWhere((d) => ids.contains(d.id));
+    await _persistDrawings();
+    notifyListeners();
   }
 
   /// Replaces local data with merged cloud data (used by sync).

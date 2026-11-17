@@ -1,5 +1,6 @@
 import '../models/models.dart';
 import '../state/app_state.dart';
+import 'sample_drawings.dart';
 
 /// Creates a realistic sample project with three days of DPRs so new users
 /// can explore the app before entering their own site data.
@@ -104,5 +105,6 @@ Future<Project> createSampleProject(AppState state) async {
     await state.saveReport(r);
     prev = r;
   }
+  await createSampleDrawings(state, p);
   return p;
 }

@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../models/models.dart';
 import '../state/app_state.dart';
 import '../widgets/common.dart';
+import 'drawing_register.dart';
 import 'media_gallery.dart';
 import 'project_form_screen.dart';
 import 'report_screen.dart';
@@ -20,7 +21,7 @@ class ProjectScreen extends StatelessWidget {
     if (project == null) return const Scaffold(body: SizedBox());
 
     return DefaultTabController(
-      length: 3,
+      length: 4,
       child: Scaffold(
         appBar: AppBar(
           title: Text(project.name, overflow: TextOverflow.ellipsis),
@@ -49,18 +50,34 @@ class ProjectScreen extends StatelessWidget {
             Tab(icon: Icon(Icons.description_outlined), text: 'DPRs'),
             Tab(icon: Icon(Icons.insights_outlined), text: 'Dashboard'),
             Tab(icon: Icon(Icons.photo_library_outlined), text: 'Media'),
+            Tab(icon: Icon(Icons.architecture), text: 'Drawings'),
           ]),
         ),
         body: TabBarView(children: [
           _ReportList(project: project),
           _Dashboard(project: project),
           ProjectMediaLibrary(projectId: project.id),
+          DrawingRegisterTab(project: project),
         ]),
-        floatingActionButton: FloatingActionButton.extended(
-          onPressed: () => newReport(context, project.id),
-          icon: const Icon(Icons.note_add_outlined),
-          label: const Text('New DPR'),
-        ),
+        floatingActionButton: Builder(builder: (context) {
+          final tabs = DefaultTabController.of(context);
+          return AnimatedBuilder(
+            animation: tabs,
+            builder: (context, _) => tabs.index == 3
+                ? FloatingActionButton.extended(
+                    heroTag: 'import-drawings',
+                    onPressed: () => importDrawings(context, project),
+                    icon: const Icon(Icons.unarchive_outlined),
+                    label: const Text('Import ZIP'),
+                  )
+                : FloatingActionButton.extended(
+                    heroTag: 'new-dpr',
+                    onPressed: () => newReport(context, project.id),
+                    icon: const Icon(Icons.note_add_outlined),
+                    label: const Text('New DPR'),
+                  ),
+          );
+        }),
       ),
     );
   }
