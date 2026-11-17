@@ -50,6 +50,9 @@ static class SelfTest
             main.Show();
             Application.DoEvents();
             var tabs = main.Controls.OfType<Panel>().SelectMany(p => p.Controls.OfType<TabControl>()).Single();
+            var dash = tabs.TabPages[0].Controls.OfType<DashboardView>().Single();
+            if (dash.KpiTiles != 5) throw new InvalidOperationException($"Dashboard shows {dash.KpiTiles} KPI tiles at startup, expected 5.");
+            Log("ok  dashboard filled at startup");
             foreach (TabPage page in tabs.TabPages)
             {
                 tabs.SelectedTab = page;

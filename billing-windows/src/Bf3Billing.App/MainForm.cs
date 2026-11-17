@@ -64,6 +64,7 @@ sealed class MainForm : Form, IAppHost
 
         BuildTabs();
         _tabs.SelectedIndexChanged += (_, _) => RefreshIfStale(_tabs.SelectedTab);
+        Load += (_, _) => RefreshIfStale(CurrentTab);
         KeyDown += (_, e) =>
         {
             if (e.Control && e.KeyCode == Keys.N) { e.Handled = true; OpenBill(null); }
@@ -112,10 +113,13 @@ sealed class MainForm : Form, IAppHost
         }
     }
 
+    /// <summary>The tab on screen. Before the window exists TabControl reports none selected, though the first tab will show.</summary>
+    TabPage? CurrentTab => _tabs.SelectedTab ?? (_tabs.TabCount > 0 ? _tabs.TabPages[0] : null);
+
     public void DataChanged()
     {
         foreach (TabPage p in _tabs.TabPages) _stale.Add(p);
-        RefreshIfStale(_tabs.SelectedTab);
+        RefreshIfStale(CurrentTab);
     }
 
     public bool OpenBill(long? billId, long? workOrderId = null)

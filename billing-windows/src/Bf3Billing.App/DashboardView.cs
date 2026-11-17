@@ -16,6 +16,8 @@ sealed class DashboardView : Panel, ITabView
     readonly DataGridView _contractorGrid = Ui.Grid(false);
     readonly DataGridView _woGrid = Ui.Grid(false);
     const int Gap = 14, Pad = 14;
+    /// <summary>Self test: the number of KPI tiles shown (0 means the dashboard was never filled).</summary>
+    internal int KpiTiles => _kpis.Controls.Count;
 
     /// <summary>A white card whose content is a list of controls laid out top to bottom.</summary>
     sealed class Block
