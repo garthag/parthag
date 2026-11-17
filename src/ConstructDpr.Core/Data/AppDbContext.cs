@@ -127,9 +127,32 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : IdentityUser
                     ? $"IF SCHEMA_ID(N'{Schema}') IS NULL EXEC(N'CREATE SCHEMA [{Schema}]')"
                     : $"CREATE SCHEMA IF NOT EXISTS {Schema}");
             creator.CreateTables();
-            return;
         }
-        AddMissingTables();
+        else AddMissingTables();
+        EnsureViews();
+    }
+
+    private DbProvider Provider => IsSqlite ? DbProvider.Sqlite : IsSqlServer ? DbProvider.SqlServer : DbProvider.PostgreSql;
+
+    /// <summary>
+    /// Creates the reporting views (SqlViews) when they are missing or older than this version. The apps do not need
+    /// them, so a database login without the right to create views only loses the views, nothing else.
+    /// </summary>
+    private void EnsureViews()
+    {
+        try
+        {
+            var prefix = IsSqlite ? "" : Schema + ".";
+            int current;
+            var versionSql = "SELECT \"ViewsVersion\" AS \"Value\" FROM " + prefix + "\"vw_SchemaInfo\""; // fixed text, no user input
+            try { current = Database.SqlQueryRaw<int>(versionSql).AsEnumerable().FirstOrDefault(); }
+            catch (System.Data.Common.DbException) { current = 0; }
+            if (current == SqlViews.Version) return;
+            using var tx = Database.BeginTransaction();
+            foreach (var statement in SqlViews.Statements(Provider)) Database.ExecuteSqlRaw(statement);
+            tx.Commit();
+        }
+        catch (System.Data.Common.DbException) { /* no permission, or another PC is creating them right now */ }
     }
 
     private bool HasTable(string name) => TableExists(IsSqlite

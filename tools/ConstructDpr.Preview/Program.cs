@@ -4,6 +4,18 @@ using ConstructDpr.Shared.Model;
 using ConstructDpr.Core.Services;
 using ConstructDpr.Reports;
 
+// "--sql <folder>" writes the SQL files kept in the repository's database/ folder.
+if (args.Length == 2 && args[0] == "--sql")
+{
+    foreach (var (name, text) in SqlScripts.Files())
+    {
+        var path = Path.Combine(Path.GetFullPath(args[1]), name);
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        File.WriteAllText(path, text);
+        Console.WriteLine(path);
+    }
+    return;
+}
 var outDir = Path.GetFullPath(args.Length > 0 ? args[0] : "preview");
 Directory.CreateDirectory(outDir);
 var dbPath = Path.Combine(Path.GetTempPath(), $"cdpr-preview-{Guid.NewGuid():N}.db");

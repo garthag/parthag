@@ -8,7 +8,7 @@ Everything is **C# (.NET 10)**:
 |---|---|---|
 | **Windows app** | **WPF**, with a native Gantt chart | `CONSTRUCT-DPR-windows-setup.exe` |
 | **Android app** | **.NET MAUI**, native screens written in C# | `CONSTRUCT-DPR-android.apk`, installed directly |
-| **Database** | **Microsoft SQL Server** (SQL Server Express is free), or SQLite for one PC offline, through EF Core | your office PC/server |
+| **Database** | **SQL**: Microsoft SQL Server (SQL Server Express is free), or SQLite for one PC offline. Table scripts and reporting views are in [database/](database/README.md) | your office PC/server |
 | **Sync server** (only for phones) | ASP.NET Core API + SignalR. **Built into the Windows app** ("Let phones connect to this PC"), or standalone as a Windows service | nothing extra, or `CONSTRUCT-DPR-server-windows.zip` |
 | **Rules** | CPM scheduling, approvals, roles and checks, in one shared C# library | |
 | **Reports** | QuestPDF (PDF), ClosedXML (Excel) | |
@@ -59,7 +59,7 @@ Step by step: [docs/START_HERE.md](docs/START_HERE.md).
 ## For developers
 
 ```bash
-dotnet test tests/ConstructDpr.Tests                  # 55 tests; set CDPR_SQLSERVER="Server=…" to include SQL Server
+dotnet test tests/ConstructDpr.Tests                  # 59 tests; set CDPR_SQLSERVER="Server=…" to include SQL Server
 dotnet run --project src/ConstructDpr.App             # Windows app (on Windows)
 dotnet build src/ConstructDpr.Mobile -f net10.0       # compiles the Android app's C# on any PC
 dotnet build src/ConstructDpr.Mobile -f net10.0-android   # the .apk (needs: dotnet workload install maui-android + Android SDK)
@@ -78,6 +78,7 @@ src/
 tests/                   xUnit tests
 tools/                   sample report generator
 installer/               Inno Setup script for the Windows installer
+database/                SQL scripts: SQL Server tables, reporting views
 ```
 
 ## Licence

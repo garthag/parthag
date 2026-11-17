@@ -131,6 +131,7 @@ public class PhotoAndSqlTests
             Assert.StartsWith("%PDF", System.Text.Encoding.ASCII.GetString((await api.ReportAsync(p.Id, ReportKind.DprPdf, draft.Id)).Content, 0, 4));
             var stats = await api.DashboardAsync(p.Id);
             Assert.True(stats.ActualPct > 0);
+            using (var db = new AppDbContext(options)) SqlViewTests.CheckViews(db, "cdpr.");
             var a = (await api.ActivitiesAsync(p.Id)).First();
             a.Rate += 1; // decimals exact
             await api.SaveActivitiesAsync(p.Id, new ActivityChanges { Upserts = [a] });
