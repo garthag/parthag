@@ -43,6 +43,21 @@ abstract class RecordListView : Panel, ITabView
     }
 
     protected abstract DataTable Load();
+
+    /// <summary>A column for a user-added field (named so it cannot clash with a built-in column).</summary>
+    protected static string ExtraColumn(DataTable t, string name) => t.Columns.Contains(name) ? name + " (added)" : name;
+
+    /// <summary>Adds a text box per user-added field to an edit dialog; returns a function that reads them back as JSON.</summary>
+    protected Func<string> AddExtraFields(EditDialog d, string entity, string extraJson)
+    {
+        var values = Extras.Parse(extraJson);
+        var boxes = Host.Repo.CustomFields(entity).Select(f => (f.Name, Box: d.AddText(f.Name, values.GetValueOrDefault(f.Name, "")))).ToList();
+        return () =>
+        {
+            foreach (var (name, box) in boxes) values[name] = box.Text.Trim();
+            return Extras.Write(values);
+        };
+    }
     /// <summary>Opens the edit dialog. Returns true when saved.</summary>
     protected abstract bool Edit(long? id);
     protected abstract void Delete(long id);
@@ -100,11 +115,15 @@ sealed class WorkOrdersView : RecordListView
         t.Columns.Add("WO date", typeof(DateTime)); t.Columns.Add("Status"); t.Columns.Add("Value ₹", typeof(decimal));
         t.Columns.Add("Gross billed ₹", typeof(decimal)); t.Columns.Add("Balance ₹", typeof(decimal)); t.Columns.Add("Used %", typeof(decimal));
         t.Columns.Add("Remarks");
+        var extra = Host.Repo.CustomFields(Entities.WorkOrder);
+        foreach (var f in extra) t.Columns.Add(ExtraColumn(t, f.Name));
         foreach (var w in Host.Repo.WorkOrders())
         {
             var u = d.GetValueOrDefault(w.Id);
-            t.Rows.Add(w.Id, w.WoNo, w.ContractorName, w.Service, (object?)w.WoDate ?? DBNull.Value, w.Status, w.Value,
-                u?.Gross ?? 0m, u?.Balance ?? w.Value, (object?)u?.UsedPercent ?? DBNull.Value, w.Remarks);
+            var values = Extras.Parse(w.Extra);
+            t.Rows.Add(new object?[] { w.Id, w.WoNo, w.ContractorName, w.Service, (object?)w.WoDate ?? DBNull.Value, w.Status, w.Value,
+                u?.Gross ?? 0m, u?.Balance ?? w.Value, (object?)u?.UsedPercent ?? DBNull.Value, w.Remarks }
+                .Concat(extra.Select(f => (object?)values.GetValueOrDefault(f.Name, ""))).ToArray());
         }
         return t;
     }
@@ -126,8 +145,10 @@ sealed class WorkOrdersView : RecordListView
         var date = d.AddDate("WO date", w.WoDate);
         var status = d.AddCombo("Status", new object[] { "Open", "Closed", "Short closed", "On hold" }, w.Status, editable: true, width: 150);
         var remarks = d.AddMultiline("Remarks", w.Remarks);
+        var extra = AddExtraFields(d, Entities.WorkOrder, w.Extra);
         d.OnSave = () => Ui.Try(d, () =>
         {
+            w.Extra = extra();
             w.WoNo = no.Text; w.ContractorId = (k.SelectedItem as Contractor)?.Id ?? 0; w.Service = service.Text.Trim();
             w.Value = EditDialog.Number(value); w.WoDate = Ui.Value(date); w.Status = status.Text.Trim(); w.Remarks = remarks.Text.Trim();
             Host.Repo.SaveWorkOrder(w);
@@ -153,11 +174,15 @@ sealed class ContractorsView : RecordListView
         t.Columns.Add("_Id", typeof(long)); t.Columns.Add("Name"); t.Columns.Add("Code"); t.Columns.Add("GSTIN"); t.Columns.Add("PAN");
         t.Columns.Add("Phone"); t.Columns.Add("Work orders", typeof(int)); t.Columns.Add("WO value ₹", typeof(decimal));
         t.Columns.Add("Gross billed ₹", typeof(decimal)); t.Columns.Add("Outstanding ₹", typeof(decimal)); t.Columns.Add("Address"); t.Columns.Add("Remarks");
+        var extra = Host.Repo.CustomFields(Entities.Contractor);
+        foreach (var f in extra) t.Columns.Add(ExtraColumn(t, f.Name));
         foreach (var k in Host.Repo.Contractors())
         {
             var kw = wos.Where(w => w.ContractorId == k.Id).ToList();
             var kb = bills.Where(b => b.ContractorId == k.Id).ToList();
-            t.Rows.Add(k.Id, k.Name, k.Code, k.Gstin, k.Pan, k.Phone, kw.Count, kw.Sum(w => w.Value), kb.Sum(b => b.Gross), kb.Sum(b => b.Due), k.Address, k.Remarks);
+            var values = Extras.Parse(k.Extra);
+            t.Rows.Add(new object?[] { k.Id, k.Name, k.Code, k.Gstin, k.Pan, k.Phone, kw.Count, kw.Sum(w => w.Value), kb.Sum(b => b.Gross), kb.Sum(b => b.Due), k.Address, k.Remarks }
+                .Concat(extra.Select(f => (object?)values.GetValueOrDefault(f.Name, ""))).ToArray());
         }
         return t;
     }
@@ -175,8 +200,10 @@ sealed class ContractorsView : RecordListView
         var phone = d.AddText("Phone", k.Phone, 200);
         var address = d.AddMultiline("Address", k.Address);
         var remarks = d.AddMultiline("Remarks", k.Remarks);
+        var extra = AddExtraFields(d, Entities.Contractor, k.Extra);
         d.OnSave = () => Ui.Try(d, () =>
         {
+            k.Extra = extra();
             var g = gstin.Text.Trim().ToUpperInvariant();
             if (g.Length > 0 && g.Length != 15) throw new BillingException("A GSTIN has 15 characters.");
             var p = pan.Text.Trim().ToUpperInvariant();

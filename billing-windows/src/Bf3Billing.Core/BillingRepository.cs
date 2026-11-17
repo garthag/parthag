@@ -50,12 +50,12 @@ public sealed class BillingRepository(BillingDb db)
             throw new BillingException($"A contractor named {k.Name} already exists.");
         if (k.Id == 0)
             return k.Id = c.ExecuteScalar<long>("""
-                INSERT INTO Contractor(Code, Name, Gstin, Pan, Phone, Address, Remarks)
-                VALUES (@Code, @Name, @Gstin, @Pan, @Phone, @Address, @Remarks) RETURNING Id
+                INSERT INTO Contractor(Code, Name, Gstin, Pan, Phone, Address, Remarks, Extra)
+                VALUES (@Code, @Name, @Gstin, @Pan, @Phone, @Address, @Remarks, @Extra) RETURNING Id
                 """, k);
         c.Execute("""
             UPDATE Contractor SET Code=@Code, Name=@Name, Gstin=@Gstin, Pan=@Pan, Phone=@Phone,
-              Address=@Address, Remarks=@Remarks WHERE Id=@Id
+              Address=@Address, Remarks=@Remarks, Extra=@Extra WHERE Id=@Id
             """, k);
         return k.Id;
     }
@@ -90,12 +90,12 @@ public sealed class BillingRepository(BillingDb db)
             throw new BillingException($"Work order {w.WoNo} already exists.");
         if (w.Id == 0)
             return w.Id = c.ExecuteScalar<long>("""
-                INSERT INTO WorkOrder(WoNo, ContractorId, Service, Value, WoDate, Status, Remarks)
-                VALUES (@WoNo, @ContractorId, @Service, @Value, @WoDate, @Status, @Remarks) RETURNING Id
+                INSERT INTO WorkOrder(WoNo, ContractorId, Service, Value, WoDate, Status, Remarks, Extra)
+                VALUES (@WoNo, @ContractorId, @Service, @Value, @WoDate, @Status, @Remarks, @Extra) RETURNING Id
                 """, w);
         c.Execute("""
             UPDATE WorkOrder SET WoNo=@WoNo, ContractorId=@ContractorId, Service=@Service, Value=@Value,
-              WoDate=@WoDate, Status=@Status, Remarks=@Remarks WHERE Id=@Id
+              WoDate=@WoDate, Status=@Status, Remarks=@Remarks, Extra=@Extra WHERE Id=@Id
             """, w);
         return w.Id;
     }
@@ -220,21 +220,23 @@ public sealed class BillingRepository(BillingDb db)
             b.System = b.System.Trim(); b.DrawingNo = b.DrawingNo.Trim();
             b.Sheet = b.Sheet.Trim(); b.Rev = b.Rev.Trim(); b.Item = b.Item.Trim();
             if (b.System.Length == 0 || b.DrawingNo.Length == 0) continue;
-            var id = c.ExecuteScalar<long?>("""
-                SELECT Id FROM BomItem WHERE System=@System AND DrawingNo=@DrawingNo AND Sheet=@Sheet AND Rev=@Rev AND Item=@Item
+            var found = c.QueryFirstOrDefault<BomItem>("""
+                SELECT Id, Extra FROM BomItem WHERE System=@System AND DrawingNo=@DrawingNo AND Sheet=@Sheet AND Rev=@Rev AND Item=@Item
                 """, b, tx);
+            var id = found?.Id;
             if (id == null)
             {
                 b.Id = c.ExecuteScalar<long>("""
-                    INSERT INTO BomItem(System, DrawingNo, Sheet, Rev, Item, Tonnes)
-                    VALUES (@System, @DrawingNo, @Sheet, @Rev, @Item, @Tonnes) RETURNING Id
+                    INSERT INTO BomItem(System, DrawingNo, Sheet, Rev, Item, Tonnes, Extra)
+                    VALUES (@System, @DrawingNo, @Sheet, @Rev, @Item, @Tonnes, @Extra) RETURNING Id
                     """, b, tx);
                 added++;
             }
             else
             {
                 b.Id = id.Value;
-                updated += c.Execute("UPDATE BomItem SET Tonnes=@Tonnes WHERE Id=@Id AND Tonnes<>@Tonnes", b, tx);
+                b.Extra = Extras.Merge(found!.Extra, Extras.Parse(b.Extra));
+                updated += c.Execute("UPDATE BomItem SET Tonnes=@Tonnes, Extra=@Extra WHERE Id=@Id AND (Tonnes<>@Tonnes OR Extra<>@Extra)", b, tx);
             }
         }
         tx.Commit();
@@ -246,6 +248,75 @@ public sealed class BillingRepository(BillingDb db)
     {
         using var c = Open();
         return c.Execute("DELETE FROM BomItem WHERE Id NOT IN (SELECT BomItemId FROM BillLine WHERE BomItemId IS NOT NULL)");
+    }
+
+    // ───────────────────────── User-added fields ─────────────────────────
+
+    static string TableOf(string entity) => Entities.All.Contains(entity) ? entity : throw new BillingException($"Unknown record type {entity}.");
+
+    public List<CustomField> CustomFields(string? entity = null)
+    {
+        using var c = Open();
+        return c.Query<CustomField>("SELECT * FROM CustomField WHERE @entity IS NULL OR Entity = @entity ORDER BY Entity, SortOrder, Id", new { entity }).ToList();
+    }
+
+    static string CheckFieldName(string name)
+    {
+        name = string.Join(' ', (name ?? "").Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
+        if (name.Length == 0) throw new BillingException("Enter a name for the field.");
+        if (name.Length > 60) throw new BillingException("Keep field names to 60 characters.");
+        if (name.IndexOfAny(new[] { '"', '\\', '\'' }) >= 0) throw new BillingException("Field names cannot contain quotes or backslashes.");
+        return name;
+    }
+
+    /// <summary>Adds a field (or returns the existing one with the same name).</summary>
+    public CustomField AddCustomField(string entity, string name)
+    {
+        TableOf(entity);
+        name = CheckFieldName(name);
+        using var c = Open();
+        var existing = c.QueryFirstOrDefault<CustomField>("SELECT * FROM CustomField WHERE Entity=@entity AND Name=@name COLLATE NOCASE", new { entity, name });
+        if (existing != null) return existing;
+        var sort = c.ExecuteScalar<int>("SELECT COALESCE(MAX(SortOrder), 0) + 10 FROM CustomField WHERE Entity=@entity", new { entity });
+        var id = c.ExecuteScalar<long>("INSERT INTO CustomField(Entity, Name, SortOrder) VALUES (@entity, @name, @sort) RETURNING Id", new { entity, name, sort });
+        return new CustomField { Id = id, Entity = entity, Name = name, SortOrder = sort };
+    }
+
+    public void RenameCustomField(long id, string newName)
+    {
+        newName = CheckFieldName(newName);
+        using var c = Open();
+        using var tx = c.BeginTransaction();
+        var f = c.QueryFirstOrDefault<CustomField>("SELECT * FROM CustomField WHERE Id=@id", new { id }, tx) ?? throw new BillingException("The field no longer exists.");
+        if (c.ExecuteScalar<long>("SELECT COUNT(*) FROM CustomField WHERE Entity=@Entity AND Name=@newName COLLATE NOCASE AND Id<>@Id", new { f.Entity, newName, f.Id }, tx) > 0)
+            throw new BillingException($"There is already a field named {newName}.");
+        var table = TableOf(f.Entity);
+        foreach (var (rid, extra) in c.Query<(long, string)>($"SELECT Id, Extra FROM {table}", transaction: tx).ToList())
+        {
+            var d = Extras.Parse(extra);
+            if (!d.Remove(f.Name, out var v)) continue;
+            d[newName] = v;
+            c.Execute($"UPDATE {table} SET Extra=@x WHERE Id=@rid", new { x = Extras.Write(d), rid }, tx);
+        }
+        c.Execute("UPDATE CustomField SET Name=@newName WHERE Id=@id", new { newName, id }, tx);
+        tx.Commit();
+    }
+
+    /// <summary>Deletes a field and every value stored in it.</summary>
+    public void DeleteCustomField(long id)
+    {
+        using var c = Open();
+        using var tx = c.BeginTransaction();
+        var f = c.QueryFirstOrDefault<CustomField>("SELECT * FROM CustomField WHERE Id=@id", new { id }, tx);
+        if (f == null) return;
+        var table = TableOf(f.Entity);
+        foreach (var (rid, extra) in c.Query<(long, string)>($"SELECT Id, Extra FROM {table}", transaction: tx).ToList())
+        {
+            var d = Extras.Parse(extra);
+            if (d.Remove(f.Name)) c.Execute($"UPDATE {table} SET Extra=@x WHERE Id=@rid", new { x = Extras.Write(d), rid }, tx);
+        }
+        c.Execute("DELETE FROM CustomField WHERE Id=@id", new { id }, tx);
+        tx.Commit();
     }
 
     // ───────────────────────── Bills ─────────────────────────
@@ -337,8 +408,8 @@ public sealed class BillingRepository(BillingDb db)
             l.BillId = b.Id;
             l.LineNo = ++no;
             l.Id = c.ExecuteScalar<long>("""
-                INSERT INTO BillLine(BillId, LineNo, BomItemId, Description, Remarks, ActivityId, Unit, Qty, Rate)
-                VALUES (@BillId, @LineNo, @BomItemId, @Description, @Remarks, @ActivityId, @Unit, @Qty, @Rate) RETURNING Id
+                INSERT INTO BillLine(BillId, LineNo, BomItemId, Description, Remarks, ActivityId, Unit, Qty, Rate, Extra)
+                VALUES (@BillId, @LineNo, @BomItemId, @Description, @Remarks, @ActivityId, @Unit, @Qty, @Rate, @Extra) RETURNING Id
                 """, l, tx);
         }
         tx.Commit();

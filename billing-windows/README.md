@@ -39,18 +39,42 @@ To try the app with made-up bills, use **Data › Open demo data file**. It open
 | **BOM progress** | Tonnes billed per BOM activity at system, drawing or item level, with a %. Rows over scope are shown in red. Double-click a row to see the bill lines behind it. |
 | **Work orders / Contractors** | Add, edit and delete; value, gross billed, balance and % used. Validates GSTIN and PAN length. |
 | **Reports** | Contractor-wise, work order-wise and activity-wise abstracts, bill register, payment register, outstanding bills, all bill lines, and lines above BOM scope. Each can be filtered by bill date, exported to Excel, or printed / saved as PDF. |
-| **Masters** | Activities (and whether each is billed against the BOM), rates (per work order, or a default for all), and defaults for new bills. When you choose an activity on a bill line, the rate is filled in. |
-| **Data** | Data file location and counts. Back up, restore (a safety copy of your data is taken first), open, new and demo data files. Import from Excel and save the Excel templates. Export everything. |
+| **Masters** | Activities (and whether each is billed against the BOM), rates (per work order, or a default for all), added fields, and defaults for new bills. When you choose an activity on a bill line, the rate is filled in. |
+| **Data** | Data file location and counts. Back up, restore (a safety copy of your data is taken first), open, new and demo data files. Import from Excel (with column matching and duplicate check), quick imports, Excel templates. Export everything. |
 
 **Print PDF** opens a print preview. Choose **Microsoft Print to PDF** to save a PDF.
 
 ## Excel import
 
-**BOM.** The importer reads every sheet that has a drawing column (`Drawing no`, `DRG NO`, `Drg No` …) and a weight column, either in tonnes (`Tonnes`, `Wt (MT)`, `Weight (t)` …) or in kg (`Weight (kg)`, `Total weight` …, divided by 1000). It also uses `System`, `Sheet`, `Rev` and `Item`/`Mark` when they are there. Without a System column, the sheet name is the system. The header row is found anywhere in the first 15 rows. Sheet numbers that Excel turned into dates (2/3 → 02-Mar) are turned back. Total rows are skipped. Rows that already exist get their tonnes updated. To replace a revised BOM, use **Delete unused BOM rows** first.
+### Import from Excel (check and match columns)
 
-**Bills.** One row per bill line with the columns *Work order, Bill no, Type, Bill date, Status, GST %, Retention %, TDS %, Other deduction, Paid, Paid on, System, Drawing no, Sheet, Rev, Item, Description, Activity, Unit, Qty, Rate, Remarks*. A row with a drawing becomes a BOM line; a row without one becomes a free line. A bill that already exists is skipped, so importing the same file twice is safe. The **Bill lines** sheet of **Export everything** has the same layout.
+Use **Data › Import from Excel (check and match columns)…**, or **Import from Excel…** on the first-start screen. It works with untidy workbooks: several sheets, title rows above the table, merged cells, and columns named differently from the app's fields.
 
-**Data › Save Excel templates** writes both layouts with an example row.
+1. **Sheets.** Every sheet is read. The heading row is found automatically (you can change it) and the app suggests what the sheet holds: contractors, work orders, BOM or bill lines. Sheets are listed in a sensible order: contractors, then work orders, then BOM, then bills.
+2. **Columns.** Each Excel column is fitted to a field by its heading, allowing for different spellings: `Agency Name` → Name, `GST No.` → GSTIN, `W.O. No.` → Work order no., `Drg No` → Drawing no., `Wt (kg)` → Weight (kg). You can change any choice.
+   A column that fits no field is marked **⚠**. When you check the data, the app **asks** whether to add these columns as **new fields**. Yes adds a field for each and keeps the data there; No leaves them out; Cancel lets you choose a field for each yourself.
+3. **Check.** Nothing is saved yet. Every row is cleaned (amounts like `₹ 12,50,000/-`, dates like `02.11.2025`, extra spaces) and coloured:
+
+   | Colour | Meaning | Ticked to import? |
+   |---|---|---|
+   | Green – **New** | Not saved yet | Yes |
+   | Orange – **Already saved** | Same contractor name / work order no. / drawing and item / bill as a saved record | No, or Yes if you choose *update with the file's values* |
+   | Yellow – **Repeated in file** | The same record appears more than once in the upload. Each group of repeats gets a group number (D1, D2 …) and the note says which row it repeats: *exact copy of row 6* or *same contractor name as row 6, different details* | Only the first row of each group |
+   | Red – **Problem** | A needed value is missing, or a number or date cannot be read | No |
+   | Grey – **Left out** | Total and empty rows | No |
+
+   Names are compared ignoring case, spaces and punctuation, so `G.R. Enterprises` matches the saved `G.R ENTERPRISES`. In a BOM, rows with the same drawing and item but different weights are parts and their weights are **added together**; only exact copies are marked as repeats.
+   Tick or untick any row (select several rows and press Space). **Save check to Excel…** writes the same coloured list.
+4. **Import ticked rows.** New fields are created, then the rows are added. Work orders whose contractor is not in the list add the contractor (you can switch this off). A bill is only added whole: if one of its lines has a problem, the whole bill is held back.
+
+**Added fields** appear as extra columns in Contractors and Work orders (and in their edit forms), in BOM progress at Items level, and in the bill editor's lines. Manage them in **Masters › Added fields** (add, rename, delete).
+
+### Quick imports
+
+**Quick BOM import** and **Quick bill import** skip the check. They import every sheet that fits, leave unmatched columns out, update BOM weights, and skip bills that are already saved.
+
+* **BOM:** a drawing column and a weight column (tonnes, or kg divided by 1000), plus System, Sheet, Rev and Item/Mark when they are there. Without a System column, the sheet name is the system. Sheet numbers that Excel turned into dates (2/3 → 02-Mar) are turned back.
+* **Bills:** one row per bill line with *Work order, Bill no, Type, Bill date, Status, GST %, Retention %, TDS %, Other deduction, Paid, Paid on, System, Drawing no, Sheet, Rev, Item, Description, Activity, Unit, Qty, Rate, Remarks*. A row with a drawing becomes a BOM line; a row without one becomes a free line. The **Bill lines** sheet of **Export everything** has the same layout, and **Data › Save Excel templates** writes both layouts with an example row.
 
 ## How the numbers are worked out
 
@@ -65,7 +89,8 @@ To try the app with made-up bills, use **Data › Open demo data file**. It open
 ```
 billing-windows/
   Bf3Billing.sln
-  src/Bf3Billing.Core/   data file (SQLite + Dapper), bill maths, scope checks, dashboard, reports, Excel import/export (ClosedXML)
+  src/Bf3Billing.Core/   data file (SQLite + Dapper), bill maths, scope checks, dashboard, reports, Excel import/export (ClosedXML),
+                         SmartImport (sheet reading, column matching, duplicate check, added fields)
   src/Bf3Billing.App/    Windows Forms screens, printing, and `Bf3Billing.exe --selftest`
   tests/Bf3Billing.Tests xUnit tests; the demo data must reproduce the design's figures
 ```

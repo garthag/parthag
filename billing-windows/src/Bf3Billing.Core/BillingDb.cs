@@ -8,7 +8,7 @@ namespace Bf3Billing.Core;
 /// <summary>The SQLite data file (billing.db) and its schema.</summary>
 public sealed class BillingDb
 {
-    public const int SchemaVersion = 1;
+    public const int SchemaVersion = 2;
     public string FilePath { get; }
 
     static BillingDb()
@@ -68,6 +68,10 @@ public sealed class BillingDb
     static void EnsureSchema(IDbConnection c)
     {
         c.Execute(Schema);
+        // Version 2: user-added fields are kept as JSON in an Extra column.
+        foreach (var table in new[] { "Contractor", "WorkOrder", "BomItem", "BillLine" })
+            if (!c.Query<string>($"SELECT name FROM pragma_table_info('{table}')").Contains("Extra", StringComparer.OrdinalIgnoreCase))
+                c.Execute($"ALTER TABLE {table} ADD COLUMN Extra TEXT NOT NULL DEFAULT '{{}}'");
         var v = c.ExecuteScalar<string?>("SELECT Value FROM Setting WHERE Key='SchemaVersion'");
         if (v == null)
             c.Execute("INSERT INTO Setting(Key, Value) VALUES ('SchemaVersion', @v)", new { v = SchemaVersion.ToString(CultureInfo.InvariantCulture) });
@@ -154,6 +158,13 @@ public sealed class BillingDb
             Unit        TEXT NOT NULL DEFAULT '',
             Qty         REAL NOT NULL DEFAULT 0,
             Rate        REAL NOT NULL DEFAULT 0);
+
+        CREATE TABLE IF NOT EXISTS CustomField(
+            Id        INTEGER PRIMARY KEY,
+            Entity    TEXT NOT NULL,
+            Name      TEXT NOT NULL,
+            SortOrder INTEGER NOT NULL DEFAULT 0,
+            UNIQUE(Entity, Name COLLATE NOCASE));
 
         CREATE INDEX IF NOT EXISTS IX_BillLine_Bill ON BillLine(BillId);
         CREATE INDEX IF NOT EXISTS IX_BillLine_Bom ON BillLine(BomItemId, ActivityId);

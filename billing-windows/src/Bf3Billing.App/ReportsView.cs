@@ -65,6 +65,7 @@ sealed class MastersView : Panel, ITabView
     readonly IAppHost _host;
     readonly DataGridView _acts = Ui.Grid();
     readonly DataGridView _rates = Ui.Grid();
+    readonly DataGridView _fields = Ui.Grid();
     readonly TextBox _gst = new() { Width = 70, TextAlign = HorizontalAlignment.Right, AccessibleName = "Default GST percent" };
     readonly TextBox _ret = new() { Width = 70, TextAlign = HorizontalAlignment.Right, AccessibleName = "Default retention percent" };
     readonly TextBox _tds = new() { Width = 70, TextAlign = HorizontalAlignment.Right, AccessibleName = "Default TDS percent" };
@@ -86,25 +87,28 @@ sealed class MastersView : Panel, ITabView
         defaults.Controls.Add(df);
         defaults.Controls.Add(new Label { Text = "Defaults", Dock = DockStyle.Top, Font = Ui.Section, AutoSize = true });
 
-        var split = new SplitContainer { Dock = DockStyle.Fill, Orientation = Orientation.Vertical, BackColor = Ui.Back };
-        split.Panel1.Controls.Add(Section("Activities", "BOM activities are billed in tonnes against the BOM and appear in BOM progress.",
+        var tabs = new TabControl { Dock = DockStyle.Fill, Padding = new Point(12, 4) };
+        TabPage Page(string title, Control content)
+        {
+            var page = new TabPage(title) { BackColor = Ui.Back, Padding = new Padding(8) };
+            page.Controls.Add(content);
+            tabs.TabPages.Add(page);
+            return page;
+        }
+        Page("Activities", Section("Activities", "BOM activities are billed in tonnes against the BOM and appear in BOM progress.",
             _acts, ("+ New activity", (_, _) => EditActivity(null)), ("Edit", (_, _) => EditActivity(Ui.SelectedId(_acts))), ("Delete", (_, _) => DeleteActivity())));
-        split.Panel2.Controls.Add(Section("Rates", "Filled in automatically when an activity is chosen on a bill line. A work order's own rate comes before the default rate.",
+        Page("Rates", Section("Rates", "Filled in automatically when an activity is chosen on a bill line. A work order's own rate comes before the default rate.",
             _rates, ("+ New rate", (_, _) => EditRate(null)), ("Edit", (_, _) => EditRate(Ui.SelectedId(_rates))), ("Delete", (_, _) => DeleteRate())));
+        Page("Added fields", Section("Added fields", "Extra fields for contractors, work orders, BOM rows and bill lines. They are added here or when an Excel import has columns that fit no field, and show as extra columns in the lists and the bill editor.",
+            _fields, ("+ New field", (_, _) => AddField()), ("Rename", (_, _) => RenameField()), ("Delete", (_, _) => DeleteField())));
+        _fields.CellDoubleClick += (_, e) => { if (e.RowIndex >= 0) RenameField(); };
         _acts.CellDoubleClick += (_, e) => { if (e.RowIndex >= 0) EditActivity(Ui.SelectedId(_acts)); };
         _rates.CellDoubleClick += (_, e) => { if (e.RowIndex >= 0) EditRate(Ui.SelectedId(_rates)); };
 
-        Controls.Add(split);
+        Controls.Add(tabs);
         Controls.Add(new Panel { Dock = DockStyle.Top, Height = 12 });
         Controls.Add(defaults);
-        var splitSet = false;
-        split.SizeChanged += (_, _) =>
-        {
-            if (splitSet || split.Width < 700) return;
-            splitSet = true;
-            try { split.SplitterDistance = split.Width * 4 / 10; }
-            catch (Exception ex) when (ex is InvalidOperationException or ArgumentOutOfRangeException) { }
-        };
+
     }
 
     static Control Section(string title, string hint, DataGridView grid, params (string Text, EventHandler Click)[] buttons)
@@ -136,6 +140,19 @@ sealed class MastersView : Panel, ITabView
         t.Columns.Add("_Id", typeof(long)); t.Columns.Add("Work order"); t.Columns.Add("Activity"); t.Columns.Add("Unit"); t.Columns.Add("Rate ₹", typeof(decimal));
         foreach (var x in r.Rates()) t.Rows.Add(x.Id, x.WorkOrderNo, x.ActivityName, x.Unit, x.Amount);
         Ui.Bind(_rates, t);
+
+        var f = new DataTable();
+        f.Columns.Add("_Id", typeof(long)); f.Columns.Add("Field"); f.Columns.Add("Used for"); f.Columns.Add("Records with a value", typeof(int));
+        var counts = new Dictionary<string, List<string>>
+        {
+            [Entities.Contractor] = r.Contractors().Select(x => x.Extra).ToList(),
+            [Entities.WorkOrder] = r.WorkOrders().Select(x => x.Extra).ToList(),
+            [Entities.BomItem] = r.BomItems().Select(x => x.Extra).ToList(),
+            [Entities.BillLine] = r.BillSummaries().SelectMany(b => r.GetBill(b.Id)?.Lines ?? new()).Select(x => x.Extra).ToList(),
+        };
+        foreach (var x in r.CustomFields())
+            f.Rows.Add(x.Id, x.Name, Entities.Label(x.Entity), counts[x.Entity].Count(e => Extras.Get(e, x.Name).Length > 0));
+        Ui.Bind(_fields, f);
     }
 
     void SaveDefaults()
@@ -199,6 +216,38 @@ sealed class MastersView : Panel, ITabView
             _host.Repo.SaveRate(r);
         });
         if (d.ShowDialog(_host.Window) == DialogResult.OK) _host.DataChanged();
+    }
+
+    sealed record EntityItem(string Entity) { public override string ToString() => Entities.Label(Entity); }
+
+    void AddField()
+    {
+        using var d = new EditDialog("New field");
+        var used = d.AddCombo("For", Entities.All.Select(e => (object)new EntityItem(e)), null, width: 200);
+        var name = d.AddText("Field name", "", 260);
+        d.OnSave = () => Ui.Try(d, () => _host.Repo.AddCustomField(((EntityItem)used.SelectedItem!).Entity, name.Text));
+        if (d.ShowDialog(_host.Window) == DialogResult.OK) _host.DataChanged();
+    }
+
+    void RenameField()
+    {
+        if (Ui.SelectedId(_fields) is not long id) return;
+        var f = _host.Repo.CustomFields().FirstOrDefault(x => x.Id == id);
+        if (f == null) return;
+        using var d = new EditDialog("Rename field");
+        var name = d.AddText("Field name", f.Name, 260);
+        d.OnSave = () => Ui.Try(d, () => _host.Repo.RenameCustomField(id, name.Text));
+        if (d.ShowDialog(_host.Window) == DialogResult.OK) _host.DataChanged();
+    }
+
+    void DeleteField()
+    {
+        if (Ui.SelectedId(_fields) is not long id) return;
+        var f = _host.Repo.CustomFields().FirstOrDefault(x => x.Id == id);
+        if (f == null) return;
+        if (Ui.Confirm(_host.Window, $"Delete the field '{f.Name}' ({Entities.Label(f.Entity)}) and every value stored in it? This cannot be undone.")
+            && Ui.Try(_host.Window, () => _host.Repo.DeleteCustomField(id)))
+            _host.DataChanged();
     }
 
     void DeleteRate()

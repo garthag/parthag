@@ -25,10 +25,14 @@ sealed class DataView : Panel, ITabView
             Array.Empty<Control>(),
             ("Open data file…", OpenOther), ("New empty data file…", NewFile), ("Open demo data file", OpenDemo),
             ("Back to default data file", (_, _) => Switch(BillingDb.DefaultPath))));
-        stack.Controls.Add(Card("Import from Excel", "BOM: any sheet with a drawing column and a weight column (tonnes, or kg). Without a System column the sheet name is used. Rows that already exist get their tonnes updated.\n" +
-            "Bills: one row per bill line, grouped by work order and bill no. Bills that already exist are skipped. Save the templates to see the columns.",
+        stack.Controls.Add(Card("Import from Excel",
+            "Import from Excel: open any workbook, even an untidy one with several sheets. For each sheet the app finds the heading row, guesses what it holds " +
+            "(contractors, work orders, BOM or bill lines) and fits its columns to the app's fields. Columns that fit no field can be added as new fields. " +
+            "Before anything is saved, every row is checked and coloured: new, already saved, repeated in the file (grouped), or with a problem.\n" +
+            "Quick BOM and bill imports skip the check: they add what fits, leave other columns out, update BOM weights and skip bills already saved.",
             Array.Empty<Control>(),
-            ("Import BOM…", (_, _) => ImportBom(_host)), ("Import bills…", (_, _) => ImportBills(_host)), ("Save Excel templates…", Templates),
+            ("Import from Excel (check and match columns)…", (_, _) => OpenWizard(_host)),
+            ("Quick BOM import…", (_, _) => ImportBom(_host)), ("Quick bill import…", (_, _) => ImportBills(_host)), ("Save Excel templates…", Templates),
             ("Delete unused BOM rows…", DeleteUnusedBom)));
         stack.Controls.Add(Card("Export", "Contractors, work orders, BOM, bill lines, bills and the work order abstract in one workbook. The 'Bill lines' sheet can be imported again.",
             Array.Empty<Control>(), ("Export everything to Excel…", ExportAll)));
@@ -43,7 +47,7 @@ sealed class DataView : Panel, ITabView
         inner.Controls.Add(new Label { Text = text, AutoSize = true, MaximumSize = new Size(860, 0), ForeColor = Ui.Muted, Margin = new Padding(0, 0, 0, 8) });
         foreach (var c in extra) inner.Controls.Add(c);
         var bar = new FlowLayoutPanel { AutoSize = true, WrapContents = true, MaximumSize = new Size(870, 0), Margin = new Padding(0) };
-        foreach (var (t, click) in buttons) bar.Controls.Add(Ui.Btn(t, click));
+        foreach (var (t, click) in buttons) bar.Controls.Add(Ui.Btn(t, click, primary: t.StartsWith("Import from Excel")));
         inner.Controls.Add(bar);
         card.Controls.Add(inner);
         return card;
@@ -58,6 +62,14 @@ sealed class DataView : Panel, ITabView
     }
 
     // ───────────────────────── Shared actions (also used by the dashboard) ─────────────────────────
+
+    public static void OpenWizard(IAppHost host)
+    {
+        using var f = new ImportWizardForm(host.Repo);
+        f.Shown += (_, _) => f.ChooseFile();
+        f.ShowDialog(host.Window);
+        if (f.Changed) host.DataChanged();
+    }
 
     public static void ImportBom(IAppHost host)
     {

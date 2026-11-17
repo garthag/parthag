@@ -10,6 +10,8 @@ sealed class BillEditorForm : Form
     readonly List<BillLine> _lines = new();
     readonly List<WorkOrder> _wos;
     readonly List<Activity> _acts;
+    readonly List<CustomField> _lineFields;
+    const string ExtraCol = "x:";
     readonly Dictionary<long, BomItem> _bom = new();
     bool _dirty;
     bool _loading;
@@ -49,6 +51,7 @@ sealed class BillEditorForm : Form
         _repo = repo;
         _wos = repo.WorkOrders();
         _acts = repo.Activities();
+        _lineFields = repo.CustomFields(Entities.BillLine);
         foreach (var b in repo.BomItems()) _bom[b.Id] = b;
 
         Font = Ui.Base;
@@ -221,6 +224,7 @@ sealed class BillEditorForm : Form
         g.Columns.Add(Text(CNo, "#", 36, ro: true, right: true));
         g.Columns.Add(Text(CItem, "Item", 300, fill: true));
         g.Columns.Add(Text(CRemarks, "Remarks", 150));
+        foreach (var f in _lineFields) g.Columns.Add(Text(ExtraCol + f.Name, f.Name, 110));
         var act = new DataGridViewComboBoxColumn
         {
             Name = CAct, HeaderText = "Activity", Width = 150, FlatStyle = FlatStyle.Flat,
@@ -312,6 +316,11 @@ sealed class BillEditorForm : Form
             r.Cells[CItem].ToolTipText = "Description of the work";
         }
         r.Cells[CRemarks].Value = l.Remarks;
+        if (_lineFields.Count > 0)
+        {
+            var x = Extras.Parse(l.Extra);
+            foreach (var f in _lineFields) r.Cells[ExtraCol + f.Name].Value = x.GetValueOrDefault(f.Name, "");
+        }
         r.Cells[CAct].Value = l.ActivityId is long a ? _acts.FirstOrDefault(x => x.Id == a)?.Name ?? "" : "";
         r.Cells[CUnit].Value = l.Unit;
         r.Cells[CQty].Value = l.IsBom || l.Unit is "t" or "MT" ? l.Qty.ToString("N3", Fmt.Culture) : l.Qty.ToString("#,##0.###", Fmt.Culture);
@@ -329,6 +338,11 @@ sealed class BillEditorForm : Form
         {
             case CItem when !l.IsBom: l.Description = text.Trim(); break;
             case CRemarks: l.Remarks = text.Trim(); break;
+            case var name when name.StartsWith(ExtraCol, StringComparison.Ordinal):
+                var values = Extras.Parse(l.Extra);
+                values[name[ExtraCol.Length..]] = text.Trim();
+                l.Extra = Extras.Write(values);
+                break;
             case CUnit when !l.IsBom: l.Unit = text.Trim(); break;
             case CQty: l.Qty = Fmt.TryParse(text, out var q) ? q : 0; break;
             case CRate: l.Rate = Fmt.TryParse(text, out var r) ? r : 0; break;

@@ -93,8 +93,7 @@ sealed class DashboardView : Panel, ITabView
                 : "The contractors, work orders and activities are loaded. The BOM is not loaded yet: import it from Excel so BOM lines can be billed against drawings. Then enter the first bill, or bring bills in from Excel.";
             var buttons = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, Margin = new Padding(0) };
             buttons.Controls.Add(Ui.Btn("+ New bill", (_, _) => _host.OpenBill(null), primary: true));
-            if (d.BomDrawings == 0) buttons.Controls.Add(Ui.Btn("Import BOM from Excel", (_, _) => DataView.ImportBom(_host)));
-            buttons.Controls.Add(Ui.Btn("Import bills from Excel", (_, _) => DataView.ImportBills(_host)));
+            buttons.Controls.Add(Ui.Btn("Import from Excel…", (_, _) => DataView.OpenWizard(_host)));
             buttons.Controls.Add(Ui.Btn("Set rates and defaults", (_, _) => _host.ShowTab("Masters")));
             var msg = new Label { Text = text, Dock = DockStyle.Top, AutoSize = false, Height = 44, ForeColor = Ui.Muted, Padding = new Padding(0, 6, 0, 6) };
             SetChildren(_start, new Label { Text = "No bills yet", Dock = DockStyle.Top, AutoSize = true, Font = new Font("Segoe UI Semibold", 12f) }, msg, buttons);
@@ -132,7 +131,7 @@ sealed class DashboardView : Panel, ITabView
             table.Controls.Add(new ProgressStrip { Percent = p.Percent, Dock = DockStyle.Fill, Margin = new Padding(6, 6, 6, 4), AccessibleName = $"{p.Activity} {Fmt.Pct(p.Percent)} percent" });
             table.Controls.Add(new Label { Text = $"{Fmt.Tonnes(p.Tonnes)} t · {Fmt.Pct(p.Percent)}%", AutoSize = true, Anchor = AnchorStyles.Right, Margin = new Padding(0, 4, 0, 4) });
         }
-        var bomHint = d.BomTonnes > 0 ? $"Tonnes billed against the {Fmt.Tonnes(d.BomTonnes)} t BOM" : "No BOM loaded yet (Data › Import BOM from Excel)";
+        var bomHint = d.BomTonnes > 0 ? $"Tonnes billed against the {Fmt.Tonnes(d.BomTonnes)} t BOM" : "No BOM loaded yet (Data › Import from Excel)";
         SetChildren(_progress, Title("BOM progress by activity"), Hint(bomHint), table);
 
         // By contractor.

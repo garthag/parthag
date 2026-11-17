@@ -66,6 +66,34 @@ static class SelfTest
                 Log("ok  BOM picker");
             }
 
+            var xlsx = Path.Combine(dir, "untidy.xlsx");
+            using (var wb = new ClosedXML.Excel.XLWorkbook())
+            {
+                var ws = wb.Worksheets.Add("Agencies");
+                ws.Cell(1, 1).Value = "LIST OF AGENCIES";
+                ws.Cell(3, 1).Value = "Agency Name"; ws.Cell(3, 2).Value = "GST No."; ws.Cell(3, 3).Value = "Bank A/c";
+                ws.Cell(4, 1).Value = "Shakti Fabricators"; ws.Cell(4, 2).Value = "20AAAAA1111A1Z1"; ws.Cell(4, 3).Value = "PNB 1";
+                ws.Cell(5, 1).Value = "Shakti Fabricators"; ws.Cell(5, 2).Value = "20AAAAA1111A1Z1"; ws.Cell(5, 3).Value = "PNB 1";
+                ws.Cell(6, 1).Value = "G.R. Enterprises";
+                var bom = wb.Worksheets.Add("STOVE");
+                bom.Cell(1, 1).Value = "Drg No"; bom.Cell(1, 2).Value = "Wt (kg)"; bom.Cell(1, 3).Value = "Grade";
+                bom.Cell(2, 1).Value = "D-1"; bom.Cell(2, 2).Value = 1000; bom.Cell(2, 3).Value = "E250";
+                wb.SaveAs(xlsx);
+            }
+            using (var w = new ImportWizardForm(repo) { AutoAddNewFields = true })
+            {
+                w.Show(main);
+                Application.DoEvents();
+                w.ChooseFile(xlsx);
+                Application.DoEvents();
+                if (!w.SheetTargets.Any(x => x.Target == ImportTarget.Contractors) || !w.SheetTargets.Any(x => x.Target == ImportTarget.Bom))
+                    throw new InvalidOperationException("Import window did not recognise the sheets.");
+                w.CheckAllForTest();
+                Application.DoEvents();
+                w.Close();
+                Log("ok  import window: sheets recognised, columns matched, data checked");
+            }
+
             foreach (var name in Reports.Names)
             {
                 var t = Reports.Run(repo, name);

@@ -15,6 +15,8 @@ sealed class BomProgressView : Panel, ITabView
     readonly System.Windows.Forms.Timer _debounce = new() { Interval = 300 };
     List<BomProgressRow> _rows = new();
     List<Activity> _acts = new();
+    List<CustomField> _extra = new();
+    Dictionary<long, BomItem> _bom = new();
     bool _loading;
 
     public BomProgressView(IAppHost host)
@@ -71,6 +73,8 @@ sealed class BomProgressView : Panel, ITabView
         {
             var level = (BomLevel)_level.SelectedIndex;
             _rows = _host.Repo.BomProgress(level, _system.SelectedIndex > 0 ? _system.SelectedItem as string : null, _search.Text, _billed.Checked);
+            _extra = level == BomLevel.Items ? _host.Repo.CustomFields(Entities.BomItem) : new();
+            _bom = level == BomLevel.Items ? _host.Repo.BomItems().ToDictionary(b => b.Id) : new();
             Ui.Bind(_grid, Table());
             _grid.Columns["Item"]!.Visible = level == BomLevel.Items;
             var all = _host.Repo.BomCount();
@@ -87,6 +91,8 @@ sealed class BomProgressView : Panel, ITabView
         t.Columns.Add("System"); t.Columns.Add("Drawing"); t.Columns.Add("Item"); t.Columns.Add("BOM t", typeof(decimal));
         foreach (var a in _acts) { t.Columns.Add($"{a.Name} t", typeof(decimal)); t.Columns.Add($"{a.Name} %", typeof(decimal)); }
         t.Columns.Add("Scope");
+        var extraCols = _extra.Select(f => t.Columns.Contains(f.Name) ? f.Name + " (added)" : f.Name).ToList();
+        foreach (var c in extraCols) t.Columns.Add(c);
         for (var i = 0; i < _rows.Count; i++)
         {
             var r = _rows[i];
@@ -98,6 +104,11 @@ sealed class BomProgressView : Panel, ITabView
                 vals.Add(r.BomTonnes > 0 ? q * 100m / r.BomTonnes : 0m);
             }
             vals.Add(r.Over ? "Over" : "");
+            if (_extra.Count > 0)
+            {
+                var x = r.BomItemIds.Count == 1 && _bom.TryGetValue(r.BomItemIds[0], out var b) ? Extras.Parse(b.Extra) : new();
+                vals.AddRange(_extra.Select(f => (object)x.GetValueOrDefault(f.Name, "")));
+            }
             t.Rows.Add(vals.ToArray());
         }
         return t;

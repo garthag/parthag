@@ -25,6 +25,8 @@ public sealed class Contractor
     public string Phone { get; set; } = "";
     public string Address { get; set; } = "";
     public string Remarks { get; set; } = "";
+    /// <summary>Values of user-added fields, as JSON: {"Field name": "value"}.</summary>
+    public string Extra { get; set; } = "{}";
     public override string ToString() => Name;
 }
 
@@ -39,6 +41,8 @@ public sealed class WorkOrder
     public DateTime? WoDate { get; set; }
     public string Status { get; set; } = "Open";
     public string Remarks { get; set; } = "";
+    /// <summary>Values of user-added fields, as JSON: {"Field name": "value"}.</summary>
+    public string Extra { get; set; } = "{}";
     public override string ToString() => WoNo;
 }
 
@@ -62,6 +66,8 @@ public sealed class BomItem
     public string Rev { get; set; } = "";
     public string Item { get; set; } = "";
     public decimal Tonnes { get; set; }
+    /// <summary>Values of user-added fields, as JSON: {"Field name": "value"}.</summary>
+    public string Extra { get; set; } = "{}";
 
     /// <summary>"16193442 · Sht 3/6 · Rev A"</summary>
     public string DrawingLabel => FormatDrawing(DrawingNo, Sheet, Rev);
@@ -126,6 +132,8 @@ public sealed class BillLine
     public string Unit { get; set; } = "";
     public decimal Qty { get; set; }
     public decimal Rate { get; set; }
+    /// <summary>Values of user-added fields, as JSON: {"Field name": "value"}.</summary>
+    public string Extra { get; set; } = "{}";
     public decimal Amount => BillMath.LineAmount(Qty, Rate);
     public bool IsBom => BomItemId.HasValue;
 
@@ -256,4 +264,54 @@ public sealed class BillLineDetail
     public decimal Rate { get; set; }
     public decimal Amount { get; set; }
     public string Remarks { get; set; } = "";
+}
+
+/// <summary>A field the user added (from an Excel import or in Masters) to contractors, work orders, BOM rows or bill lines.</summary>
+public sealed class CustomField
+{
+    public long Id { get; set; }
+    /// <summary>Contractor, WorkOrder, BomItem or BillLine.</summary>
+    public string Entity { get; set; } = "";
+    public string Name { get; set; } = "";
+    public int SortOrder { get; set; }
+    public override string ToString() => Name;
+}
+
+public static class Entities
+{
+    public const string Contractor = "Contractor", WorkOrder = "WorkOrder", BomItem = "BomItem", BillLine = "BillLine";
+    public static readonly string[] All = { Contractor, WorkOrder, BomItem, BillLine };
+    public static string Label(string entity) => entity switch
+    {
+        Contractor => "Contractors", WorkOrder => "Work orders", BomItem => "BOM", BillLine => "Bill lines", _ => entity,
+    };
+}
+
+/// <summary>Reads and writes the JSON of user-added field values.</summary>
+public static class Extras
+{
+    public static Dictionary<string, string> Parse(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json)) return new(StringComparer.OrdinalIgnoreCase);
+        try
+        {
+            var d = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, string>>(json);
+            return d == null ? new(StringComparer.OrdinalIgnoreCase) : new(d, StringComparer.OrdinalIgnoreCase);
+        }
+        catch (System.Text.Json.JsonException) { return new(StringComparer.OrdinalIgnoreCase); }
+    }
+
+    public static string Write(IDictionary<string, string> values) =>
+        System.Text.Json.JsonSerializer.Serialize(values.Where(kv => !string.IsNullOrWhiteSpace(kv.Value))
+            .ToDictionary(kv => kv.Key, kv => kv.Value.Trim()));
+
+    /// <summary>Adds or replaces the given values; blank new values leave old ones alone.</summary>
+    public static string Merge(string? oldJson, IDictionary<string, string> newValues)
+    {
+        var d = Parse(oldJson);
+        foreach (var (k, v) in newValues) if (!string.IsNullOrWhiteSpace(v)) d[k] = v.Trim();
+        return Write(d);
+    }
+
+    public static string Get(string? json, string field) => Parse(json).GetValueOrDefault(field, "");
 }
