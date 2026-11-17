@@ -11,6 +11,9 @@ public sealed class ImportResult
     public List<string> Errors { get; } = [];
     public int JunkSkipped { get; set; }
 
+    /// <summary>Files that were attached to a register row created earlier from an Excel drawing list.</summary>
+    public int AttachedToList { get; set; }
+
     public int Unclassified => Added.Count(d => d.TypeCode == DrawingType.Other.Code);
     public int Plants => Added.Select(d => d.Plant).Distinct().Count();
     public int Units => Added.Select(d => d.Plant + "|" + d.Unit).Distinct().Count();
@@ -23,6 +26,54 @@ public sealed class DrawingImporter(IDrawingStore store, DrawingLibrary library)
     public const int MaxNestedDepth = 2;
 
     sealed record Source(string Path, long Size, Func<Stream> Open);
+
+    /// <summary>
+    /// Picks the register row a file belongs to: same drawing number, then the same sheet (or the only
+    /// sheet), preferring a row of the same revision that still has no file.
+    /// </summary>
+    static Drawing? FindTemplate(IEnumerable<Drawing> sameNumber, Drawing file, HashSet<int> claimed)
+    {
+        var all = sameNumber.ToList();
+        var candidates = all;
+        if (candidates.Count == 0) return null;
+        if (file.Sheet.Length > 0)
+        {
+            var sameSheet = candidates.Where(x => x.Sheet == file.Sheet || x.Sheet.Length == 0).ToList();
+            if (sameSheet.Count > 0) candidates = sameSheet;
+        }
+        // Judge "several sheets" on every row of the drawing, not just the ones still without a file.
+        else if (all.Select(x => x.Sheet).Distinct().Count() > 1)
+        {
+            // Several sheets and the file name doesn't say which: only an exact single-sheet row qualifies.
+            var single = candidates.Where(x => x.Sheet is "" or "1/1" or "1").ToList();
+            if (single.Count == 0) return null;
+            candidates = single;
+        }
+        // An empty row of the same revision is filled; any other row only lends its plant / unit / type.
+        return candidates.FirstOrDefault(x => x.FileMissing && !claimed.Contains(x.Id)
+                                              && x.Revision.Equals(file.Revision, StringComparison.OrdinalIgnoreCase))
+               ?? candidates.OrderByDescending(x => x.RevRank).First();
+    }
+
+    /// <summary>
+    /// Adds drawings read from Excel as register rows without files. Rows already in the register
+    /// (same number, sheet and revision) are skipped.
+    /// </summary>
+    public (int Added, int AlreadyThere) ImportList(DrawingListResult list, string source)
+    {
+        var existing = store.All().Select(d => $"{d.NumberKey}|{d.Sheet}|{d.Revision.ToUpperInvariant()}").ToHashSet();
+        var batch = store.StartBatch(source, list.Plant);
+        int added = 0, already = 0;
+        foreach (var d in list.Drawings)
+        {
+            if (!existing.Add($"{d.NumberKey}|{d.Sheet}|{d.Revision.ToUpperInvariant()}")) { already++; continue; }
+            d.BatchId = batch;
+            store.Add(d);
+            added++;
+        }
+        store.FinishBatch(batch, added, already, 0);
+        return (added, already);
+    }
 
     public ImportResult Import(IReadOnlyList<string> files, string defaultPlant,
         IProgress<ImportProgress>? progress = null, CancellationToken ct = default)
@@ -101,7 +152,10 @@ public sealed class DrawingImporter(IDrawingStore store, DrawingLibrary library)
     {
         // A single wrapper folder (usually the ZIP's own name) carries no meaning.
         var root = DrawingParser.CommonRootFolder(sources.Select(s => s.Path));
-        var seen = store.All().Select(d => d.DuplicateKey).ToHashSet();
+        var existing = store.All();
+        var seen = existing.Where(d => !d.FileMissing).Select(d => d.DuplicateKey).ToHashSet();
+        var byNumber = existing.ToLookup(d => d.NumberKey);
+        var claimed = new HashSet<int>();
 
         for (var i = 0; i < sources.Count; i++)
         {
@@ -114,14 +168,47 @@ public sealed class DrawingImporter(IDrawingStore store, DrawingLibrary library)
             var d = new Drawing
             {
                 DrawingNo = p.DrawingNo, Title = p.Title, Revision = p.Revision, Plant = p.Plant, Unit = p.Unit,
-                TypeCode = p.Type.Code, Kind = p.Kind, Status = p.Status, FileName = p.FileName,
+                TypeCode = p.Type.Code, Kind = p.Kind, Status = p.Status, FileName = p.FileName, Sheet = p.Sheet,
                 SourcePath = p.Folder, SizeBytes = s.Size, BatchId = batch,
             };
+
+            // A drawing already in the register (e.g. from the BOM) decides plant, unit, type and title.
+            var template = FindTemplate(byNumber[d.NumberKey], d, claimed);
+            if (template != null)
+            {
+                d.DrawingNo = template.DrawingNo;
+                d.Plant = template.Plant;
+                d.Unit = template.Unit;
+                d.TypeCode = template.TypeCode;
+                d.Sheet = template.Sheet;
+                d.Agency = template.Agency;
+                if (template.Title.Length > 0) d.Title = template.Title;
+                if (d.Kind.Length == 0) d.Kind = template.Kind;
+            }
             if (!seen.Add(d.DuplicateKey)) { result.Duplicates.Add(s.Path); continue; }
+
+            // Same revision listed without a file: fill that row instead of adding a new one.
+            var placeholder = template is { FileMissing: true } && !claimed.Contains(template.Id)
+                              && template.Revision.Equals(d.Revision, StringComparison.OrdinalIgnoreCase)
+                ? template : null;
             try
             {
+                if (placeholder != null)
+                {
+                    d.Id = placeholder.Id;
+                    d.Remarks = placeholder.Remarks;
+                    d.Status = placeholder.Status;
+                    d.BatchId = placeholder.BatchId;
+                    d.SourcePath = placeholder.SourcePath.Length > 0 ? $"{placeholder.SourcePath}; ZIP: {p.Folder}".TrimEnd(' ', ':', ';') : p.Folder;
+                }
                 using (var content = s.Open()) library.Store(d, content);
-                store.Add(d);
+                if (placeholder != null)
+                {
+                    store.Update(d);
+                    claimed.Add(placeholder.Id);
+                    result.AttachedToList++;
+                }
+                else store.Add(d);
                 result.Added.Add(d);
             }
             catch (Exception e) when (e is not OperationCanceledException)

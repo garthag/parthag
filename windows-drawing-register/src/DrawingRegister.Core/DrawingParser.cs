@@ -4,7 +4,7 @@ namespace DrawingRegister.Core;
 
 public sealed record ParsedDrawing(
     string DrawingNo, string Title, string Revision, string Plant, string Unit,
-    DrawingType Type, string Kind, DrawingStatus Status, string FileName, string Folder);
+    DrawingType Type, string Kind, DrawingStatus Status, string FileName, string Folder, string Sheet = "");
 
 /// <summary>
 /// Reads plant, unit, drawing type, drawing number, revision and status from a
@@ -32,6 +32,22 @@ public static class DrawingParser
         (new($@"(?:^|{Sep})(?:AS[\s_\-]?BUILT|ABD)(?=$|{Sep})", I), DrawingStatus.AsBuilt),
         (new($@"(?:^|{Sep})FOR[\s_\-]?INFO(?:RMATION)?(?=$|{Sep})", I), DrawingStatus.ForInformation),
     ];
+
+    /// <summary>"(SH. 1 OF 2)", "(SHT.1 OF 2)", "Sht-1/5", "SHEET 9/32", "1 OF 1".</summary>
+    public static readonly Regex SheetRe = new(
+        @"[\s,(_\-]*\b(?:SH(?:EET|T)?\.?[\s\-#]*)?(\d{1,3})\s*(?:OF|/)\s*(\d{1,3})\b\s*\)?", I);
+    static readonly Regex SheetWordRe = new(@"\bSH(?:EET|T)?\.?[\s\-#]*\d{1,3}\s*(?:OF|/)\s*\d{1,3}\b", I);
+
+    /// <summary>Takes a sheet reference ("SH. 1 OF 2", "Sht-1/5") out of <paramref name="text"/>; returns "1/2".</summary>
+    public static string ExtractSheet(ref string text, bool requireWord = true)
+    {
+        var w = SheetWordRe.Match(text);
+        if (requireWord && !w.Success) return "";
+        var m = SheetRe.Match(text, w.Success ? Math.Max(0, w.Index - 3) : 0);
+        if (!m.Success) return "";
+        text = text.Remove(m.Index, m.Length).Insert(m.Index, " ");
+        return $"{int.Parse(m.Groups[1].Value)}/{int.Parse(m.Groups[2].Value)}";
+    }
 
     static readonly Regex NumberRe = new(@"^[A-Za-z0-9&]+(?:[-_.][A-Za-z0-9&]+)*", RegexOptions.Compiled);
     static readonly Regex PlantFolder = new(@"^(?:PLANT|PLT)[\s_\-#.]*([A-Z0-9][A-Z0-9 \-&]*)$", I);
@@ -137,6 +153,7 @@ public static class DrawingParser
         var folders = parts.Length > 1 ? parts[..^1] : [];
         var dot = fileName.LastIndexOf('.');
         var stem = dot > 0 ? fileName[..dot] : fileName;
+        var sheet = ExtractSheet(ref stem);
 
         // Revision.
         var revision = "";
@@ -271,7 +288,7 @@ public static class DrawingParser
             kind = KindWords.FirstOrDefault(k => upper.Contains(k.Word)).Kind ?? "";
         }
 
-        return new ParsedDrawing(number, title, revision, plant, unit, type, kind, status.Value, fileName, string.Join('/', folders));
+        return new ParsedDrawing(number, title, revision, plant, unit, type, kind, status.Value, fileName, string.Join('/', folders), sheet);
     }
 
     /// <summary>When every path sits under one wrapper folder, returns it so it can be ignored.</summary>

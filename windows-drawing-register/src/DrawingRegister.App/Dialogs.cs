@@ -142,14 +142,15 @@ sealed class ProgressForm : Form
 
 sealed class EditDrawingForm : FormDialog
 {
-    readonly TextBox _no, _title, _rev, _kind, _remarks;
+    readonly TextBox _no, _sheet, _title, _rev, _kind, _remarks, _agency;
     readonly ComboBox _plant, _unit, _type, _status;
     readonly CheckBox _all;
     public bool ApplyToAllRevisions => _all.Checked;
 
-    public EditDrawingForm(Drawing d, int revisionCount, IEnumerable<Drawing> all) : base($"Drawing details – {d.DrawingNo}", 620, 520)
+    public EditDrawingForm(Drawing d, int revisionCount, IEnumerable<Drawing> all) : base($"Drawing details – {d.DrawingNo}", 620, 600)
     {
         _no = Row("Drawing no.", new TextBox { Text = d.DrawingNo });
+        _sheet = Row("Sheet (e.g. 2/6)", new TextBox { Text = d.Sheet });
         _title = Row("Title", new TextBox { Text = d.Title });
         _rev = Row("Revision", new TextBox { Text = d.Revision, CharacterCasing = CharacterCasing.Upper });
         _status = Row("Status", new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList });
@@ -165,10 +166,11 @@ sealed class EditDrawingForm : FormDialog
         _unit.Items.AddRange(all.Select(x => x.Unit).Where(x => x.Length > 0).Distinct().Order(NaturalComparer.Instance).Cast<object>().ToArray());
         _unit.Text = d.Unit;
         _kind = Row("Sheet kind", new TextBox { Text = d.Kind });
+        _agency = Row("Agency", new TextBox { Text = d.Agency, CharacterCasing = CharacterCasing.Upper });
         _remarks = Row("Remarks", new TextBox { Text = d.Remarks, Multiline = true, Height = 60 });
         _all = new CheckBox
         {
-            Text = $"Apply drawing no., plant, unit and type to all {revisionCount} revisions",
+            Text = $"Apply drawing no., sheet, plant, unit, type and agency to all {revisionCount} revisions",
             Checked = true, Visible = revisionCount > 1, AutoSize = true,
         };
         Grid.Controls.Add(_all);
@@ -183,6 +185,8 @@ sealed class EditDrawingForm : FormDialog
         x.Plant = _plant.Text.Trim();
         x.Unit = _unit.Text.Trim();
         x.TypeCode = ((DrawingType)_type.SelectedItem!).Code;
+        x.Sheet = _sheet.Text.Trim();
+        x.Agency = _agency.Text.Trim();
     }
 
     /// <summary>Fields of this revision only.</summary>

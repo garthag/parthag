@@ -57,7 +57,7 @@ public sealed class SqlDrawingStore(string connectionString) : IDrawingStore
     }
 
     const string Columns =
-        "Id, Plant, Unit, TypeCode, DrawingNo, Title, Kind, Revision, Status, FileName, StoredPath, SourcePath, SizeBytes, Remarks, BatchId, ImportedOn";
+        "Id, Plant, Unit, TypeCode, DrawingNo, Title, Kind, Revision, Status, FileName, StoredPath, SourcePath, SizeBytes, Remarks, BatchId, ImportedOn, Sheet, Agency";
 
     public List<Drawing> All()
     {
@@ -75,6 +75,7 @@ public sealed class SqlDrawingStore(string connectionString) : IDrawingStore
                 Status = DrawingStatusInfo.FromCode(r.GetString(8)), FileName = r.GetString(9), StoredPath = r.GetString(10),
                 SourcePath = r.GetString(11), SizeBytes = r.GetInt64(12), Remarks = r.GetString(13),
                 BatchId = r.IsDBNull(14) ? null : r.GetInt32(14), ImportedOn = r.GetDateTime(15),
+                Sheet = r.GetString(16), Agency = r.GetString(17),
             });
         }
         return list;
@@ -97,6 +98,8 @@ public sealed class SqlDrawingStore(string connectionString) : IDrawingStore
         cmd.Parameters.AddWithValue("@SizeBytes", d.SizeBytes);
         cmd.Parameters.AddWithValue("@Remarks", d.Remarks);
         cmd.Parameters.AddWithValue("@BatchId", (object?)d.BatchId ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("@Sheet", d.Sheet);
+        cmd.Parameters.AddWithValue("@Agency", d.Agency);
     }
 
     public void Add(Drawing d)
@@ -104,9 +107,9 @@ public sealed class SqlDrawingStore(string connectionString) : IDrawingStore
         using var c = Open();
         using var cmd = c.CreateCommand();
         cmd.CommandText =
-            "INSERT dbo.Drawing (Plant, Unit, TypeCode, DrawingNo, Title, Kind, Revision, RevRank, Status, FileName, StoredPath, SourcePath, SizeBytes, Remarks, BatchId) " +
+            "INSERT dbo.Drawing (Plant, Unit, TypeCode, DrawingNo, Title, Kind, Revision, RevRank, Status, FileName, StoredPath, SourcePath, SizeBytes, Remarks, BatchId, Sheet, Agency) " +
             "OUTPUT INSERTED.Id, INSERTED.ImportedOn " +
-            "VALUES (@Plant, @Unit, @TypeCode, @DrawingNo, @Title, @Kind, @Revision, @RevRank, @Status, @FileName, @StoredPath, @SourcePath, @SizeBytes, @Remarks, @BatchId)";
+            "VALUES (@Plant, @Unit, @TypeCode, @DrawingNo, @Title, @Kind, @Revision, @RevRank, @Status, @FileName, @StoredPath, @SourcePath, @SizeBytes, @Remarks, @BatchId, @Sheet, @Agency)";
         Bind(cmd, d);
         using var r = cmd.ExecuteReader();
         r.Read();
@@ -121,7 +124,7 @@ public sealed class SqlDrawingStore(string connectionString) : IDrawingStore
         cmd.CommandText =
             "UPDATE dbo.Drawing SET Plant=@Plant, Unit=@Unit, TypeCode=@TypeCode, DrawingNo=@DrawingNo, Title=@Title, Kind=@Kind, " +
             "Revision=@Revision, RevRank=@RevRank, Status=@Status, FileName=@FileName, StoredPath=@StoredPath, SourcePath=@SourcePath, " +
-            "SizeBytes=@SizeBytes, Remarks=@Remarks, BatchId=@BatchId, ModifiedOn=SYSDATETIME(), ModifiedBy=SUSER_SNAME() WHERE Id=@Id";
+            "SizeBytes=@SizeBytes, Remarks=@Remarks, BatchId=@BatchId, Sheet=@Sheet, Agency=@Agency, ModifiedOn=SYSDATETIME(), ModifiedBy=SUSER_SNAME() WHERE Id=@Id";
         Bind(cmd, d);
         cmd.Parameters.AddWithValue("@Id", d.Id);
         cmd.ExecuteNonQuery();

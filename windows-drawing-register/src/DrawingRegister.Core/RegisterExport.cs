@@ -15,7 +15,7 @@ public static class RegisterExport
     {
         static string Q(string v) => "\"" + v.Replace("\"", "\"\"") + "\"";
         var sb = new StringBuilder();
-        sb.Append("S.No,Plant,Unit/Area,Type code,Type,Drawing No.,Title,Sheet kind,Revision,Current,Status,Received,File name,Stored at,ZIP folder,Remarks\r\n");
+        sb.Append("S.No,Plant,Unit/Area,Type code,Type,Drawing No.,Sheet,Title,Sheet kind,Revision,Current,Status,Agency,File received,Added on,File name,Stored at,Source,Remarks\r\n");
         var sn = 0;
         foreach (var (p, u, t, e) in Register.Flatten(Register.Organise(drawings)))
         {
@@ -23,8 +23,9 @@ public static class RegisterExport
             {
                 sb.AppendJoin(',',
                     ++sn, Q(Register.PlantLabel(p.Plant)), Q(Register.UnitLabel(u.Unit)), t.Type.Code, Q(t.Type.Name),
-                    Q(d.DrawingNo), Q(d.DisplayTitle), Q(d.Kind), Q(d.Revision), d == e.Current ? "Yes" : "Superseded",
-                    Q(d.Status.Label()), d.ImportedOn.ToString("dd-MM-yyyy"), Q(d.FileName), Q(d.StoredPath), Q(d.SourcePath), Q(d.Remarks));
+                    Q(d.DrawingNo), Q(d.Sheet), Q(d.DisplayTitle), Q(d.Kind), Q(d.Revision), d == e.Current ? "Yes" : "Superseded",
+                    Q(d.Status.Label()), Q(d.Agency), d.FileMissing ? "No" : "Yes", d.ImportedOn.ToString("dd-MM-yyyy"),
+                    Q(d.FileName), Q(d.StoredPath), Q(d.SourcePath), Q(d.Remarks));
                 sb.Append("\r\n");
             }
         }
@@ -48,16 +49,18 @@ public static class RegisterExport
         var all = drawings.ToList();
         var groups = Register.Organise(all);
         var current = groups.Sum(g => g.Count);
+        var received = Register.Flatten(groups).Count(x => !x.Entry.Current.FileMissing);
         using var doc = new PdfDocument();
         doc.Info.Title = $"Drawing Register - {projectName}";
         doc.Info.Creator = "Drawing Register";
-        var w = new PageWriter(doc, projectName, $"{current} drawings | {all.Count} files");
+        var w = new PageWriter(doc, projectName, $"{current} drawings | {received} files received");
 
         // Summary: current drawings per plant/unit x type.
         w.Heading("Summary by unit and drawing type", 9);
         var summaryCols = new List<(string, double)> { ("Plant / Unit", 0.0) };
         summaryCols.AddRange(DrawingType.All.Select(t => (t.Code, 30.0)));
         summaryCols.Add(("Total", 36));
+        summaryCols.Add(("Files", 36));
         w.TableHeader(summaryCols, XColors.LightGray);
         foreach (var p in groups)
             foreach (var u in p.Units)
@@ -69,6 +72,7 @@ public static class RegisterExport
                     return n == 0 ? "-" : n.ToString();
                 }));
                 cells.Add(u.Count.ToString());
+                cells.Add(u.Types.Sum(t => t.Drawings.Count(e => !e.Current.FileMissing)).ToString());
                 w.Row(summaryCols, cells, bold: false);
             }
         w.Note(string.Join("   ", DrawingType.All.Select(t => $"{t.Code} = {t.Name}")));
@@ -76,8 +80,8 @@ public static class RegisterExport
 
         var cols = new List<(string, double)>
         {
-            ("S.No", 30), ("Drawing No.", 150), ("Title", 0), ("Sheet kind", 95), ("Rev", 34), ("Status", 38),
-            ("Earlier revs", 70), ("Received", 58), ("File", 150),
+            ("S.No", 30), ("Drawing No.", 150), ("Sheet", 38), ("Title", 0), ("Rev", 34), ("Status", 38),
+            ("Earlier revs", 60), ("Agency", 50), ("Added", 54), ("File", 140),
         };
         var sn = 0;
         foreach (var p in groups)
@@ -94,13 +98,14 @@ public static class RegisterExport
                     {
                         var d = e.Current;
                         w.Row(cols, [
-                            (++sn).ToString(), d.DrawingNo, d.DisplayTitle, d.Kind, Revisions.Label(d.Revision), d.Status.Code(),
-                            string.Join(", ", e.Superseded.Select(x => x.Revision)), d.ImportedOn.ToString("dd-MM-yyyy"), d.FileName,
+                            (++sn).ToString(), d.DrawingNo, d.Sheet, d.DisplayTitle, Revisions.Label(d.Revision), d.Status.Code(),
+                            string.Join(", ", e.Superseded.Select(x => x.Revision)), d.Agency, d.ImportedOn.ToString("dd-MM-yyyy"),
+                            d.FileMissing ? "- not received -" : d.FileName,
                         ], bold: false, boldColumns: [1, 4]);
                         if (!includeSuperseded) continue;
                         foreach (var s in e.Superseded)
-                            w.Row(cols, ["", "   superseded", s.DisplayTitle, "", Revisions.Label(s.Revision), s.Status.Code(), "",
-                                s.ImportedOn.ToString("dd-MM-yyyy"), s.FileName], bold: false, colour: Grey, small: true);
+                            w.Row(cols, ["", "   superseded", s.Sheet, s.DisplayTitle, Revisions.Label(s.Revision), s.Status.Code(), "", "",
+                                s.ImportedOn.ToString("dd-MM-yyyy"), s.FileMissing ? "- not received -" : s.FileName], bold: false, colour: Grey, small: true);
                     }
                 }
             }

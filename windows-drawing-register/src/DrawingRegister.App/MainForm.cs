@@ -21,6 +21,7 @@ sealed class MainForm : Form
     readonly ViewerPanel _viewer = new() { Dock = DockStyle.Fill };
     readonly ToolStripTextBox _search = new() { Width = 220, ToolTipText = "Search drawing no., title, unit, revision, file" };
     readonly ToolStripButton _superseded = new("Show superseded") { CheckOnClick = true, ToolTipText = "List older revisions under each drawing" };
+    readonly ToolStripButton _missingOnly = new("Not received") { CheckOnClick = true, ToolTipText = "Only drawings whose file has not been imported yet" };
     readonly ToolStripComboBox _typeFilter = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 210 };
     readonly ToolStripStatusLabel _status = new() { Spring = true, TextAlign = ContentAlignment.MiddleLeft };
     readonly ToolStripStatusLabel _where = new() { ForeColor = SystemColors.GrayText };
@@ -35,6 +36,8 @@ sealed class MainForm : Form
         public bool IsCurrent { get; } = current;
         public string SNo { get; } = sn?.ToString() ?? "";
         public string DrawingNo => IsCurrent ? Drawing.DrawingNo : "   ↳ superseded";
+        public string Sheet => Drawing.Sheet;
+        public string Agency => Drawing.Agency;
         public string Title => Drawing.DisplayTitle;
         public string Type => Drawing.Type.Code;
         public string Rev => Revisions.Label(Drawing.Revision);
@@ -44,7 +47,7 @@ sealed class MainForm : Form
         public string Unit => Register.UnitLabel(Drawing.Unit);
         public string Kind => Drawing.Kind;
         public string Received => Drawing.ImportedOn.ToString("dd-MM-yyyy");
-        public string File => Drawing.FileName;
+        public string File => Drawing.FileMissing ? "— not received —" : Drawing.FileName;
         public string Size => Ui.Size(Drawing.SizeBytes);
     }
 
@@ -97,6 +100,7 @@ sealed class MainForm : Form
         _superseded.Checked = settings.ShowSuperseded;
         _superseded.CheckedChanged += (_, _) => { _settings.ShowSuperseded = _superseded.Checked; _settings.Save(); FillGrid(); };
         _typeFilter.SelectedIndexChanged += (_, _) => FillGrid();
+        _missingOnly.CheckedChanged += (_, _) => FillGrid();
 
         DragEnter += (_, e) => e.Effect = e.Data?.GetDataPresent(DataFormats.FileDrop) == true ? DragDropEffects.Copy : DragDropEffects.None;
         DragDrop += (_, e) => { if (e.Data?.GetData(DataFormats.FileDrop) is string[] files) Import(files); };
@@ -117,6 +121,8 @@ sealed class MainForm : Form
         }
         B("Import ZIP…", "Unzip a drawing package and file it Plant > Unit > Type (Ctrl+I)", (_, _) => PickAndImport(zip: true));
         B("Add files…", "Add PDF / DWG / image drawings", (_, _) => PickAndImport(zip: false));
+        B("Import drawing list (Excel)…", "Add the drawings listed in a BOM / drawing list workbook; their files attach when the ZIP is imported",
+            (_, _) => ImportExcelList());
         bar.Items.Add(new ToolStripSeparator());
         B("Open", "Open in the default program (Enter)", (_, _) => _viewer.OpenExternal(Selected));
         B("Show in folder", "Show the file in Explorer", (_, _) => _viewer.ShowInFolder(Selected));
@@ -136,6 +142,7 @@ sealed class MainForm : Form
         bar.Items.Add(new ToolStripLabel("Search:"));
         bar.Items.Add(_search);
         bar.Items.Add(_superseded);
+        bar.Items.Add(_missingOnly);
         var settings = new ToolStripButton("Settings…") { Alignment = ToolStripItemAlignment.Right };
         settings.Click += (_, _) => OpenSettings();
         var refresh = new ToolStripButton("Refresh") { Alignment = ToolStripItemAlignment.Right, ToolTipText = "Reload from the database (F5)" };
@@ -158,7 +165,8 @@ sealed class MainForm : Form
             _grid.Columns.Add(c);
         }
         Col(nameof(Row.SNo), "S.No", 44);
-        Col(nameof(Row.DrawingNo), "Drawing No.", 170);
+        Col(nameof(Row.DrawingNo), "Drawing No.", 190);
+        Col(nameof(Row.Sheet), "Sheet", 50);
         Col(nameof(Row.Title), "Title", 200, fill: true);
         Col(nameof(Row.Type), "Type", 42);
         Col(nameof(Row.Rev), "Rev", 52);
@@ -166,6 +174,7 @@ sealed class MainForm : Form
         Col(nameof(Row.Earlier), "Earlier revs", 80);
         Col(nameof(Row.Unit), "Unit / Area", 110);
         Col(nameof(Row.Plant), "Plant", 120);
+        Col(nameof(Row.Agency), "Agency", 60);
         Col(nameof(Row.Kind), "Sheet kind", 120);
         Col(nameof(Row.Received), "Received", 78);
         Col(nameof(Row.File), "File", 200);
@@ -197,6 +206,8 @@ sealed class MainForm : Form
         }
         else if (col is nameof(Row.DrawingNo) or nameof(Row.Rev))
             e.CellStyle.Font = _bold;
+        else if (col == nameof(Row.File) && r.Drawing.FileMissing)
+            e.CellStyle.ForeColor = Color.FromArgb(198, 40, 40);
         else if (col == nameof(Row.Status))
             e.CellStyle.ForeColor = r.Drawing.Status switch
             {
@@ -285,7 +296,7 @@ sealed class MainForm : Form
         if (_typeFilter.SelectedItem is DrawingType t && d.TypeCode != t.Code) return false;
         var q = _search.Text.Trim();
         if (q.Length == 0) return true;
-        return new[] { d.DrawingNo, d.Title, d.Kind, d.Plant, d.Unit, d.FileName, d.Revision, d.Type.Name, d.Remarks }
+        return new[] { d.DrawingNo, d.Title, d.Kind, d.Plant, d.Unit, d.FileName, d.Revision, d.Type.Name, d.Remarks, d.Sheet, d.Agency }
             .Any(s => s.Contains(q, StringComparison.OrdinalIgnoreCase));
     }
 
@@ -298,13 +309,15 @@ sealed class MainForm : Form
         {
             // A drawing is listed when its current revision (or any revision, when searching) matches.
             if (!e.Revisions.Any(Matches)) continue;
+            if (_missingOnly.Checked && !e.Current.FileMissing) continue;
             rows.Add(new Row(e.Current, true, ++sn, string.Join(", ", e.Superseded.Select(x => x.Revision))));
             if (_superseded.Checked)
                 rows.AddRange(e.Superseded.Select(s => new Row(s, false, null, "")));
         }
         _grid.DataSource = rows;
         var current = _groups.Sum(g => g.Count);
-        _status.Text = $"{sn} of {current} drawings shown   ·   {_all.Count} files   ·   {_groups.Count} plants   ·   " +
+        var received = Register.Flatten(_groups).Count(x => !x.Entry.Current.FileMissing);
+        _status.Text = $"{sn} of {current} drawings shown   ·   files received for {received} of {current}   ·   {_groups.Count} plants   ·   " +
                        $"{_groups.Sum(g => g.Units.Count)} units   ·   {_all.Count - current} superseded revisions";
         _where.Text = $"Library: {_library.Root}";
 
@@ -418,12 +431,57 @@ sealed class MainForm : Form
                 .Select(t => $"   • {t.Label}: {r.Added.Count(d => d.TypeCode == t.Code)}"));
         }
         else lines.Add("Nothing new was imported.");
+        if (r.AttachedToList > 0) lines.Add($"\n{r.AttachedToList} file(s) attached to drawings already listed in the register (from Excel).");
         if (r.Unclassified > 0) lines.Add($"\n{r.Unclassified} file(s) could not be classified and are under \"OT – Other\". Use Edit to set the type.");
         if (r.Duplicates.Count > 0) lines.Add($"\n{r.Duplicates.Count} file(s) already in the register were skipped.");
         if (r.JunkSkipped > 0) lines.Add($"{r.JunkSkipped} system file(s) ignored.");
         if (r.Errors.Count > 0) lines.Add($"\n{r.Errors.Count} error(s):\n" + string.Join("\n", r.Errors.Take(8)));
         MessageBox.Show(this, string.Join("\n", lines), "Import finished", MessageBoxButtons.OK,
             r.Errors.Count > 0 ? MessageBoxIcon.Warning : MessageBoxIcon.Information);
+    }
+
+    async void ImportExcelList()
+    {
+        using var d = new OpenFileDialog
+        {
+            Title = "Choose BOM / drawing list workbook(s)",
+            Multiselect = true,
+            Filter = "Excel workbooks (*.xlsx;*.xlsm)|*.xlsx;*.xlsm",
+        };
+        if (d.ShowDialog(this) != DialogResult.OK) return;
+        var files = d.FileNames;
+        var plant = _all.Select(x => x.Plant).FirstOrDefault(x => x.Length > 0) ?? "";
+
+        Cursor = Cursors.WaitCursor;
+        DrawingListResult list;
+        try { list = await Task.Run(() => ExcelDrawingList.Read(files, plant)); }
+        catch (Exception e) { Cursor = Cursors.Default; Ui.Error("Could not read the workbook. Close it in Excel and try again.", e); return; }
+        Cursor = Cursors.Default;
+
+        if (list.Drawings.Count == 0)
+        {
+            Ui.Info("No drawing numbers were found. The workbook needs a column headed \"DRG NO\", \"DRG NUMBER\" or \"Drawing No.\".");
+            return;
+        }
+        var sheets = string.Join("\n", list.PerSheet.Select(kv => $"   • {kv.Key}: {kv.Value}"));
+        var types = string.Join(", ", DrawingType.All.Where(t => list.Drawings.Any(x => x.TypeCode == t.Code))
+            .Select(t => $"{t.Code} {list.Drawings.Count(x => x.TypeCode == t.Code)}"));
+        if (MessageBox.Show(this,
+                $"Found {list.Drawings.Count} drawing sheets (plant: {Register.PlantLabel(list.Plant.Length > 0 ? list.Plant : plant)}):\n{sheets}\n\n" +
+                $"Types: {types}\n" +
+                (list.MergedDuplicates > 0 ? $"{list.MergedDuplicates} listed in more than one worksheet (kept once).\n" : "") +
+                (list.NotDrawingRows > 0 ? $"{list.NotDrawingRows} bolt / nut lines in the drawing column skipped.\n" : "") +
+                (list.ScopeItemsWithoutNumber > 0 ? $"{list.ScopeItemsWithoutNumber} scope items without a drawing number not added.\n" : "") +
+                "\nAdd them to the register? Their files attach automatically when you import the drawing ZIP.",
+                "Import drawing list", MessageBoxButtons.OKCancel, MessageBoxIcon.Question) != DialogResult.OK) return;
+        try
+        {
+            var (added, already) = new DrawingImporter(_store, _library).ImportList(list, string.Join("; ", files.Select(Path.GetFileName)));
+            Reload();
+            Ui.Info($"{added} drawing(s) added to the register." + (already > 0 ? $"\n{already} were already there." : "") +
+                    "\n\nUse the \"Not received\" filter to see which drawing files are still missing.");
+        }
+        catch (Exception e) { Ui.Error("Could not save the drawing list.", e); Reload(); }
     }
 
     void EditSelected()

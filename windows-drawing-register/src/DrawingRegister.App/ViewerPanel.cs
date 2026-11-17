@@ -75,10 +75,11 @@ sealed class ViewerPanel : UserControl
         _updatingRevs = true;
         _revisions.Items.Clear();
         foreach (var (r, i) in revisions.Select((r, i) => (r, i)))
-            _revisions.Items.Add($"{Revisions.Label(r.Revision)}  {r.Status.Code()}  {(i == 0 ? "(current)" : "(superseded)")}  {r.ImportedOn:dd-MM-yyyy}");
+            _revisions.Items.Add($"{Revisions.Label(r.Revision)}  {r.Status.Code()}  {(i == 0 ? "(current)" : "(superseded)")}  {r.ImportedOn:dd-MM-yyyy}{(r.FileMissing ? "  no file" : "")}");
         _revisions.SelectedIndex = d == null ? -1 : revisions.FindIndex(r => r.Id == d.Id);
         _updatingRevs = false;
-        _revisions.Enabled = _openExternal.Enabled = d != null;
+        _revisions.Enabled = d != null;
+        _openExternal.Enabled = d is { FileMissing: false };
 
         if (d == null)
         {
@@ -89,14 +90,22 @@ sealed class ViewerPanel : UserControl
             return;
         }
 
-        _number.Text = $"{d.DrawingNo}   {Revisions.Label(d.Revision)}";
+        _number.Text = $"{d.NumberWithSheet}   {Revisions.Label(d.Revision)}";
         _info.Text = $"{d.DisplayTitle}\n{Register.PlantLabel(d.Plant)} › {Register.UnitLabel(d.Unit)} › {d.Type.Label}   ·   " +
-                     $"{d.Status.Label()}   ·   {d.FileName} {Ui.Size(d.SizeBytes)}";
+                     $"{d.Status.Label()}" + (d.Agency.Length > 0 ? $"   ·   Agency {d.Agency}" : "") +
+                     (d.FileMissing ? "   ·   file not received" : $"   ·   {d.FileName} {Ui.Size(d.SizeBytes)}");
         var current = revisions.Count > 0 ? revisions[0] : d;
         _banner.Visible = current.Id != d.Id;
         _bannerText.Text = $"SUPERSEDED – Rev {d.Revision} is not the latest. Rev {current.Revision} ({current.Status.Code()}) is current. Do not use for construction.";
         _openCurrent.Text = $"Open Rev {current.Revision}";
 
+        if (d.FileMissing)
+        {
+            ShowMessage("The drawing file has not been received yet.\n\n" +
+                        "Import the drawing ZIP – files are attached to this row automatically when the drawing number matches." +
+                        (d.SourcePath.Length > 0 ? $"\n\nListed in: {d.SourcePath}" : "") + (d.Remarks.Length > 0 ? $"\n{d.Remarks}" : ""));
+            return;
+        }
         if (!Library.Exists(d))
         {
             ShowMessage($"The file is missing from the library folder:\n{Library.FullPath(d)}");

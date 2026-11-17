@@ -80,6 +80,9 @@ public sealed class Drawing
     public string DrawingNo { get; set; } = "";
     public string Title { get; set; } = "";
     public string Revision { get; set; } = "0";
+
+    /// <summary>Sheet of a multi-sheet drawing, e.g. "2/6". Empty for single-sheet drawings.</summary>
+    public string Sheet { get; set; } = "";
     public string Plant { get; set; } = "";
     public string Unit { get; set; } = "";
     public string TypeCode { get; set; } = DrawingType.Other.Code;
@@ -91,16 +94,33 @@ public sealed class Drawing
     public string StoredPath { get; set; } = "";
     public string SourcePath { get; set; } = "";
     public string Remarks { get; set; } = "";
+
+    /// <summary>Contractor / agency responsible, when known (e.g. from the contractor workbook).</summary>
+    public string Agency { get; set; } = "";
     public long SizeBytes { get; set; }
     public DateTime ImportedOn { get; set; } = DateTime.Now;
     public int? BatchId { get; set; }
 
     public DrawingType Type => DrawingType.ByCode(TypeCode);
-    public DrawingFormat Format => FormatOf(FileName);
+    public DrawingFormat Format => FormatOf(FileName.Length > 0 ? FileName : StoredPath);
     public int RevRank => Revisions.Rank(Revision);
 
-    /// <summary>Revisions of the same drawing share this key.</summary>
-    public string RegisterKey => $"{Plant.Trim().ToUpperInvariant()}|{Unit.Trim().ToUpperInvariant()}|{DrawingNo.Trim().ToUpperInvariant()}";
+    /// <summary>Revisions of the same drawing sheet share this key.</summary>
+    public string RegisterKey =>
+        $"{Plant.Trim().ToUpperInvariant()}|{Unit.Trim().ToUpperInvariant()}|{DrawingNo.Trim().ToUpperInvariant()}|{Sheet.Trim()}";
+
+    /// <summary>True when the register row is known (e.g. from a BOM) but its file has not been imported yet.</summary>
+    public bool FileMissing => StoredPath.Length == 0;
+
+    /// <summary>Drawing number with only letters and digits, used to match files to register rows
+    /// ("ERC-MCK-BSL-STH-F-001" matches "ERC/MCK/BSL/STH/F-001").</summary>
+    public static string NormaliseNumber(string number) =>
+        new(number.ToUpperInvariant().Where(char.IsLetterOrDigit).ToArray());
+
+    public string NumberKey => NormaliseNumber(DrawingNo);
+
+    /// <summary>"16193442  Sh 2/6".</summary>
+    public string NumberWithSheet => Sheet.Length == 0 ? DrawingNo : $"{DrawingNo}  Sh {Sheet}";
 
     /// <summary>Same drawing, same revision, same file type: treated as a duplicate on import.</summary>
     public string DuplicateKey => $"{RegisterKey}|{Revision.ToUpperInvariant()}|{Path.GetExtension(FileName).ToLowerInvariant()}";

@@ -50,6 +50,14 @@ CREATE TABLE dbo.Drawing (
 );
 GO
 
+-- Added in 1.1: sheet of multi-sheet drawings, and the responsible agency.
+IF COL_LENGTH('dbo.Drawing', 'Sheet') IS NULL
+    ALTER TABLE dbo.Drawing ADD Sheet NVARCHAR(20) NOT NULL CONSTRAINT DF_Drawing_Sheet DEFAULT N'';
+GO
+IF COL_LENGTH('dbo.Drawing', 'Agency') IS NULL
+    ALTER TABLE dbo.Drawing ADD Agency NVARCHAR(150) NOT NULL CONSTRAINT DF_Drawing_Agency DEFAULT N'';
+GO
+
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_Drawing_Register')
 CREATE INDEX IX_Drawing_Register ON dbo.Drawing (Plant, Unit, TypeCode, DrawingNo, RevRank DESC);
 GO
@@ -81,10 +89,11 @@ GO
 CREATE OR ALTER VIEW dbo.vw_DrawingRegister AS
 SELECT
     d.Id, d.Plant, d.Unit, d.TypeCode, t.Name AS TypeName, t.SortOrder AS TypeOrder,
-    d.DrawingNo, d.Title, d.Kind, d.Revision, d.RevRank, d.Status,
-    CASE WHEN ROW_NUMBER() OVER (PARTITION BY d.Plant, d.Unit, d.DrawingNo
+    d.DrawingNo, d.Sheet, d.Title, d.Kind, d.Revision, d.RevRank, d.Status, d.Agency,
+    CASE WHEN ROW_NUMBER() OVER (PARTITION BY d.Plant, d.Unit, d.DrawingNo, d.Sheet
                                  ORDER BY d.RevRank DESC, d.ImportedOn DESC, d.Id DESC) = 1
          THEN 1 ELSE 0 END AS IsCurrent,
+    CASE WHEN d.StoredPath = N'' THEN 0 ELSE 1 END AS FileReceived,
     d.FileName, d.StoredPath, d.SourcePath, d.SizeBytes, d.Remarks, d.ImportedOn, d.ModifiedOn, d.ModifiedBy, d.BatchId
 FROM dbo.Drawing d
 JOIN dbo.DrawingType t ON t.Code = d.TypeCode;
@@ -92,7 +101,7 @@ GO
 
 -- Count of current drawings per plant / unit / type.
 CREATE OR ALTER VIEW dbo.vw_DrawingSummary AS
-SELECT Plant, Unit, TypeCode, TypeName, TypeOrder, COUNT(*) AS Drawings
+SELECT Plant, Unit, TypeCode, TypeName, TypeOrder, COUNT(*) AS Drawings, SUM(FileReceived) AS FilesReceived
 FROM dbo.vw_DrawingRegister
 WHERE IsCurrent = 1
 GROUP BY Plant, Unit, TypeCode, TypeName, TypeOrder;
