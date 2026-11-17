@@ -110,9 +110,11 @@ sealed class BomView : Panel, ITabView
                 (object?)p.LengthMm ?? DBNull.Value, (object?)p.WidthMm ?? DBNull.Value, (object?)p.ThicknessMm ?? DBNull.Value,
                 p.Qty is { } q ? q : DBNull.Value, (object?)p.UnitWeightKg ?? DBNull.Value, (object?)p.TotalWeightKg ?? DBNull.Value,
                 p.Grade, p.Remarks, p.Flags);
-        Ui.Bind(_parts, t);
-        foreach (var c in new[] { "Length mm", "Width mm", "Thk mm" }) _parts.Columns[c]!.DefaultCellStyle.Format = "0.##";
-        foreach (var c in new[] { "Unit wt kg", "Total kg" }) _parts.Columns[c]!.DefaultCellStyle.Format = "N2";
+        Ui.Bind(_parts, t, after: g =>
+        {
+            foreach (var c in new[] { "Length mm", "Width mm", "Thk mm" }) g.Columns[c]!.DefaultCellStyle.Format = "0.##";
+            foreach (var c in new[] { "Unit wt kg", "Total kg" }) g.Columns[c]!.DefaultCellStyle.Format = "N2";
+        });
         _partsTitle.Text = item == null ? "Part lines" :
             $"Part lines of {item.Label}{(item.Description.Length > 0 ? " – " + item.Description : "")}: {t.Rows.Count} line(s)" +
             (item.Sets > 1 ? $" · weights are for one set; the BOM row counts {item.Sets} sets" : "") + " · grey lines are details already in their assembly's weight";

@@ -129,9 +129,24 @@ static class Ui
     /// Shows a table in a grid. Columns whose names start with "_" are hidden (ids).
     /// Decimal columns are right-aligned and formatted: tonnes with 3 decimals, % with 1, money with 2.
     /// </summary>
-    public static void Bind(DataGridView g, DataTable t, string money = "N2")
+    public static void Bind(DataGridView g, DataTable t, string money = "N2", Action<DataGridView>? after = null)
     {
         g.DataSource = t;
+        // A grid on a tab that is not showing creates its columns only when it is first shown:
+        // format them now if they exist, else as soon as they do.
+        if (g.Columns.Count > 0) { Format(g, t, money); after?.Invoke(g); return; }
+        void Once(object? sender, DataGridViewBindingCompleteEventArgs e)
+        {
+            if (g.Columns.Count == 0 || g.DataSource != t) return;
+            g.DataBindingComplete -= Once;
+            Format(g, t, money);
+            after?.Invoke(g);
+        }
+        g.DataBindingComplete += Once;
+    }
+
+    static void Format(DataGridView g, DataTable t, string money)
+    {
         foreach (DataGridViewColumn c in g.Columns)
         {
             c.Visible = !c.Name.StartsWith('_');

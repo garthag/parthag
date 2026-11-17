@@ -149,8 +149,7 @@ sealed class DashboardView : Panel, ITabView
         wt.Columns.Add("Value ₹", typeof(decimal)); wt.Columns.Add("Gross billed ₹", typeof(decimal)); wt.Columns.Add("Balance ₹", typeof(decimal));
         wt.Columns.Add("Used", typeof(decimal));
         foreach (var w in d.WorkOrders) wt.Rows.Add(w.WorkOrderId, w.WoNo, w.Contractor, w.Service, w.Value, w.Gross, w.Balance, (object?)w.UsedPercent ?? DBNull.Value);
-        Ui.Bind(_woGrid, wt, "N0");
-        _woGrid.Columns["Used"]!.DefaultCellStyle.Format = "0.0'%'";
+        Ui.Bind(_woGrid, wt, "N0", g => g.Columns["Used"]!.DefaultCellStyle.Format = "0.0'%'");
         SetChildren(_workOrders, Title("Work order utilisation"), Hint("Double-click a work order to see its bills"), _woGrid);
 
         ResumeLayout(true);

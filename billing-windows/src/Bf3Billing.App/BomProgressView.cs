@@ -75,8 +75,7 @@ sealed class BomProgressView : Panel, ITabView
             _rows = _host.Repo.BomProgress(level, _system.SelectedIndex > 0 ? _system.SelectedItem as string : null, _search.Text, _billed.Checked);
             _extra = level == BomLevel.Items ? _host.Repo.CustomFields(Entities.BomItem) : new();
             _bom = level == BomLevel.Items ? _host.Repo.BomItems().ToDictionary(b => b.Id) : new();
-            Ui.Bind(_grid, Table());
-            _grid.Columns["Item"]!.Visible = level == BomLevel.Items;
+            Ui.Bind(_grid, Table(), after: g => g.Columns["Item"]!.Visible = level == BomLevel.Items);
             var all = _host.Repo.BomCount();
             _total.Text = all == 0
                 ? "The BOM is empty. Import it on the Data tab (Import BOM from Excel)."
