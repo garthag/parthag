@@ -10,6 +10,11 @@ on:
       - 'billing-windows/**'
       - '.github/workflows/billing-windows.yml'
   workflow_dispatch:
+    inputs:
+      commit_screenshots:
+        description: Commit the screenshots to billing-windows/docs/screenshots on this branch
+        type: boolean
+        default: false
 
 concurrency:
   group: billing-windows-${{ github.ref }}-${{ github.event_name }}
@@ -18,6 +23,8 @@ concurrency:
 jobs:
   build:
     runs-on: windows-latest
+    permissions:
+      contents: write
     timeout-minutes: 30
     defaults:
       run:
@@ -65,18 +72,27 @@ jobs:
           New-Item -ItemType Directory -Force -Path screenshots | Out-Null
           Copy-Item "$dir/*.png" screenshots/
           Get-ChildItem screenshots | ForEach-Object { Write-Host "$($_.Name) $($_.Length) bytes" }
-          # Also written into the log (base64) so the images can be read where artifacts cannot be downloaded.
-          foreach ($f in Get-ChildItem screenshots -Filter *.png) {
-            $b = [Convert]::ToBase64String([IO.File]::ReadAllBytes($f.FullName))
-            Write-Host "##SHOT $($f.Name)"
-            for ($i = 0; $i -lt $b.Length; $i += 3000) { Write-Host ("#B " + $b.Substring($i, [Math]::Min(3000, $b.Length - $i))) }
-            Write-Host "##END"
-          }
 
       - uses: actions/upload-artifact@v4
         with:
           name: Bf3Billing-screenshots
           path: billing-windows/screenshots/
+
+      - name: Commit screenshots (manual runs only)
+        if: github.event_name == 'workflow_dispatch' && inputs.commit_screenshots
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path docs/screenshots | Out-Null
+          Remove-Item docs/screenshots/*.png -ErrorAction SilentlyContinue
+          Copy-Item screenshots/*.png docs/screenshots/
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/screenshots
+          git diff --cached --quiet
+          if ($LASTEXITCODE -ne 0) {
+            git commit -m "Billing app: screenshots of every screen [skip ci]"
+            git push origin "HEAD:${{ github.ref_name }}"
+          }
 
       - name: Zip
         shell: pwsh
