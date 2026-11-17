@@ -1,0 +1,56 @@
+name: BF#3 Billing (Windows)
+
+on:
+  push:
+    paths:
+      - 'billing-windows/**'
+      - '.github/workflows/billing-windows.yml'
+  pull_request:
+    paths:
+      - 'billing-windows/**'
+      - '.github/workflows/billing-windows.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: billing-windows
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Restore
+        run: dotnet restore Bf3Billing.sln
+
+      - name: Build
+        run: dotnet build Bf3Billing.sln -c Release --no-restore
+
+      - name: Unit tests
+        run: dotnet test tests/Bf3Billing.Tests -c Release --no-build --logger "console;verbosity=normal"
+
+      - name: Publish single-file app
+        run: dotnet publish src/Bf3Billing.App -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true -o publish/Bf3Billing
+
+      - name: Self test (opens every screen on a temporary demo data file)
+        shell: pwsh
+        run: |
+          $log = Join-Path $env:RUNNER_TEMP 'selftest.log'
+          $p = Start-Process -FilePath 'publish/Bf3Billing/Bf3Billing.exe' -ArgumentList '--selftest', "`"$log`"" -PassThru -Wait
+          if (Test-Path $log) { Get-Content $log }
+          if ($p.ExitCode -ne 0) { throw "Self test failed with exit code $($p.ExitCode)" }
+
+      - name: Zip
+        shell: pwsh
+        run: |
+          Copy-Item README.md publish/Bf3Billing/README.md
+          Compress-Archive -Path publish/Bf3Billing/* -DestinationPath publish/Bf3Billing-win-x64.zip
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Bf3Billing-win-x64
+          path: billing-windows/publish/Bf3Billing-win-x64.zip

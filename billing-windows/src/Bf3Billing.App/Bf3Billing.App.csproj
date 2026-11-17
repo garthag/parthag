@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>Bf3Billing.App</RootNamespace>
+    <AssemblyName>Bf3Billing</AssemblyName>
+    <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
+    <Product>BF#3 Billing Database</Product>
+    <Version>1.0.0</Version>
+  </PropertyGroup>
+
+  <!-- Compile check on Linux build machines whose SDK has no Windows Desktop targets.
+       On Windows the normal Windows Forms targets are used. -->
+  <PropertyGroup Condition="'$(OS)' != 'Windows_NT' And !Exists('$(NetCoreRoot)sdk/$(NETCoreSdkVersion)/Sdks/Microsoft.NET.Sdk.WindowsDesktop/targets/Microsoft.NET.Sdk.WindowsDesktop.targets')">
+    <ImportWindowsDesktopTargets>false</ImportWindowsDesktopTargets>
+    <LinuxCompileCheck>true</LinuxCompileCheck>
+  </PropertyGroup>
+  <ItemGroup Condition="'$(LinuxCompileCheck)' == 'true'">
+    <FrameworkReference Include="Microsoft.WindowsDesktop.App.WindowsForms" />
+    <Using Include="System.Drawing" />
+    <Using Include="System.Windows.Forms" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Bf3Billing.Core\Bf3Billing.Core.csproj" />
+  </ItemGroup>
+</Project>

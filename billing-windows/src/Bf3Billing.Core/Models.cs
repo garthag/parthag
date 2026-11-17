@@ -1,0 +1,259 @@
+namespace Bf3Billing.Core;
+
+public static class BillStatus
+{
+    public const string Draft = "Draft";
+    public const string Submitted = "Submitted";
+    public const string Certified = "Certified";
+    public const string Paid = "Paid";
+    public const string Cancelled = "Cancelled";
+    public static readonly string[] All = { Draft, Submitted, Certified, Paid, Cancelled };
+}
+
+public static class BillTypes
+{
+    public static readonly string[] All = { "RA bill", "Final bill", "Advance", "Supplementary" };
+}
+
+public sealed class Contractor
+{
+    public long Id { get; set; }
+    public string Code { get; set; } = "";
+    public string Name { get; set; } = "";
+    public string Gstin { get; set; } = "";
+    public string Pan { get; set; } = "";
+    public string Phone { get; set; } = "";
+    public string Address { get; set; } = "";
+    public string Remarks { get; set; } = "";
+    public override string ToString() => Name;
+}
+
+public sealed class WorkOrder
+{
+    public long Id { get; set; }
+    public string WoNo { get; set; } = "";
+    public long ContractorId { get; set; }
+    public string ContractorName { get; set; } = "";
+    public string Service { get; set; } = "";
+    public decimal Value { get; set; }
+    public DateTime? WoDate { get; set; }
+    public string Status { get; set; } = "Open";
+    public string Remarks { get; set; } = "";
+    public override string ToString() => WoNo;
+}
+
+public sealed class Activity
+{
+    public long Id { get; set; }
+    public string Name { get; set; } = "";
+    /// <summary>True when lines of this activity are billed in tonnes against the BOM.</summary>
+    public bool IsBom { get; set; }
+    public string DefaultUnit { get; set; } = "t";
+    public int SortOrder { get; set; }
+    public override string ToString() => Name;
+}
+
+public sealed class BomItem
+{
+    public long Id { get; set; }
+    public string System { get; set; } = "";
+    public string DrawingNo { get; set; } = "";
+    public string Sheet { get; set; } = "";
+    public string Rev { get; set; } = "";
+    public string Item { get; set; } = "";
+    public decimal Tonnes { get; set; }
+
+    /// <summary>"16193442 · Sht 3/6 · Rev A"</summary>
+    public string DrawingLabel => FormatDrawing(DrawingNo, Sheet, Rev);
+
+    /// <summary>"1 STOVE › 16193442 · Sht 3/6 · Rev A › B1"</summary>
+    public string Label => System + " › " + DrawingLabel + (Item.Length > 0 ? " › " + Item : "");
+
+    public static string FormatDrawing(string drawingNo, string sheet, string rev)
+    {
+        var s = drawingNo;
+        if (!string.IsNullOrWhiteSpace(sheet)) s += " · Sht " + sheet;
+        if (!string.IsNullOrWhiteSpace(rev)) s += " · Rev " + rev;
+        return s;
+    }
+
+    public override string ToString() => Label;
+}
+
+public sealed class Rate
+{
+    public long Id { get; set; }
+    /// <summary>0 = default rate for every work order.</summary>
+    public long WorkOrderId { get; set; }
+    public string WorkOrderNo { get; set; } = "";
+    public long ActivityId { get; set; }
+    public string ActivityName { get; set; } = "";
+    public string Unit { get; set; } = "";
+    public decimal Amount { get; set; }
+}
+
+public sealed class Bill
+{
+    public long Id { get; set; }
+    public long WorkOrderId { get; set; }
+    public string BillNo { get; set; } = "";
+    public string BillType { get; set; } = "RA bill";
+    public DateTime BillDate { get; set; } = DateTime.Today;
+    public DateTime? PeriodFrom { get; set; }
+    public DateTime? PeriodTo { get; set; }
+    public string Status { get; set; } = BillStatus.Draft;
+    public decimal GstPct { get; set; } = 18m;
+    public decimal RetentionPct { get; set; }
+    public decimal TdsPct { get; set; }
+    public decimal OtherDeduction { get; set; }
+    public decimal PaidAmount { get; set; }
+    public DateTime? PaidOn { get; set; }
+    public string Remarks { get; set; } = "";
+    public DateTime? CreatedAt { get; set; }
+    public DateTime? UpdatedAt { get; set; }
+}
+
+public sealed class BillLine
+{
+    public long Id { get; set; }
+    public long BillId { get; set; }
+    public int LineNo { get; set; }
+    /// <summary>Set for a BOM line (billed in tonnes against a drawing or item); null for a free line.</summary>
+    public long? BomItemId { get; set; }
+    public string Description { get; set; } = "";
+    public string Remarks { get; set; } = "";
+    public long? ActivityId { get; set; }
+    public string Unit { get; set; } = "";
+    public decimal Qty { get; set; }
+    public decimal Rate { get; set; }
+    public decimal Amount => BillMath.LineAmount(Qty, Rate);
+    public bool IsBom => BomItemId.HasValue;
+
+    public BillLine Clone() => (BillLine)MemberwiseClone();
+}
+
+public sealed record BillTotals(
+    decimal Gross, decimal Gst, decimal Retention, decimal Tds, decimal Other,
+    decimal Net, decimal Paid, decimal Due);
+
+/// <summary>One row of the Bills list.</summary>
+public sealed class BillSummary
+{
+    public long Id { get; set; }
+    public string BillNo { get; set; } = "";
+    public DateTime BillDate { get; set; }
+    public long ContractorId { get; set; }
+    public string Contractor { get; set; } = "";
+    public long WorkOrderId { get; set; }
+    public string WorkOrder { get; set; } = "";
+    public string BillType { get; set; } = "";
+    public int Lines { get; set; }
+    public decimal Gross { get; set; }
+    public decimal Net { get; set; }
+    public decimal Paid { get; set; }
+    public decimal Due { get; set; }
+    public string Status { get; set; } = "";
+    public string Remarks { get; set; } = "";
+    /// <summary>Number of lines that take the cumulative billing of a BOM item above its scope.</summary>
+    public int OverScopeLines { get; set; }
+}
+
+public sealed class BillFilter
+{
+    public string? Search { get; set; }
+    public string? Status { get; set; }
+    public long? ContractorId { get; set; }
+    public long? WorkOrderId { get; set; }
+    public DateTime? From { get; set; }
+    public DateTime? To { get; set; }
+    public bool OnlyOverScope { get; set; }
+}
+
+/// <summary>Scope check of one BOM line inside a bill being edited.</summary>
+public sealed record ScopeInfo(decimal Scope, decimal Earlier, decimal This)
+{
+    public decimal Cumulative => Earlier + This;
+    public decimal Percent => Scope > 0 ? Cumulative * 100m / Scope : (Cumulative > 0 ? 100m : 0m);
+    public bool Over => Cumulative > Scope + 0.0005m;
+}
+
+public enum BomLevel { Systems, Drawings, Items }
+
+public sealed class BomProgressRow
+{
+    public string System { get; set; } = "";
+    public string Drawing { get; set; } = "";
+    public string Item { get; set; } = "";
+    public decimal BomTonnes { get; set; }
+    /// <summary>Billed tonnes per BOM activity id.</summary>
+    public Dictionary<long, decimal> Billed { get; } = new();
+    public List<long> BomItemIds { get; } = new();
+    public bool Over { get; set; }
+}
+
+public sealed class ActivityProgress
+{
+    public long ActivityId { get; set; }
+    public string Activity { get; set; } = "";
+    public decimal Tonnes { get; set; }
+    public decimal Percent { get; set; }
+}
+
+public sealed class ContractorSummary
+{
+    public string Contractor { get; set; } = "";
+    public decimal WoValue { get; set; }
+    public int Bills { get; set; }
+    public decimal Gross { get; set; }
+    public decimal PercentOfWo => WoValue > 0 ? Gross * 100m / WoValue : 0m;
+    public decimal Net { get; set; }
+    public decimal Paid { get; set; }
+    public decimal Outstanding { get; set; }
+}
+
+public sealed class WorkOrderUse
+{
+    public long WorkOrderId { get; set; }
+    public string WoNo { get; set; } = "";
+    public string Contractor { get; set; } = "";
+    public string Service { get; set; } = "";
+    public decimal Value { get; set; }
+    public decimal Gross { get; set; }
+    public decimal Balance => Value - Gross;
+    public decimal? UsedPercent => Value > 0 ? Gross * 100m / Value : null;
+}
+
+public sealed class Dashboard
+{
+    public int BillCount { get; set; }
+    public decimal Gross { get; set; }
+    public decimal Net { get; set; }
+    public decimal Paid { get; set; }
+    public decimal Outstanding { get; set; }
+    public int OverScopeLines { get; set; }
+    public int DraftBills { get; set; }
+    public int BomDrawings { get; set; }
+    public decimal BomTonnes { get; set; }
+    public List<ActivityProgress> Progress { get; set; } = new();
+    public List<ContractorSummary> ByContractor { get; set; } = new();
+    public List<WorkOrderUse> WorkOrders { get; set; } = new();
+}
+
+/// <summary>A bill line with its bill, for "lines behind this BOM row" and reports.</summary>
+public sealed class BillLineDetail
+{
+    public long BillId { get; set; }
+    public string BillNo { get; set; } = "";
+    public DateTime BillDate { get; set; }
+    public string Status { get; set; } = "";
+    public string Contractor { get; set; } = "";
+    public string WorkOrder { get; set; } = "";
+    public int LineNo { get; set; }
+    public string Item { get; set; } = "";
+    public string Activity { get; set; } = "";
+    public string Unit { get; set; } = "";
+    public decimal Qty { get; set; }
+    public decimal Rate { get; set; }
+    public decimal Amount { get; set; }
+    public string Remarks { get; set; } = "";
+}
