@@ -14,7 +14,7 @@ import hashlib
 import logging
 import random
 from dataclasses import dataclass
-from datetime import date, timedelta
+from datetime import UTC, date, datetime, time, timedelta
 from decimal import Decimal
 
 from sqlalchemy import select
@@ -514,6 +514,7 @@ def seed(
                         is_scanned=False,
                         upload_status=FileStatus.PROCESSED,
                         created_by_id=admin.id,
+                        created_at=datetime.combine(rev_date, time(9), tzinfo=UTC),
                     )
                 )
                 stats["pdfs"] += 1

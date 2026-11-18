@@ -1,0 +1,103 @@
+# Production stack. Configure secrets in .env (see .env.example), then:
+#   docker compose -f docker-compose.prod.yml --env-file .env up -d --build
+# Everything is served on http://<host>:${HTTP_PORT:-80}
+name: drawing-reader
+
+x-backend-env: &backend-env
+  ENVIRONMENT: production
+  DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-drawing}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-drawing_reader}
+  REDIS_URL: redis://redis:6379/0
+  OCR_EAGER: "false"
+  OCR_ENGINE: ${OCR_ENGINE:-auto}
+  STORAGE_DIR: /data/storage
+  SECRET_KEY: ${SECRET_KEY:?set SECRET_KEY (min 32 chars)}
+  CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost}
+  LOG_LEVEL: ${LOG_LEVEL:-INFO}
+  LOG_JSON: "true"
+  ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+  MAX_UPLOAD_MB: ${MAX_UPLOAD_MB:-200}
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-drawing}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-drawing_reader}
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes: [redisdata:/data]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+
+  api:
+    image: ${REGISTRY:-drawing-reader}/backend:${IMAGE_TAG:-latest}
+    build: ./backend
+    restart: unless-stopped
+    command: ["api"]
+    environment:
+      <<: *backend-env
+      SEED_ON_START: ${SEED_ON_START:-false}
+      WEB_CONCURRENCY: ${WEB_CONCURRENCY:-4}
+    volumes: [storage:/data/storage]
+    depends_on:
+      db: { condition: service_healthy }
+      redis: { condition: service_healthy }
+
+  worker:
+    image: ${REGISTRY:-drawing-reader}/backend:${IMAGE_TAG:-latest}
+    build: ./backend
+    restart: unless-stopped
+    command: ["worker"]
+    environment:
+      <<: *backend-env
+      CELERY_CONCURRENCY: ${CELERY_CONCURRENCY:-2}
+    volumes: [storage:/data/storage]
+    depends_on:
+      db: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A app.workers.celery_app inspect ping -d celery@$$HOSTNAME --timeout 5 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  web:
+    image: ${REGISTRY:-drawing-reader}/frontend:${IMAGE_TAG:-latest}
+    build: ./frontend
+    restart: unless-stopped
+
+  proxy:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    ports: ["${HTTP_PORT:-80}:80"]
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./nginx/proxy_params.conf:/etc/nginx/proxy_params.conf:ro
+    depends_on:
+      api: { condition: service_healthy }
+      web: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+volumes:
+  pgdata:
+  redisdata:
+  storage:
