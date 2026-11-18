@@ -1,0 +1,36 @@
+[project]
+name = "drawing-reader-backend"
+version = "1.0.0"
+description = "Engineering Drawing Register, OCR, BOM intelligence and revision analytics API"
+requires-python = ">=3.12"
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+extend-exclude = ["alembic/versions"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "N", "S", "BLE", "A", "C4", "SIM", "RUF"]
+ignore = ["S101", "B008", "RUF001", "RUF002", "RUF003", "S311", "S603", "S607", "SIM108", "RUF012"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S105", "S106", "S108", "N802", "BLE001"]
+"app/seed/*" = ["S105", "S106"]
+
+[tool.ruff.format]
+quote-style = "double"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q --strict-markers"
+markers = ["tesseract: requires the tesseract binary"]
+filterwarnings = ["ignore::DeprecationWarning", "ignore::FutureWarning"]
+
+[tool.coverage.run]
+source = ["app"]
+omit = ["app/workers/*", "app/seed/seed.py"]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true
+exclude_lines = ["pragma: no cover", "if __name__ == .__main__.:", "raise NotImplementedError", "if TYPE_CHECKING:"]
