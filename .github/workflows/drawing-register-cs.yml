@@ -1,0 +1,81 @@
+name: Drawing Register (C#) Windows installer
+
+on:
+  push:
+    paths: ["drawing-register-cs/**", ".github/workflows/drawing-register-cs.yml"]
+  pull_request:
+    paths: ["drawing-register-cs/**", ".github/workflows/drawing-register-cs.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: drawing-register-cs-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  installer:
+    name: Test, build & verify DrawingRegisterSetup.exe
+    runs-on: windows-latest
+    timeout-minutes: 30
+    env:
+      APP_VERSION: 1.0.${{ github.run_number }}
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+      DOTNET_NOLOGO: "1"
+    defaults:
+      run:
+        shell: pwsh
+        working-directory: drawing-register-cs
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+      - name: Install Inno Setup
+        run: choco install innosetup -y --no-progress
+      - name: Build (unit tests, publish, smoke test of the real window, installer)
+        run: ./build-windows.ps1 -Version $env:APP_VERSION
+      - name: Silent install, smoke test of the installed app, uninstall
+        run: |
+          $setup = "dist\DrawingRegisterSetup-$env:APP_VERSION.exe"
+          $p = Start-Process $setup -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/CURRENTUSER' -Wait -PassThru
+          if ($p.ExitCode -ne 0) { throw "installer exit code $($p.ExitCode)" }
+          $installed = Join-Path $env:LOCALAPPDATA "Programs\Drawing Register"
+          $report = Join-Path $env:TEMP "installed-smoke.txt"
+          $run = Start-Process (Join-Path $installed "DrawingRegister.exe") -ArgumentList '--smoke-test', "`"$report`"" -Wait -PassThru
+          Get-Content $report
+          if ($run.ExitCode -ne 0) { throw "installed app smoke test failed" }
+          $u = Start-Process (Join-Path $installed "unins000.exe") -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES' -Wait -PassThru
+          if ($u.ExitCode -ne 0) { throw "uninstaller exit code $($u.ExitCode)" }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DrawingRegisterSetup-windows
+          path: drawing-register-cs/dist/DrawingRegisterSetup-*.exe
+          if-no-files-found: error
+
+  release:
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    needs: installer
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: DrawingRegisterSetup-windows
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: drawing-register-cs-v1.0.${{ github.run_number }}
+          target_commitish: ${{ github.sha }}
+          name: Drawing Register (C#) 1.0.${{ github.run_number }} for Windows
+          make_latest: false
+          body: |
+            **Windows 10/11 (64-bit):** download `DrawingRegisterSetup-1.0.${{ github.run_number }}.exe` and run it.
+
+            A native Windows app (C# / WPF) that works fully offline with a local SQLite database:
+            - **Add project** (code, name, client, location, status, dates) and edit or delete projects.
+            - **Upload PDFs**, **Upload folder** (all sub-folders) or drag & drop PDFs/folders onto the list. Drawing number, revision, discipline, area and type are read from file and folder names; duplicates are skipped; new revisions are tracked.
+            - Search and filter the register, edit drawing details, preview PDFs inside the app, export the register to CSV for Excel.
+
+            No administrator rights and no .NET installation needed. Data is kept in `%LOCALAPPDATA%\DrawingRegister`.
+            Windows SmartScreen may warn that the installer is from an unknown publisher because it is not code-signed: choose **More info → Run anyway**.
+          files: DrawingRegisterSetup-*.exe

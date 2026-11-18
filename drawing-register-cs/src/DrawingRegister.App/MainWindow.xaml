@@ -1,0 +1,178 @@
+<Window x:Class="DrawingRegister.App.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:wv2="clr-namespace:Microsoft.Web.WebView2.Wpf;assembly=Microsoft.Web.WebView2.Wpf"
+        Title="Drawing Register" Width="1400" Height="860" MinWidth="980" MinHeight="600"
+        WindowStartupLocation="CenterScreen" Icon="app.ico" FontFamily="Segoe UI" FontSize="13" Background="{StaticResource PanelBrush}">
+    <Window.InputBindings>
+        <KeyBinding Key="N" Modifiers="Control" Command="{Binding AddProjectCommand}" />
+        <KeyBinding Key="U" Modifiers="Control" Command="{Binding UploadFilesCommand}" />
+        <KeyBinding Key="F5" Command="{Binding RefreshCommand}" />
+    </Window.InputBindings>
+    <DockPanel>
+        <!-- Status bar -->
+        <Border DockPanel.Dock="Bottom" Background="White" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,1,0,0">
+            <Grid Margin="10,4">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="220" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <TextBlock Text="{Binding StatusText}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                <ProgressBar Grid.Column="1" Height="12" Margin="10,0" Value="{Binding Progress}"
+                             Visibility="{Binding IsBusy, Converter={StaticResource BoolToVisibility}}" />
+                <Button Grid.Column="2" Content="Open data folder" Command="{Binding OpenDataFolderCommand}"
+                        Padding="8,2" Background="Transparent" BorderThickness="0" Foreground="{StaticResource AccentBrush}" />
+            </Grid>
+        </Border>
+
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="270" MinWidth="200" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="3*" MinWidth="420" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="2*" MinWidth="320" />
+            </Grid.ColumnDefinitions>
+
+            <!-- Projects -->
+            <DockPanel Grid.Column="0" Margin="10">
+                <TextBlock DockPanel.Dock="Top" Text="Projects" Style="{StaticResource SectionTitle}" />
+                <Button DockPanel.Dock="Top" Content="+  Add project" Style="{StaticResource PrimaryButton}"
+                        Command="{Binding AddProjectCommand}" HorizontalAlignment="Stretch" Margin="0,0,0,8"
+                        ToolTip="Create a new project (Ctrl+N)" AutomationProperties.AutomationId="AddProject" />
+                <UniformGrid DockPanel.Dock="Bottom" Columns="2" Margin="0,8,0,0">
+                    <Button Content="Edit" Style="{StaticResource ToolButton}" Command="{Binding EditProjectCommand}" />
+                    <Button Content="Delete" Style="{StaticResource ToolButton}" Margin="0" Command="{Binding DeleteProjectCommand}" />
+                </UniformGrid>
+                <ListBox ItemsSource="{Binding Projects}" SelectedItem="{Binding SelectedProject}"
+                         BorderBrush="{StaticResource BorderBrush}" HorizontalContentAlignment="Stretch">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate>
+                            <Grid Margin="2,5">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel>
+                                    <TextBlock Text="{Binding Code}" FontWeight="SemiBold" />
+                                    <TextBlock Text="{Binding Name}" Foreground="{StaticResource MutedBrush}" TextTrimming="CharacterEllipsis" />
+                                </StackPanel>
+                                <Border Grid.Column="1" Background="{StaticResource AccentLightBrush}" CornerRadius="9" Padding="7,1"
+                                        VerticalAlignment="Center" ToolTip="Drawings">
+                                    <TextBlock Text="{Binding DrawingCount}" FontSize="11" />
+                                </Border>
+                            </Grid>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+            </DockPanel>
+
+            <GridSplitter Grid.Column="1" Width="4" HorizontalAlignment="Center" VerticalAlignment="Stretch" Background="Transparent" />
+
+            <!-- Drawings -->
+            <DockPanel Grid.Column="2" Margin="0,10,0,10">
+                <TextBlock DockPanel.Dock="Top" Text="{Binding ProjectHeader}" Style="{StaticResource SectionTitle}" TextTrimming="CharacterEllipsis" />
+                <WrapPanel DockPanel.Dock="Top" Margin="0,0,0,8">
+                    <Button Content="⭱  Upload PDFs" Style="{StaticResource PrimaryButton}" Command="{Binding UploadFilesCommand}"
+                            ToolTip="Upload one or more PDF drawings (Ctrl+U)" AutomationProperties.AutomationId="UploadFiles" />
+                    <Button Content="Upload folder" Style="{StaticResource ToolButton}" Command="{Binding UploadFolderCommand}"
+                            ToolTip="Upload every PDF in a folder and its sub-folders" />
+                    <Button Content="Edit drawing" Style="{StaticResource ToolButton}" Command="{Binding EditDrawingCommand}" />
+                    <Button Content="Delete drawing" Style="{StaticResource ToolButton}" Command="{Binding DeleteDrawingCommand}" />
+                    <Button Content="Export CSV" Style="{StaticResource ToolButton}" Command="{Binding ExportCsvCommand}"
+                            ToolTip="Export this register to a CSV file for Excel" />
+                </WrapPanel>
+                <Grid DockPanel.Dock="Top" Margin="0,0,0,8">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="160" />
+                        <ColumnDefinition Width="130" />
+                    </Grid.ColumnDefinitions>
+                    <Grid>
+                        <TextBox x:Name="SearchBox" Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged, Delay=200}"
+                                 IsEnabled="{Binding HasProject}" />
+                        <TextBlock Text="Search drawing number, title, discipline, area, folder…" Margin="7,0,0,0"
+                                   VerticalAlignment="Center" Foreground="#9AA0A8" IsHitTestVisible="False">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="Visibility" Value="Collapsed" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding Text, ElementName=SearchBox}" Value="">
+                                            <Setter Property="Visibility" Value="Visible" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
+                    </Grid>
+                    <ComboBox Grid.Column="1" Margin="6,0,0,0" ItemsSource="{Binding DisciplineOptions}"
+                              SelectedItem="{Binding DisciplineFilter}" ToolTip="Discipline" IsEnabled="{Binding HasProject}" />
+                    <ComboBox Grid.Column="2" Margin="6,0,0,0" ItemsSource="{Binding StatusOptions}"
+                              SelectedItem="{Binding StatusFilter}" ToolTip="Status" IsEnabled="{Binding HasProject}" />
+                </Grid>
+                <Grid>
+                    <DataGrid x:Name="DrawingsGrid" ItemsSource="{Binding Drawings}" SelectedItem="{Binding SelectedDrawing}"
+                              AllowDrop="True" Drop="OnDrop" DragOver="OnDragOver" MouseDoubleClick="OnDrawingDoubleClick">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="Drawing No" Binding="{Binding DrawingNumber}" Width="190" />
+                            <DataGridTextColumn Header="Title" Binding="{Binding Title}" Width="*" />
+                            <DataGridTextColumn Header="Discipline" Binding="{Binding Discipline}" Width="100" />
+                            <DataGridTextColumn Header="Area" Binding="{Binding Area}" Width="65" />
+                            <DataGridTextColumn Header="Type" Binding="{Binding DrawingType}" Width="55" />
+                            <DataGridTextColumn Header="Rev" Binding="{Binding CurrentRevision}" Width="50" />
+                            <DataGridTextColumn Header="Status" Binding="{Binding Status}" Width="80" />
+                            <DataGridTextColumn Header="Revs" Binding="{Binding RevisionCount}" Width="50" />
+                            <DataGridTextColumn Header="Updated" Binding="{Binding UpdatedAt, StringFormat=yyyy-MM-dd}" Width="90" />
+                        </DataGrid.Columns>
+                    </DataGrid>
+                    <Border IsHitTestVisible="False" HorizontalAlignment="Center" VerticalAlignment="Center" Padding="24"
+                            Visibility="{Binding Drawings.Count, Converter={StaticResource ZeroToVisible}}">
+                        <TextBlock TextAlignment="Center" Foreground="{StaticResource MutedBrush}" TextWrapping="Wrap" MaxWidth="360">
+                            <Run Text="No drawings to show." FontWeight="SemiBold" /><LineBreak />
+                            <Run Text="Add a project, then click &quot;Upload PDFs&quot; / &quot;Upload folder&quot; or drag PDF files and folders here." />
+                        </TextBlock>
+                    </Border>
+                </Grid>
+            </DockPanel>
+
+            <GridSplitter Grid.Column="3" Width="4" HorizontalAlignment="Center" VerticalAlignment="Stretch" Background="Transparent" />
+
+            <!-- Details: revisions + preview -->
+            <Grid Grid.Column="4" Margin="0,10,10,10">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="140" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+                <TextBlock Text="{Binding SelectedDrawing.DrawingNumber, FallbackValue='No drawing selected', TargetNullValue='No drawing selected'}"
+                           Style="{StaticResource SectionTitle}" />
+                <TextBlock Grid.Row="1" Text="{Binding SelectedDrawing.Title}" TextWrapping="Wrap" Margin="0,0,0,6"
+                           Foreground="{StaticResource MutedBrush}" />
+                <DataGrid Grid.Row="2" ItemsSource="{Binding Revisions}" SelectedItem="{Binding SelectedRevision}">
+                    <DataGrid.Columns>
+                        <DataGridTextColumn Header="Rev" Binding="{Binding Code}" Width="55" />
+                        <DataGridTextColumn Header="Date" Binding="{Binding RevisionDate, StringFormat=yyyy-MM-dd}" Width="90" />
+                        <DataGridTextColumn Header="File" Binding="{Binding File.OriginalFileName}" Width="*" />
+                        <DataGridCheckBoxColumn Header="Current" Binding="{Binding IsCurrent}" Width="60" />
+                    </DataGrid.Columns>
+                </DataGrid>
+                <WrapPanel Grid.Row="3" Margin="0,8,0,6">
+                    <Button Content="Open PDF" Style="{StaticResource ToolButton}" Command="{Binding OpenPdfCommand}"
+                            ToolTip="Open in your default PDF viewer" />
+                    <Button Content="Show in folder" Style="{StaticResource ToolButton}" Command="{Binding ShowInFolderCommand}" />
+                </WrapPanel>
+                <Border Grid.Row="4" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" Background="White">
+                    <Grid>
+                        <wv2:WebView2 x:Name="Preview" />
+                        <TextBlock x:Name="PreviewMessage" Margin="16" TextWrapping="Wrap" HorizontalAlignment="Center"
+                                   VerticalAlignment="Center" Foreground="{StaticResource MutedBrush}"
+                                   Text="Select a drawing to preview its PDF." />
+                    </Grid>
+                </Border>
+            </Grid>
+        </Grid>
+    </DockPanel>
+</Window>
