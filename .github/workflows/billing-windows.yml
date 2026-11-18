@@ -1,0 +1,145 @@
+name: BF#3 Billing (Windows)
+
+on:
+  push:
+    paths:
+      - 'billing-windows/**'
+      - '.github/workflows/billing-windows.yml'
+  pull_request:
+    paths:
+      - 'billing-windows/**'
+      - '.github/workflows/billing-windows.yml'
+  workflow_dispatch:
+    inputs:
+      release:
+        description: Publish the installer as a GitHub release
+        type: boolean
+        default: false
+      commit_screenshots:
+        description: Commit the screenshots to billing-windows/docs/screenshots on this branch
+        type: boolean
+        default: false
+
+concurrency:
+  group: billing-windows-${{ github.ref }}-${{ github.event_name }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    env:
+      APP_VERSION: 1.0.${{ github.run_number }}
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: billing-windows
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Restore
+        run: dotnet restore Bf3Billing.sln
+
+      - name: Build
+        run: dotnet build Bf3Billing.sln -c Release --no-restore
+
+      - name: Unit tests
+        run: dotnet test tests/Bf3Billing.Tests -c Release --no-build --logger "console;verbosity=normal"
+
+      - name: Publish single-file app
+        run: dotnet publish src/Bf3Billing.App -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true -p:DebugType=none -p:Version=${{ env.APP_VERSION }} -o publish/Bf3Billing
+
+      - name: Self test (opens every screen on a temporary demo data file)
+        timeout-minutes: 6
+        shell: pwsh
+        run: |
+          $log = Join-Path $env:RUNNER_TEMP 'selftest.log'
+          $p = Start-Process -FilePath 'publish/Bf3Billing/Bf3Billing.exe' -ArgumentList '--selftest', "`"$log`"" -PassThru
+          $done = $p.WaitForExit(240000)
+          if (-not $done) { $p.Kill() }
+          if (Test-Path $log) { Get-Content $log } else { throw "Self test wrote no log" }
+          $last = (Get-Content $log | Select-Object -Last 1)
+          if ($last -ne 'SELF TEST PASSED') { throw "Self test failed: $last" }
+          if (-not $done) { Write-Host "::warning::Self test passed but the program did not exit by itself" }
+
+      - name: Screenshots of every screen (demo data)
+        timeout-minutes: 5
+        shell: pwsh
+        run: |
+          $dir = Join-Path $env:RUNNER_TEMP 'shots'
+          $p = Start-Process -FilePath 'publish/Bf3Billing/Bf3Billing.exe' -ArgumentList '--screenshots', "`"$dir`"" -PassThru
+          if (-not $p.WaitForExit(180000)) { $p.Kill() }
+          if (Test-Path "$dir/error.txt") { Get-Content "$dir/error.txt"; throw "Screenshots failed" }
+          New-Item -ItemType Directory -Force -Path screenshots | Out-Null
+          Copy-Item "$dir/*.png" screenshots/
+          Get-ChildItem screenshots | ForEach-Object { Write-Host "$($_.Name) $($_.Length) bytes" }
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Bf3Billing-screenshots
+          path: billing-windows/screenshots/
+
+      - name: Commit screenshots (manual runs only)
+        if: github.event_name == 'workflow_dispatch' && inputs.commit_screenshots
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path docs/screenshots | Out-Null
+          Remove-Item docs/screenshots/*.png -ErrorAction SilentlyContinue
+          Copy-Item screenshots/*.png docs/screenshots/
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/screenshots
+          git diff --cached --quiet
+          if ($LASTEXITCODE -ne 0) {
+            git commit -m "Billing app: screenshots of every screen [skip ci]"
+            git push origin "HEAD:${{ github.ref_name }}"
+          }
+
+      - name: Zip
+        shell: pwsh
+        run: |
+          Copy-Item README.md publish/Bf3Billing/README.md
+          Compress-Archive -Path publish/Bf3Billing/* -DestinationPath publish/Bf3Billing-win-x64.zip
+
+      - name: Build installer (Inno Setup)
+        shell: pwsh
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) { choco install innosetup --no-progress -y | Out-Null }
+          & $iscc /Q "/DAppVersion=$env:APP_VERSION" installer\Bf3Billing.iss
+          if ($LASTEXITCODE -ne 0) { throw "Inno Setup failed" }
+          Get-ChildItem publish\*.exe | ForEach-Object { Write-Host "$($_.Name) $([math]::Round($_.Length / 1MB, 1)) MB" }
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: BF3-Billing-Setup
+          path: billing-windows/publish/BF3-Billing-Setup-*.exe
+
+      - name: Publish release (manual runs only)
+        if: github.event_name == 'workflow_dispatch' && inputs.release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: billing-v${{ env.APP_VERSION }}
+          target_commitish: ${{ github.sha }}
+          name: BF#3 Billing ${{ env.APP_VERSION }} (Windows)
+          make_latest: false
+          body: |
+            **Install:** download `BF3-Billing-Setup-${{ env.APP_VERSION }}.exe` and run it. No admin rights needed (it installs for your user; an administrator can choose "all users"). Start menu and desktop shortcuts are created.
+            Windows SmartScreen may warn because the installer is not code-signed: choose **More info › Run anyway**.
+
+            **No installer?** `Bf3Billing-win-x64.zip` holds the same app as a single `Bf3Billing.exe` to run from any folder.
+
+            Your data file (`%LOCALAPPDATA%\Bf3Billing\billing.db`) is not touched by installing, updating or uninstalling. Load the BSL workbooks with **Data › Import BSL workbooks…**.
+          files: |
+            billing-windows/publish/BF3-Billing-Setup-*.exe
+            billing-windows/publish/Bf3Billing-win-x64.zip
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Bf3Billing-win-x64
+          path: billing-windows/publish/Bf3Billing-win-x64.zip
