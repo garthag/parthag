@@ -6,11 +6,20 @@ A Windows desktop app for contractor billing on the BF#3 project. It is built fr
 * **SQL database:** one SQLite file, `%LOCALAPPDATA%\Bf3Billing\billing.db`. Nothing to install and no server. Back it up by copying the file, or use **Data › Back up now**.
 * Indian number formats (1,23,45,678.00, ₹ 29.43 L) and dd-MM-yyyy dates.
 
-## Get it
+## Install
 
-GitHub Actions builds the app on every push that changes `billing-windows/` (workflow **BF#3 Billing (Windows)**). Download the artifact **Bf3Billing-win-x64**, unzip it and run `Bf3Billing.exe`. It is self-contained, so .NET does not need to be installed.
+1. Open the repository's **Releases** page and download **`BF3-Billing-Setup-1.0.N.exe`** from the newest *BF#3 Billing (Windows)* release.
+2. Run it. Windows SmartScreen may warn because the installer is not code-signed: choose **More info › Run anyway**.
+3. Setup installs for your user, with no admin rights needed. An administrator can choose *all users*. It adds a Start menu entry and, if ticked, a desktop shortcut.
+4. Start **BF#3 Billing**. Load your data with **Data › Import BSL workbooks…**, or open a data file with **Data › Open data file…**.
 
-To build it yourself on Windows with the .NET 8 SDK:
+Updating means running a newer setup over the old one. Uninstall from *Settings › Apps*. Neither touches your data file (`%LOCALAPPDATA%\Bf3Billing\billing.db`). Back it up regularly with **Data › Back up now**.
+
+Without an installer, `Bf3Billing-win-x64.zip` (in the same release, and an artifact of every build) holds the same program as a single `Bf3Billing.exe` that runs from any folder. It is self-contained, so .NET does not need to be installed.
+
+The workflow **BF#3 Billing (Windows)** builds and tests on every push. Started by hand (*Run workflow*) with **release** ticked, it also publishes the installer as a release.
+
+To build it yourself on Windows with the .NET 8 SDK (and Inno Setup 6 for the installer):
 
 ```bat
 cd billing-windows

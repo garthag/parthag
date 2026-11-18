@@ -11,6 +11,7 @@
     <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
     <Product>BF#3 Billing Database</Product>
     <Version>1.0.0</Version>
+    <ApplicationIcon>app.ico</ApplicationIcon>
   </PropertyGroup>
 
   <!-- Compile check on Linux build machines whose SDK has no Windows Desktop targets.

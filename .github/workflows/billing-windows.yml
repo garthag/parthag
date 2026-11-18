@@ -11,6 +11,10 @@ on:
       - '.github/workflows/billing-windows.yml'
   workflow_dispatch:
     inputs:
+      release:
+        description: Publish the installer as a GitHub release
+        type: boolean
+        default: false
       commit_screenshots:
         description: Commit the screenshots to billing-windows/docs/screenshots on this branch
         type: boolean
@@ -25,6 +29,8 @@ jobs:
     runs-on: windows-latest
     permissions:
       contents: write
+    env:
+      APP_VERSION: 1.0.${{ github.run_number }}
     timeout-minutes: 30
     defaults:
       run:
@@ -46,7 +52,7 @@ jobs:
         run: dotnet test tests/Bf3Billing.Tests -c Release --no-build --logger "console;verbosity=normal"
 
       - name: Publish single-file app
-        run: dotnet publish src/Bf3Billing.App -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true -o publish/Bf3Billing
+        run: dotnet publish src/Bf3Billing.App -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true -p:DebugType=none -p:Version=${{ env.APP_VERSION }} -o publish/Bf3Billing
 
       - name: Self test (opens every screen on a temporary demo data file)
         timeout-minutes: 6
@@ -99,6 +105,39 @@ jobs:
         run: |
           Copy-Item README.md publish/Bf3Billing/README.md
           Compress-Archive -Path publish/Bf3Billing/* -DestinationPath publish/Bf3Billing-win-x64.zip
+
+      - name: Build installer (Inno Setup)
+        shell: pwsh
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) { choco install innosetup --no-progress -y | Out-Null }
+          & $iscc /Q "/DAppVersion=$env:APP_VERSION" installer\Bf3Billing.iss
+          if ($LASTEXITCODE -ne 0) { throw "Inno Setup failed" }
+          Get-ChildItem publish\*.exe | ForEach-Object { Write-Host "$($_.Name) $([math]::Round($_.Length / 1MB, 1)) MB" }
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: BF3-Billing-Setup
+          path: billing-windows/publish/BF3-Billing-Setup-*.exe
+
+      - name: Publish release (manual runs only)
+        if: github.event_name == 'workflow_dispatch' && inputs.release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: billing-v${{ env.APP_VERSION }}
+          target_commitish: ${{ github.sha }}
+          name: BF#3 Billing ${{ env.APP_VERSION }} (Windows)
+          make_latest: false
+          body: |
+            **Install:** download `BF3-Billing-Setup-${{ env.APP_VERSION }}.exe` and run it. No admin rights needed (it installs for your user; an administrator can choose "all users"). Start menu and desktop shortcuts are created.
+            Windows SmartScreen may warn because the installer is not code-signed: choose **More info › Run anyway**.
+
+            **No installer?** `Bf3Billing-win-x64.zip` holds the same app as a single `Bf3Billing.exe` to run from any folder.
+
+            Your data file (`%LOCALAPPDATA%\Bf3Billing\billing.db`) is not touched by installing, updating or uninstalling. Load the BSL workbooks with **Data › Import BSL workbooks…**.
+          files: |
+            billing-windows/publish/BF3-Billing-Setup-*.exe
+            billing-windows/publish/Bf3Billing-win-x64.zip
 
       - uses: actions/upload-artifact@v4
         with:
