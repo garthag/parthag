@@ -347,3 +347,43 @@ public class ExcelTests
         Assert.Equal(25m * 6500m + 85000m, b.Gross);
     }
 }
+
+public class DataFileTests
+{
+    [Fact]
+    public void File_made_by_another_program_is_refused_and_left_untouched()
+    {
+        using var t = new TempDb();
+        var path = t.File("other.db");
+        using (var c = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={path};Pooling=False"))
+        {
+            c.Open();
+            using var cmd = c.CreateCommand();
+            cmd.CommandText = "CREATE TABLE Bill(id INTEGER PRIMARY KEY, work_order_id INTEGER, amount REAL); INSERT INTO Bill(work_order_id, amount) VALUES (1, 100);";
+            cmd.ExecuteNonQuery();
+        }
+        var before = File.ReadAllBytes(path);
+        var ex = Assert.Throws<IncompatibleDataFileException>(() => new BillingDb(path));
+        Assert.Contains("WorkOrderId", ex.Message);
+        Assert.Equal(before, File.ReadAllBytes(path));
+    }
+
+    [Fact]
+    public void Text_file_is_refused()
+    {
+        using var t = new TempDb();
+        var path = t.File("notes.db");
+        File.WriteAllText(path, "this is not a database, just some text that is long enough to have a header");
+        Assert.Throws<IncompatibleDataFileException>(() => new BillingDb(path));
+    }
+
+    [Fact]
+    public void Own_files_and_empty_files_open()
+    {
+        using var t = new TempDb(demo: true);
+        Assert.Equal(6, new BillingRepository(new BillingDb(t.Db.FilePath)).Counts().Bills);
+        var empty = t.File("empty.db");
+        File.WriteAllBytes(empty, Array.Empty<byte>());
+        Assert.Equal(0, new BillingRepository(new BillingDb(empty)).Counts().Bills);
+    }
+}

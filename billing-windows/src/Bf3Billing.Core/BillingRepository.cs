@@ -6,7 +6,7 @@ using Microsoft.Data.Sqlite;
 namespace Bf3Billing.Core;
 
 /// <summary>A rule the user broke (shown as a message, not a crash).</summary>
-public sealed class BillingException(string message) : Exception(message);
+public class BillingException(string message) : Exception(message);
 
 public sealed class BillingRepository(BillingDb db)
 {

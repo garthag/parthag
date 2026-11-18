@@ -8,6 +8,37 @@ static class Program
     [System.Runtime.InteropServices.DllImport("kernel32.dll")]
     static extern void ExitProcess(uint exitCode);
 
+    /// <summary>
+    /// Opens the data file; never writes to a file made by another program. Falls back to the default file,
+    /// and if that one belongs to another program, to <see cref="BillingDb.AlternatePath"/> next to it.
+    /// </summary>
+    static BillingRepository OpenDataFile(string path, AppSettings settings)
+    {
+        var tried = new List<string>();
+        foreach (var candidate in new[] { path, BillingDb.DefaultPath, BillingDb.AlternatePath }.Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            try
+            {
+                var repo = new BillingRepository(new BillingDb(candidate));
+                if (tried.Count > 0)
+                    MessageBox.Show(string.Join(Environment.NewLine + Environment.NewLine, tried) + Environment.NewLine + Environment.NewLine +
+                        "BF#3 Billing now keeps its data in:" + Environment.NewLine + repo.Db.FilePath + Environment.NewLine + Environment.NewLine +
+                        "(Data › Open data file switches files at any time.)",
+                        "BF#3 Billing", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return repo;
+            }
+            catch (Exception ex) when (ex is BillingException or Microsoft.Data.Sqlite.SqliteException or IOException or UnauthorizedAccessException)
+            {
+                tried.Add(ex is IncompatibleDataFileException ? ex.Message : $"The data file could not be opened:{Environment.NewLine}{candidate}{Environment.NewLine}{ex.Message}");
+            }
+        }
+        // Last resort: a fresh file with a unique name, so the app always starts.
+        var fresh = Path.Combine(Path.GetDirectoryName(BillingDb.DefaultPath)!, $"bf3-billing-{DateTime.Now:yyyyMMdd-HHmmss}.db");
+        MessageBox.Show(string.Join(Environment.NewLine + Environment.NewLine, tried) + Environment.NewLine + Environment.NewLine + "A new data file is used: " + fresh,
+            "BF#3 Billing", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        return new BillingRepository(new BillingDb(fresh));
+    }
+
     [STAThread]
     static void Main(string[] args)
     {
@@ -32,17 +63,7 @@ static class Program
         var path = args.Length > 0 ? args[0] : settings.DataFile;
         if (string.IsNullOrWhiteSpace(path)) path = BillingDb.DefaultPath;
 
-        BillingRepository repo;
-        try
-        {
-            repo = new BillingRepository(new BillingDb(path));
-        }
-        catch (Exception ex)
-        {
-            MessageBox.Show($"The data file could not be opened:{Environment.NewLine}{path}{Environment.NewLine}{Environment.NewLine}{ex.Message}{Environment.NewLine}{Environment.NewLine}The default data file is used instead.",
-                "BF#3 Billing", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-            repo = new BillingRepository(new BillingDb(BillingDb.DefaultPath));
-        }
+        var repo = OpenDataFile(path, settings);
         settings.DataFile = repo.Db.FilePath;
         settings.Save();
         Application.Run(new MainForm(repo, settings));

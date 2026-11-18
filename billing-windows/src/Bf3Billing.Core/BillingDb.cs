@@ -5,6 +5,13 @@ using Microsoft.Data.Sqlite;
 
 namespace Bf3Billing.Core;
 
+/// <summary>A data file made by another program (or not a database): it is left untouched.</summary>
+public sealed class IncompatibleDataFileException(string path, string reason)
+    : BillingException($"This file was not made by BF#3 Billing and is left as it is:{Environment.NewLine}{path}{Environment.NewLine}{Environment.NewLine}{reason}")
+{
+    public string FilePath { get; } = path;
+}
+
 /// <summary>The SQLite data file (billing.db) and its schema.</summary>
 public sealed class BillingDb
 {
@@ -23,8 +30,52 @@ public sealed class BillingDb
         var dir = Path.GetDirectoryName(FilePath);
         if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
         using var c = Open();
+        CheckCompatible(c, FilePath);
         EnsureSchema(c);
         if (seedMasters) Seed.Masters(c);
+    }
+
+    /// <summary>
+    /// Used when <see cref="DefaultPath"/> holds a file made by another program: this app then keeps its data here,
+    /// next to it, and never touches the other file.
+    /// </summary>
+    public static string AlternatePath =>
+        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Bf3Billing", "bf3-billing.db");
+
+    /// <summary>Columns this app needs in tables that may already exist in a file. Checked before anything is written.</summary>
+    static readonly Dictionary<string, string[]> Required = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["Setting"] = new[] { "Key", "Value" },
+        ["Contractor"] = new[] { "Id", "Name", "Code" },
+        ["WorkOrder"] = new[] { "Id", "WoNo", "ContractorId", "Value" },
+        ["Activity"] = new[] { "Id", "Name", "IsBom" },
+        ["BomItem"] = new[] { "Id", "System", "DrawingNo", "Sheet", "Rev", "Item", "Tonnes" },
+        ["Rate"] = new[] { "Id", "WorkOrderId", "ActivityId", "Amount" },
+        ["Bill"] = new[] { "Id", "WorkOrderId", "BillNo", "BillDate", "Status", "GstPct" },
+        ["BillLine"] = new[] { "Id", "BillId", "LineNo", "BomItemId", "Qty", "Rate" },
+        ["BoqItem"] = new[] { "Id", "WorkOrderId", "Description", "ScopeTonnes" },
+        ["BomPart"] = new[] { "Id", "BomItemId" },
+        ["CustomField"] = new[] { "Id", "Entity", "Name" },
+    };
+
+    /// <summary>
+    /// Refuses a file whose tables do not have this app's layout (made by another program), before anything is
+    /// written to it. An empty file, or one made by any version of this app, passes.
+    /// </summary>
+    static void CheckCompatible(SqliteConnection c, string path)
+    {
+        List<string> tables;
+        try { tables = c.Query<string>("SELECT name FROM sqlite_master WHERE type = 'table'").ToList(); }
+        catch (SqliteException ex) { throw new IncompatibleDataFileException(path, "It is not a database file: " + ex.Message); }
+        var problems = new List<string>();
+        foreach (var t in tables.Where(Required.ContainsKey))
+        {
+            var cols = c.Query<string>($"SELECT name FROM pragma_table_info('{t.Replace("'", "''")}')").ToHashSet(StringComparer.OrdinalIgnoreCase);
+            var missing = Required[t].Where(x => !cols.Contains(x)).ToList();
+            if (missing.Count > 0) problems.Add($"table {t} has no column {string.Join(", ", missing)}");
+        }
+        if (problems.Count > 0)
+            throw new IncompatibleDataFileException(path, "Its tables have a different layout (" + string.Join("; ", problems.Take(4)) + ").");
     }
 
     public static string DefaultPath =>
