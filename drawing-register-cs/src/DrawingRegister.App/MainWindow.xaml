@@ -19,7 +19,7 @@
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
                 <TextBlock Text="{Binding StatusText}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
-                <ProgressBar Grid.Column="1" Height="12" Margin="10,0" Value="{Binding Progress}"
+                <ProgressBar Grid.Column="1" Height="12" Margin="10,0" Value="{Binding Progress, Mode=OneWay}"
                              Visibility="{Binding IsBusy, Converter={StaticResource BoolToVisibility}}" />
                 <Button Grid.Column="2" Content="Open data folder" Command="{Binding OpenDataFolderCommand}"
                         Padding="8,2" Background="Transparent" BorderThickness="0" Foreground="{StaticResource AccentBrush}" />
@@ -156,7 +156,7 @@
                         <DataGridTextColumn Header="Rev" Binding="{Binding Code}" Width="55" />
                         <DataGridTextColumn Header="Date" Binding="{Binding RevisionDate, StringFormat=yyyy-MM-dd}" Width="90" />
                         <DataGridTextColumn Header="File" Binding="{Binding File.OriginalFileName}" Width="*" />
-                        <DataGridCheckBoxColumn Header="Current" Binding="{Binding IsCurrent}" Width="60" />
+                        <DataGridCheckBoxColumn Header="Current" Binding="{Binding IsCurrent, Mode=OneWay}" Width="60" />
                     </DataGrid.Columns>
                 </DataGrid>
                 <WrapPanel Grid.Row="3" Margin="0,8,0,6">
