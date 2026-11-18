@@ -33,6 +33,7 @@ import { useState } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { api } from '../api/client';
 import { useProjects } from '../api/hooks';
+import { ChangePasswordDialog } from './ChangePasswordDialog';
 import { useAuthStore } from '../store/auth';
 import { useUIStore } from '../store/ui';
 
@@ -55,6 +56,7 @@ export function Layout() {
   const wide = useMediaQuery(theme.breakpoints.up('lg'));
   const [open, setOpen] = useState(false);
   const [menu, setMenu] = useState<HTMLElement | null>(null);
+  const [pwOpen, setPwOpen] = useState(false);
   const { mode, toggleMode, projectId, setProjectId } = useUIStore();
   const { user, refreshToken, logout } = useAuthStore();
   const projects = useProjects();
@@ -132,8 +134,10 @@ export function Layout() {
           </Tooltip>
           <Menu anchorEl={menu} open={!!menu} onClose={() => setMenu(null)}>
             <MenuItem disabled>{user?.email}</MenuItem>
+            <MenuItem onClick={() => { setMenu(null); setPwOpen(true); }}>Change password</MenuItem>
             <MenuItem onClick={signOut}>Sign out</MenuItem>
           </Menu>
+          <ChangePasswordDialog open={pwOpen} onClose={() => setPwOpen(false)} />
         </Toolbar>
       </AppBar>
       <Drawer

@@ -46,9 +46,9 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements-dev.txt
       - name: Lint
-        run: ruff check app tests
+        run: ruff check app tests desktop scripts
       - name: Format
-        run: ruff format --check app tests
+        run: ruff format --check app tests desktop scripts
       - name: Migrations (PostgreSQL 16) — upgrade, drift check, downgrade, upgrade
         env:
           DATABASE_URL: postgresql+psycopg://drawing:drawing@localhost:5432/drawing_reader

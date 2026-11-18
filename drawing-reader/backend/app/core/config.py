@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
+import json
 from functools import lru_cache
 from pathlib import Path
-from typing import Literal
+from typing import Annotated, Literal
 
 from pydantic import Field, field_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 
 class Settings(BaseSettings):
@@ -41,7 +42,12 @@ class Settings(BaseSettings):
     JWT_ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     REFRESH_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7
-    CORS_ORIGINS: list[str] = ["http://localhost:5173", "http://localhost:8080", "http://localhost"]
+    # NoDecode: accept "a,b" from env vars (pydantic-settings would otherwise expect JSON)
+    CORS_ORIGINS: Annotated[list[str], NoDecode] = [
+        "http://localhost:5173",
+        "http://localhost:8080",
+        "http://localhost",
+    ]
 
     # Storage
     STORAGE_DIR: Path = Path("./storage")
@@ -66,11 +72,17 @@ class Settings(BaseSettings):
     # Dashboard cache TTL (seconds)
     CACHE_TTL_SECONDS: int = 30
 
+    # Desktop / single-process mode: serve the built React app from this directory.
+    FRONTEND_DIST: Path | None = None
+
     @field_validator("CORS_ORIGINS", mode="before")
     @classmethod
     def _split_origins(cls, value: object) -> object:
-        if isinstance(value, str) and not value.startswith("["):
-            return [v.strip() for v in value.split(",") if v.strip()]
+        if isinstance(value, str):
+            text = value.strip()
+            if text.startswith("["):
+                return json.loads(text)
+            return [v.strip() for v in text.split(",") if v.strip()]
         return value
 
     @property

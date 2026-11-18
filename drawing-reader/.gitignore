@@ -16,3 +16,6 @@ backend/storage/
 frontend/node_modules/
 frontend/dist/
 frontend/coverage/
+# Desktop (PyInstaller) build output
+backend/build/
+backend/dist/

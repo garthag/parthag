@@ -8,7 +8,7 @@ from app.schemas.common import BaseSchema
 
 
 class LoginRequest(BaseSchema):
-    username: str = Field(min_length=3, max_length=255, description="Username or e-mail", examples=["admin"])
+    username: str = Field(min_length=1, max_length=255, description="Username or e-mail", examples=["admin"])
     password: str = Field(min_length=6, max_length=128, examples=["Admin@12345"])
 
 
@@ -53,3 +53,8 @@ class UserCreate(BaseSchema):
     password: str = Field(min_length=8, max_length=128)
     job_title: str | None = None
     roles: list[str] = []
+
+
+class PasswordChange(BaseSchema):
+    current_password: str = Field(min_length=1, max_length=128)
+    new_password: str = Field(min_length=8, max_length=128)

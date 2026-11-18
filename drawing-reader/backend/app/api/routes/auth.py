@@ -12,7 +12,15 @@ from app.core.config import settings
 from app.core.exceptions import AuthenticationError, ConflictError
 from app.core.security import create_token, decode_token, hash_password, token_blacklist, verify_password
 from app.models import Role, User
-from app.schemas.auth import LoginRequest, LogoutRequest, RefreshRequest, TokenPair, UserCreate, UserOut
+from app.schemas.auth import (
+    LoginRequest,
+    LogoutRequest,
+    PasswordChange,
+    RefreshRequest,
+    TokenPair,
+    UserCreate,
+    UserOut,
+)
 from app.schemas.common import ERROR_RESPONSES, ApiResponse, MessageResponse
 from app.services import audit
 
@@ -78,6 +86,19 @@ def logout(
 @router.get("/me", response_model=ApiResponse[UserOut], summary="Current user profile")
 def me(user: CurrentUser) -> ApiResponse[UserOut]:
     return ApiResponse(data=_user_out(user))
+
+
+@router.post("/change-password", response_model=MessageResponse, summary="Change the current user's password")
+def change_password(body: PasswordChange, user: CurrentUser, db: DbSession) -> MessageResponse:
+    if not verify_password(body.current_password, user.hashed_password):
+        raise AuthenticationError("Current password is incorrect")
+    if body.new_password == body.current_password:
+        from app.core.exceptions import ValidationFailedError
+
+        raise ValidationFailedError("New password must differ from the current one")
+    user.hashed_password = hash_password(body.new_password)
+    audit.record(db, action="change_password", entity="user", entity_id=user.id, user_id=user.id)
+    return MessageResponse(message="Password changed")
 
 
 @router.post("/users", response_model=ApiResponse[UserOut], status_code=201, summary="Create a user (admin)")

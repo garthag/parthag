@@ -71,6 +71,13 @@ def test_settings_parsing() -> None:
     assert s.is_sqlite and s.broker_url == "redis://r:6379/1" and s.result_backend == "redis://r:6379/1"
 
 
+def test_settings_from_environment(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("CORS_ORIGINS", "http://localhost:5173, http://127.0.0.1")
+    assert Settings().CORS_ORIGINS == ["http://localhost:5173", "http://127.0.0.1"]
+    monkeypatch.setenv("CORS_ORIGINS", '["http://x"]')
+    assert Settings().CORS_ORIGINS == ["http://x"]
+
+
 def test_storage_save_and_validation() -> None:
     data = make_pdf()
     rel, sha, size = storage.save_stream(io.BytesIO(data), "TST")

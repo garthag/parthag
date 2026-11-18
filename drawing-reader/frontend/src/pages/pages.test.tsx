@@ -82,6 +82,20 @@ describe('routing', () => {
     expect(await screen.findByText('999.8 t')).toBeInTheDocument();
     fireEvent.click(screen.getByLabelText('toggle dark mode'));
     expect(useUIStore.getState().mode).toBe('dark');
+
+    const post = vi.spyOn(api, 'post').mockResolvedValue({ data: { success: true, message: 'Password changed' } });
+    fireEvent.click(screen.getByLabelText('account'));
+    fireEvent.click(await screen.findByText('Change password'));
+    await userEvent.type(screen.getByLabelText(/current password/i), 'Admin@12345');
+    await userEvent.type(screen.getByLabelText(/^new password/i), 'NewPass@123');
+    await userEvent.type(screen.getByLabelText(/confirm new password/i), 'Mismatch@1');
+    fireEvent.click(screen.getByRole('button', { name: 'Change password' }));
+    expect(await screen.findByText('The new passwords do not match')).toBeInTheDocument();
+    await userEvent.clear(screen.getByLabelText(/confirm new password/i));
+    await userEvent.type(screen.getByLabelText(/confirm new password/i), 'NewPass@123');
+    fireEvent.click(screen.getByRole('button', { name: 'Change password' }));
+    expect(await screen.findByText('Password changed.')).toBeInTheDocument();
+    expect(post).toHaveBeenCalledWith('/auth/change-password', { current_password: 'Admin@12345', new_password: 'NewPass@123' });
   });
 });
 

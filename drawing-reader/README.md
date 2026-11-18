@@ -17,6 +17,32 @@ everything up into BOQs, cost impact and dashboards.
 
 ## Quick start
 
+### Windows installer (no Docker, no Python)
+
+1. Download `DrawingReaderSetup-1.0.x.exe` from the repository's **Releases** page (releases named
+   *Drawing Reader 1.0.x for Windows*) or from the `DrawingReaderSetup-windows` artifact of the
+   *Drawing Reader Windows installer* workflow run.
+2. Run it. No administrator rights are needed (it installs for the current user; pick "all users"
+   in the first dialog if you prefer). Windows SmartScreen may say the publisher is unknown because
+   the installer is not code-signed: choose **More info → Run anyway**.
+3. Tick **Load sample projects** if you want the demo data (3 projects, 100 drawings, 300 revisions).
+4. Drawing Reader starts and opens in your browser at `http://127.0.0.1:8765`. Sign in with
+   `admin` / `Admin@12345`, then use **account menu → Change password**.
+
+The installed app is a single local program: the FastAPI server, the web UI and the Tesseract OCR
+engine are bundled; data is a SQLite database plus your PDFs in `%LOCALAPPDATA%\DrawingReader`
+(kept on uninstall and upgrade). A small "Drawing Reader is running" window offers *Open in browser*
+and *Quit*; starting it again while it runs just reopens the browser. It listens on 127.0.0.1 only.
+`drawing-reader-cli.exe --self-test` in the install folder checks an installation.
+
+Build it yourself on Windows (Python 3.12, Node 22, `choco install tesseract innosetup`):
+
+```powershell
+cd drawing-reader\backend
+pip install -r requirements.txt -r requirements-desktop.txt
+powershell -ExecutionPolicy Bypass -File desktop\build-windows.ps1 -Version 1.0.0
+```
+
 ### Docker (single command)
 
 ```bash
@@ -84,7 +110,10 @@ Every service has a health check and `restart: unless-stopped`. Volumes: `pgdata
 **CI/CD** (`.github/workflows/drawing-reader.yml`): backend lint → format → migrations against
 PostgreSQL 16 (upgrade, `alembic check` drift detection, downgrade, upgrade) → seed smoke test →
 tests with a 90% coverage gate → OpenAPI validation; frontend lint → typecheck → tests with coverage →
-build; Docker images built on every run and pushed to GHCR on `main`. Deployment runs over SSH when the
+build; Docker images built on every run and pushed to GHCR on `main`. A separate workflow
+(`.github/workflows/drawing-reader-windows.yml`) builds the Windows installer on `windows-latest`,
+self-tests the bundle, silently installs it and self-tests the installed copy, then publishes it on
+the Releases page. Deployment runs over SSH when the
 `DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_PATH` and `DEPLOY_SSH_KEY` secrets are configured
 (`docker compose pull && up -d` with the commit's image tag); without them the job is skipped.
 
@@ -239,7 +268,7 @@ impacts, weight history and BOQs. `--no-pdfs` skips PDF generation; `--force` re
 ## Testing
 
 ```bash
-cd backend && pytest --cov=app             # 139 tests, 95% coverage
+cd backend && pytest --cov=app             # 143 tests, 95% coverage
 cd frontend && npm run test:coverage       # 29 tests, 96% line coverage
 ```
 
@@ -280,6 +309,7 @@ drawing-reader/
 │   │   ├── workers/        # Celery app and tasks
 │   │   └── seed/           # sample data
 │   ├── alembic/            # migrations
+│   ├── desktop/            # Windows desktop launcher, PyInstaller spec, Inno Setup installer
 │   ├── scripts/            # entrypoint, OpenAPI export
 │   └── tests/
 ├── frontend/src/

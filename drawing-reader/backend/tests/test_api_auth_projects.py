@@ -11,7 +11,7 @@ def test_login_failures(client: TestClient) -> None:
     body = res.json()
     assert body["success"] is False and body["error"]["code"] == "unauthorized"
     assert res.headers["www-authenticate"] == "Bearer"
-    res = client.post("/api/auth/login", json={"username": "a"})
+    res = client.post("/api/auth/login", json={"username": "a"})  # password missing
     assert res.status_code == 422 and res.json()["error"]["code"] == "validation_error"
 
 

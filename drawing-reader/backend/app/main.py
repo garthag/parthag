@@ -6,11 +6,15 @@ import logging
 import time
 import uuid
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.api.routes import auth, bom, drawings, ocr, projects, revisions
 from app.api.routes.analytics import ai, analytics_router, dashboard, reports_router
@@ -125,7 +129,27 @@ def create_app() -> FastAPI:
             conn.execute(text("SELECT 1"))
         return {"status": "ready"}
 
+    if settings.FRONTEND_DIST and (Path(settings.FRONTEND_DIST) / "index.html").is_file():
+        mount_frontend(app, Path(settings.FRONTEND_DIST))
+
     return app
+
+
+def mount_frontend(app: FastAPI, dist: Path) -> None:
+    """Serve the built single-page app (desktop installs run without a separate web server)."""
+    dist = dist.resolve()
+    index = dist / "index.html"
+    if (dist / "assets").is_dir():
+        app.mount("/assets", StaticFiles(directory=dist / "assets"), name="assets")
+
+    @app.get("/{path:path}", include_in_schema=False)
+    def spa(path: str) -> FileResponse:
+        if path.startswith(settings.API_PREFIX.strip("/") + "/"):
+            raise StarletteHTTPException(status_code=404, detail="Not Found")
+        candidate = (dist / path).resolve()
+        if path and dist in candidate.parents and candidate.is_file():
+            return FileResponse(candidate)
+        return FileResponse(index, headers={"Cache-Control": "no-cache"})
 
 
 app = create_app()
