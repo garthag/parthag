@@ -1,0 +1,92 @@
+# Development stack: hot-reloading API and Vite dev server with seeded sample data.
+#   docker compose -f docker-compose.dev.yml up --build
+# UI: http://localhost:5173   API docs: http://localhost:8000/api/docs
+name: drawing-reader-dev
+
+x-backend-env: &backend-env
+  ENVIRONMENT: development
+  DATABASE_URL: postgresql+psycopg://drawing:drawing@db:5432/drawing_reader
+  REDIS_URL: redis://redis:6379/0
+  OCR_EAGER: "false"
+  STORAGE_DIR: /data/storage
+  SECRET_KEY: dev-only-secret-key-change-me-0123456789
+  CORS_ORIGINS: http://localhost:5173
+  LOG_LEVEL: INFO
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: drawing
+      POSTGRES_PASSWORD: drawing
+      POSTGRES_DB: drawing_reader
+    ports: ["5432:5432"]
+    volumes: [pgdata-dev:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U drawing -d drawing_reader"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    ports: ["6379:6379"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  api:
+    build: ./backend
+    command: ["dev"]
+    environment:
+      <<: *backend-env
+      SEED_ON_START: "true"
+    ports: ["8000:8000"]
+    volumes:
+      - ./backend/app:/app/app
+      - ./backend/alembic:/app/alembic
+      - storage-dev:/data/storage
+    depends_on:
+      db: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    restart: unless-stopped
+
+  worker:
+    build: ./backend
+    command: ["worker"]
+    environment: *backend-env
+    volumes:
+      - ./backend/app:/app/app
+      - storage-dev:/data/storage
+    depends_on:
+      db: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A app.workers.celery_app inspect ping -d celery@$$HOSTNAME --timeout 5 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+
+  web:
+    image: node:22-alpine
+    working_dir: /app
+    command: sh -c "npm ci --no-audit --no-fund && npx vite --host 0.0.0.0 --port 5173"
+    environment:
+      VITE_PROXY_TARGET: http://api:8000
+    ports: ["5173:5173"]
+    volumes:
+      - ./frontend:/app
+      - web-node-modules:/app/node_modules
+    depends_on: [api]
+    restart: unless-stopped
+
+volumes:
+  pgdata-dev:
+  storage-dev:
+  web-node-modules:

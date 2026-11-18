@@ -1,0 +1,86 @@
+name: Drawing Reader Windows installer
+
+on:
+  push:
+    paths: ["drawing-reader/**", ".github/workflows/drawing-reader-windows.yml"]
+  pull_request:
+    paths: ["drawing-reader/**", ".github/workflows/drawing-reader-windows.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: drawing-reader-windows-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  installer:
+    name: Build & test DrawingReaderSetup.exe
+    runs-on: windows-latest
+    env:
+      APP_VERSION: 1.0.${{ github.run_number }}
+    defaults:
+      run:
+        shell: pwsh
+        working-directory: drawing-reader/backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: drawing-reader/frontend/package-lock.json
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: drawing-reader/backend/requirements*.txt
+      - name: Install Python dependencies
+        run: pip install -r requirements.txt -r requirements-desktop.txt
+      - name: Install Tesseract-OCR and Inno Setup
+        run: choco install tesseract innosetup -y --no-progress
+      - name: Build installer (UI build, PyInstaller bundle, bundle self-test, Inno Setup)
+        run: ./desktop/build-windows.ps1 -Version $env:APP_VERSION
+      - name: Silent install and self-test of the installed copy
+        run: |
+          $setup = "dist\DrawingReaderSetup-$env:APP_VERSION.exe"
+          $p = Start-Process $setup -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/CURRENTUSER', '/TASKS=""' -Wait -PassThru
+          if ($p.ExitCode -ne 0) { throw "installer exit code $($p.ExitCode)" }
+          $installed = Join-Path $env:LOCALAPPDATA "Programs\Drawing Reader"
+          Get-ChildItem $installed | Select-Object -First 5 | Format-Table Name
+          & (Join-Path $installed "drawing-reader-cli.exe") --self-test
+          if ($LASTEXITCODE) { throw "installed self-test failed" }
+          $u = Start-Process (Join-Path $installed "unins000.exe") -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES' -Wait -PassThru
+          if ($u.ExitCode -ne 0) { throw "uninstaller exit code $($u.ExitCode)" }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DrawingReaderSetup-windows
+          path: drawing-reader/backend/dist/DrawingReaderSetup-*.exe
+          if-no-files-found: error
+
+  # On pushes (not pull requests) publish the installer on the Releases page for a plain download link.
+  release:
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    needs: installer
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: DrawingReaderSetup-windows
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: drawing-reader-v1.0.${{ github.run_number }}
+          target_commitish: ${{ github.sha }}
+          name: Drawing Reader 1.0.${{ github.run_number }} for Windows
+          make_latest: false
+          body: |
+            **Windows 10/11 (64-bit):** download `DrawingReaderSetup-1.0.${{ github.run_number }}.exe` and run it.
+
+            - No administrator rights needed (installs for the current user; choose "all users" in the first dialog if you prefer).
+            - Tick **Load sample projects** to start with 3 demo projects, 100 drawings and 300 revisions.
+            - Drawing Reader opens in your web browser. Sign in with `admin` / `Admin@12345`, then change the password from the account menu (top right).
+            - Your data is kept in `%LOCALAPPDATA%\DrawingReader` and survives updates and uninstalls.
+
+            Windows SmartScreen may warn that the installer is from an unknown publisher because it is not code-signed: choose **More info → Run anyway**.
+          files: DrawingReaderSetup-*.exe

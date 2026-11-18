@@ -1,0 +1,3 @@
+# Optional: higher-accuracy OCR on scanned drawings (large download, CPU build)
+paddlepaddle==2.6.2
+paddleocr==2.10.0

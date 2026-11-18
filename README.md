@@ -133,3 +133,9 @@ test/                        Model, state, PDF and widget tests
 flutter analyze
 flutter test
 ```
+
+---
+
+## Drawing Reader (engineering drawing register)
+
+The [`drawing-reader/`](drawing-reader/README.md) directory contains a separate application: an engineering drawing register with OCR, BOM extraction, revision comparison, weight/BOQ analytics and an AI assistant (FastAPI + React). See its README for setup.
