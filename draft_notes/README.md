@@ -18,6 +18,16 @@ A Flutter note app for Android, iOS, Windows and the web. It combines three styl
 
 Every note can mix text and any number of sketches. A sketch opens full screen in the drawing canvas, where the handwriting tools and the CAD tools work side by side.
 
+## Download
+
+From the [Releases page](https://github.com/garthag/parthag/releases), open the newest **Draft Notes build**:
+
+| File | For |
+|---|---|
+| `DraftNotes-Setup.exe` | Windows 10 / 11: run it to install (no admin rights needed). If Windows shows "Windows protected your PC", click **More info → Run anyway**, because the app isn't code-signed. |
+| `DraftNotes-windows.zip` | Windows, portable: extract it and run `draft_notes.exe` in the `DraftNotes` folder |
+| `DraftNotes-android.apk` | Android phones and tablets |
+
 ## Using it
 
 **Notes**
@@ -68,4 +78,4 @@ flutter test
 flutter run                  # or: flutter build apk / windows / web
 ```
 
-The `Draft Notes` workflow (`.github/workflows/draft-notes.yml`) runs the analyzer and tests, then builds `DraftNotes-android.apk` and `DraftNotes-windows.zip`. On each push it publishes them on the [Releases page](https://github.com/garthag/parthag/releases) as **Draft Notes build N**.
+The `Draft Notes` workflow (`.github/workflows/draft-notes.yml`) runs the analyzer and tests, then builds `DraftNotes-android.apk`, `DraftNotes-windows.zip` and the `DraftNotes-Setup.exe` installer (`installer/draft_notes.nsi`, built with NSIS). On each push it publishes them on the [Releases page](https://github.com/garthag/parthag/releases) as **Draft Notes build N**.
