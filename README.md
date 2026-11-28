@@ -4,6 +4,8 @@ A Flutter (Google) mobile app for Android and iOS that lets site engineers recor
 
 It works fully **offline** on site. You can optionally turn on **Google sign-in and cloud sync** through Firebase.
 
+> **Also in this repository:** [**Draft Notes**](draft_notes/README.md) (`draft_notes/`), a note app that combines Apple Notes style text notes, Samsung Notes style handwriting and AutoCAD style precision sketches.
+
 | Projects | Dashboard | DPR – General | DPR – Manpower | DPR – Work done | PDF |
 |---|---|---|---|---|---|
 | ![](docs/screenshots/home.png) | ![](docs/screenshots/dashboard.png) | ![](docs/screenshots/dpr_general.png) | ![](docs/screenshots/dpr_manpower.png) | ![](docs/screenshots/dpr_work.png) | ![](docs/screenshots/pdf_report.png) |

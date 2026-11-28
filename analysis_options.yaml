@@ -16,6 +16,8 @@ analyzer:
     - ios/**
     - web/**
     - windows/**
+    # Separate Flutter app with its own analysis options.
+    - draft_notes/**
 
 linter:
   # The lint rules applied to this project can be customized in the

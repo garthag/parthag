@@ -1,0 +1,143 @@
+name: Draft Notes
+
+# Builds the Draft Notes app in draft_notes/ only when it changes.
+on:
+  push:
+    paths:
+      - 'draft_notes/**'
+      - '.github/workflows/draft-notes.yml'
+  pull_request:
+    paths:
+      - 'draft_notes/**'
+      - '.github/workflows/draft-notes.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+defaults:
+  run:
+    working-directory: draft_notes
+
+jobs:
+  test-and-build-apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: '3.50.1'
+          cache: true
+
+      - run: flutter pub get
+      - run: flutter analyze
+      - run: flutter test
+
+      - name: Build release APK
+        run: flutter build apk --release
+
+      - name: Rename APK
+        run: mv build/app/outputs/flutter-apk/app-release.apk ../DraftNotes-android.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: draft-notes-apk
+          path: DraftNotes-android.apk
+
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: '3.50.1'
+          cache: true
+
+      - run: flutter pub get
+
+      - name: Build Windows app
+        run: flutter build windows --release
+
+      # Flutter apps need the Visual C++ runtime; ship it so the app also
+      # runs on PCs that don't have it installed.
+      - name: Bundle the Visual C++ runtime
+        shell: pwsh
+        run: |
+          foreach ($dll in 'msvcp140.dll', 'vcruntime140.dll', 'vcruntime140_1.dll') {
+            Copy-Item "$env:WINDIR\System32\$dll" build/windows/x64/runner/Release/
+          }
+
+      - name: Zip Windows app
+        shell: pwsh
+        run: |
+          Copy-Item -Recurse build/windows/x64/runner/Release DraftNotes
+          Compress-Archive -Path DraftNotes -DestinationPath ../DraftNotes-windows.zip
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: draft-notes-windows
+          path: DraftNotes-windows.zip
+
+  # One-file Windows installer (DraftNotes-Setup.exe) made with NSIS.
+  windows-installer:
+    needs: build-windows
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: draft-notes-windows
+          path: dist
+
+      - run: sudo apt-get update && sudo apt-get install -y nsis
+
+      - name: Build installer
+        run: |
+          unzip -q "$GITHUB_WORKSPACE/dist/DraftNotes-windows.zip" -d "$GITHUB_WORKSPACE/dist"
+          VERSION=$(grep '^version:' pubspec.yaml | sed 's/version: *//; s/+.*//')
+          makensis -V2 -DSRC="$GITHUB_WORKSPACE/dist/DraftNotes" -DVERSION="$VERSION" \
+            -DOUT="$GITHUB_WORKSPACE/DraftNotes-Setup.exe" installer/draft_notes.nsi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: draft-notes-installer
+          path: DraftNotes-Setup.exe
+
+  # On pushes, publish the builds as a release of their own. It is not
+  # marked "latest", so the Site DPR download links keep working.
+  release:
+    if: github.event_name == 'push'
+    needs: [test-and-build-apk, build-windows, windows-installer]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: draft-notes-*
+          merge-multiple: true
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: draft-notes-build-${{ github.run_number }}
+          target_commitish: ${{ github.sha }}
+          name: Draft Notes build ${{ github.run_number }}
+          make_latest: false
+          body: |
+            **Android:** download `DraftNotes-android.apk` on the phone and open it to install.
+            **Windows:** download `DraftNotes-Setup.exe` and run it. It installs for your user (no admin rights) and adds Start menu and desktop shortcuts. If Windows shows "Windows protected your PC", click **More info → Run anyway** (the app isn't code-signed).
+            Portable alternative: `DraftNotes-windows.zip`; extract it and run `draft_notes.exe` in the `DraftNotes` folder.
+
+            See draft_notes/README.md for what the app does.
+          files: |
+            DraftNotes-android.apk
+            DraftNotes-Setup.exe
+            DraftNotes-windows.zip
